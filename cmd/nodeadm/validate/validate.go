@@ -32,6 +32,9 @@ func (c *validateCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		validator.DefaultNumCPU(),
 		validator.DefaultSysMem(),
 		validator.DefaultDiskSize(),
+		validator.DefaultNodeOS(),
+		validator.DefaultArch(),
+		validator.DefaultSysD(),
 	)
 
 	logger.Init()

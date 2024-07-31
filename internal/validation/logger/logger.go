@@ -67,7 +67,7 @@ func MarkPass(msg string, keysAndValues ...interface{}) {
 
 // MarkFail logs a message prefixed with a cross emoji.
 func MarkFail(msg string, keysAndValues ...interface{}) {
-	Get().V(0).Info(markFailed+"Error: "+msg, keysAndValues...)
+	Get().V(0).Info(markFailed+"Fail: "+msg, keysAndValues...)
 }
 
 // MarkWarning logs a message prefixed with a warning mark.

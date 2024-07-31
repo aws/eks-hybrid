@@ -7,7 +7,9 @@ type FailError struct {
 }
 
 func (e *FailError) Error() string {
-	e.err = "validation failed"
+	if e.err == "" {
+		e.err = "validation failed"
+	}
 	return e.err
 }
 
@@ -16,7 +18,9 @@ type WarningError struct {
 }
 
 func (e *WarningError) Error() string {
-	e.err = "validation warning"
+	if e.err == "" {
+		e.err = "validation warning"
+	}
 	return e.err
 }
 

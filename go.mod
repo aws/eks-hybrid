@@ -11,6 +11,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.146.0
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.27.4
 	github.com/aws/aws-sdk-go-v2/service/eks v1.46.1
+	github.com/aws/aws-sdk-go-v2/service/ecr v1.27.4
+	github.com/aws/aws-sdk-go-v2/service/eks v1.46.1
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.51.1
 	github.com/aws/eks-anywhere v0.20.0
 	github.com/aws/smithy-go v1.20.3
