@@ -7,6 +7,7 @@ import (
 	"text/template"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/iamauthenticator"
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
@@ -22,7 +23,7 @@ var (
 	kubeconfigTemplateData string
 	//go:embed hybrid-kubeconfig.template.yaml
 	hybridKubeconfigTemplateData string
-	kubeconfigPath               = path.Join(kubeconfigRoot, kubeconfigFile)
+	KubeconfigPath               = path.Join(kubeconfigRoot, kubeconfigFile)
 	kubeconfigBootstrapPath      = path.Join(kubeconfigRoot, kubeconfigBootstrapFile)
 )
 
@@ -38,19 +39,20 @@ func (k *kubelet) writeKubeconfig() error {
 		k.flags["bootstrap-kubeconfig"] = kubeconfigBootstrapPath
 		return util.WriteFileWithDir(kubeconfigBootstrapPath, kubeconfig, kubeconfigPerm)
 	} else {
-		k.flags["kubeconfig"] = kubeconfigPath
-		return util.WriteFileWithDir(kubeconfigPath, kubeconfig, kubeconfigPerm)
+		k.flags["kubeconfig"] = KubeconfigPath
+		return util.WriteFileWithDir(KubeconfigPath, kubeconfig, kubeconfigPerm)
 	}
 }
 
 type kubeconfigTemplateVars struct {
-	Cluster           string
-	Region            string
-	APIServerEndpoint string
-	CaCertPath        string
-	SessionName       string
-	AssumeRole        string
-	AwsConfigPath     string
+	Cluster                 string
+	Region                  string
+	APIServerEndpoint       string
+	CaCertPath              string
+	SessionName             string
+	AssumeRole              string
+	AwsConfigPath           string
+	AwsIamAuthenticatorPath string
 }
 
 func newKubeconfigTemplateVars(cfg *api.NodeConfig) *kubeconfigTemplateVars {
@@ -72,6 +74,7 @@ func (kct *kubeconfigTemplateVars) withHybridTemplateVars(cfg *api.NodeConfig) {
 	} else if cfg.IsSSM() {
 		kct.withSsmHybridVars(cfg)
 	}
+	kct.AwsIamAuthenticatorPath = iamauthenticator.IAMAuthenticatorBinPath
 }
 
 func (kct *kubeconfigTemplateVars) withIamRolesAnywhereHybridVars(cfg *api.NodeConfig) {

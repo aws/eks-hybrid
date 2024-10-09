@@ -61,7 +61,7 @@ func Uninstall() error {
 	pathsToRemove := []string{
 		BinPath,
 		UnitPath,
-		kubeconfigPath,
+		KubeconfigPath,
 		kubeletConfigRoot,
 	}
 

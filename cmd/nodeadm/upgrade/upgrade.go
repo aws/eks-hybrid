@@ -6,6 +6,7 @@ import (
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
+	"k8s.io/utils/strings/slices"
 
 	initialize "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
@@ -18,8 +19,14 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
+	"github.com/aws/eks-hybrid/internal/pods"
 	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
+)
+
+const (
+	skipPodPreflightCheck  = "pod-validation"
+	skipNodePreflightCheck = "node-validation"
 )
 
 func NewUpgradeCommand() cli.Command {
@@ -28,7 +35,7 @@ func NewUpgradeCommand() cli.Command {
 	fc := flaggy.NewSubcommand("upgrade")
 	fc.Description = "Upgrade components installed using the install sub-command"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
-	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the bootstrap you want to skip")
+	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the upgrade you want to skip")
 	cmd.flaggy = fc
 	return &cmd
 }
@@ -50,6 +57,13 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	if !root {
 		return cli.ErrMustRunAsRoot
+	}
+
+	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
+		log.Info("Validating running pods on the node...")
+		if err := pods.ValidateRunningPodsForUninstall(); err != nil {
+			return err
+		}
 	}
 
 	log.Info("Loading configuration..", zap.String("configSource", opts.ConfigSource))

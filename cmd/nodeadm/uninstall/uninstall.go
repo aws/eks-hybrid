@@ -5,6 +5,7 @@ import (
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
@@ -17,8 +18,14 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubectl"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
+	"github.com/aws/eks-hybrid/internal/pods"
 	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
+)
+
+const (
+	skipPodPreflightCheck  = "pod-validation"
+	skipNodePreflightCheck = "node-validation"
 )
 
 func NewCommand() cli.Command {
@@ -26,13 +33,15 @@ func NewCommand() cli.Command {
 
 	fc := flaggy.NewSubcommand("uninstall")
 	fc.Description = "Uninstall components installed using the install sub-command"
+	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of uninstall you want to skip")
 	cmd.flaggy = fc
 
 	return &cmd
 }
 
 type command struct {
-	flaggy *flaggy.Subcommand
+	flaggy     *flaggy.Subcommand
+	skipPhases []string
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -46,6 +55,13 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	if !root {
 		return cli.ErrMustRunAsRoot
+	}
+
+	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
+		log.Info("Validating running pods on the node")
+		if err := pods.ValidateRunningPodsForUninstall(); err != nil {
+			return err
+		}
 	}
 
 	log.Info("Loading installed components")

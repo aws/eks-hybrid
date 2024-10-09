@@ -11,11 +11,14 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"regexp"
+	"sigs.k8s.io/yaml"
 	"strings"
 	"time"
 
 	"dario.cat/mergo"
-
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/mod/semver"
 
@@ -39,7 +42,11 @@ const (
 	kubeletConfigPerm = 0644
 
 	hybridNodeLabel = "eks.amazonaws.com/compute-type=hybrid"
+
+	hybridProviderIdPrefix = "eks-hybrid"
 )
+
+var nodeNameProviderIdRegexPattern = regexp.MustCompile(`^eks-hybrid:///[^/]+/[^/]+/(.+)$`)
 
 func (k *kubelet) writeKubeletConfig() error {
 	kubeletVersion, err := GetKubeletVersion()
@@ -491,7 +498,7 @@ func getProviderId(availabilityZone, instanceId string) string {
 }
 
 func getHybridProviderId(cfg *api.NodeConfig) string {
-	return fmt.Sprintf("eks-hybrid:///%s/%s/%s", cfg.Spec.Cluster.Region, cfg.Spec.Cluster.Name, cfg.Spec.Hybrid.NodeName)
+	return fmt.Sprintf("%s:///%s/%s/%s", hybridProviderIdPrefix, cfg.Spec.Cluster.Region, cfg.Spec.Cluster.Name, cfg.Spec.Hybrid.NodeName)
 }
 
 // Get the IP of the node depending on the ipFamily configured for the cluster
@@ -563,4 +570,30 @@ func getResourceToReserveInRange(totalCPU, startRange, endRange, percentage int)
 
 func getMemoryMebibytesToReserve(maxPods int32) int32 {
 	return 11*maxPods + 255
+}
+
+func GetKubeletConfigFromDisk() (*kubeletConfig, error) {
+	data, err := os.ReadFile(filepath.Join(kubeletConfigRoot, kubeletConfigFile))
+	if err != nil {
+		return nil, err
+	}
+
+	var kubeletConf kubeletConfig
+	if err = yaml.Unmarshal(data, &kubeletConf); err != nil {
+		return nil, err
+	}
+	return &kubeletConf, nil
+}
+
+func GetNodeName() (string, error) {
+	kubeletConf, err := GetKubeletConfigFromDisk()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get kubelet configuration from disk")
+	}
+	matches := nodeNameProviderIdRegexPattern.FindStringSubmatch(*kubeletConf.ProviderID)
+	// matches have entire string, 1st match, 2nd match, etc
+	if len(matches) > 1 {
+		return matches[1], nil
+	}
+	return "", errors.New("failed to get node name from provider id")
 }
