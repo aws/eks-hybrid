@@ -3,7 +3,7 @@ version: 0.2
 phases:
   build:
     commands:
-    - aws s3 cp _bin/amd64/nodeadm s3://$ARTIFACTS_BUCKET/${CODEBUILD_BUILD_NUMBER}/linux/amd64/nodeadm --acl public-read
-    - aws s3 cp _bin/arm64/nodeadm s3://$ARTIFACTS_BUCKET/${CODEBUILD_BUILD_NUMBER}/linux/arm64/nodeadm --acl public-read
-    - aws s3 cp _bin/amd64/nodeadm s3://$ARTIFACTS_BUCKET/latest/linux/amd64/nodeadm --acl public-read
-    - aws s3 cp _bin/arm64/nodeadm s3://$ARTIFACTS_BUCKET/latest/linux/arm64/nodeadm --acl public-read
+    - aws s3 cp _bin/amd64/nodeadm s3://$ARTIFACTS_BUCKET/${CODEBUILD_BUILD_NUMBER}/linux/amd64/nodeadm
+    - aws s3 cp _bin/arm64/nodeadm s3://$ARTIFACTS_BUCKET/${CODEBUILD_BUILD_NUMBER}/linux/arm64/nodeadm
+    - aws s3 cp _bin/amd64/nodeadm s3://$ARTIFACTS_BUCKET/latest/linux/amd64/nodeadm
+    - aws s3 cp _bin/arm64/nodeadm s3://$ARTIFACTS_BUCKET/latest/linux/arm64/nodeadm
