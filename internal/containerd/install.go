@@ -1,6 +1,7 @@
 package containerd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,15 +27,15 @@ const (
 
 // Source represents a source that serves a containerd binary.
 type Source interface {
-	GetContainerd() artifact.Package
+	GetContainerd(ctx context.Context) artifact.Package
 }
 
-func Install(tracker *tracker.Tracker, source Source, containerdSource SourceName) error {
+func Install(ctx context.Context, tracker *tracker.Tracker, source Source, containerdSource SourceName) error {
 	if containerdSource == ContainerdSourceNone {
 		return nil
 	}
 	if isContainerdNotInstalled() {
-		containerd := source.GetContainerd()
+		containerd := source.GetContainerd(ctx)
 		if err := artifact.InstallPackage(containerd); err != nil {
 			return errors.Wrap(err, "failed to install containerd")
 		}
@@ -43,9 +44,9 @@ func Install(tracker *tracker.Tracker, source Source, containerdSource SourceNam
 	return nil
 }
 
-func Uninstall(source Source) error {
+func Uninstall(ctx context.Context, source Source) error {
 	if isContainerdInstalled() {
-		containerd := source.GetContainerd()
+		containerd := source.GetContainerd(ctx)
 		if err := artifact.UninstallPackage(containerd); err != nil {
 			return errors.Wrap(err, "failed to uninstall containerd")
 		}

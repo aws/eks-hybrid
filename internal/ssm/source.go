@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os/exec"
 	"runtime"
-	"time"
+
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 // Initial region ssm installer is downloaded from. When installer runs, it will
@@ -19,13 +19,11 @@ const DefaultSsmInstallerRegion = "us-west-2"
 // release endpoint.
 func NewSSMInstaller(region string) Source {
 	return ssmInstallerSource{
-		client: http.Client{Timeout: 120 * time.Second},
 		region: region,
 	}
 }
 
 type ssmInstallerSource struct {
-	client http.Client
 	region string
 }
 
@@ -34,17 +32,12 @@ func (s ssmInstallerSource) GetSSMInstaller(ctx context.Context) (io.ReadCloser,
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	obj, err := util.GetHttpFileReader(ctx, endpoint)
 	if err != nil {
+		obj.Close()
 		return nil, err
 	}
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Body, nil
+	return obj, nil
 }
 
 func buildSSMURL(region string) (string, error) {

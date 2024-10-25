@@ -1,6 +1,7 @@
 package packagemanager
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -69,36 +70,36 @@ func New(containerdSource containerd.SourceName, logger *zap.Logger) (*DistroPac
 }
 
 // Configure configures the package manager.
-func (pm *DistroPackageManger) Configure() error {
+func (pm *DistroPackageManger) Configure(ctx context.Context) error {
 	// Add docker repos to the package manager
 	if pm.dockerRepo != "" {
 		if pm.manager == yumPackageManager {
-			return pm.configureYumPackageManagerWithDockerRepo()
+			return pm.configureYumPackageManagerWithDockerRepo(ctx)
 		}
 		if pm.manager == aptPackageManager {
-			return pm.configureAptPackageManagerWithDockerRepo()
+			return pm.configureAptPackageManagerWithDockerRepo(ctx)
 		}
 	}
 	return nil
 }
 
 // configureYumPackageManagerWithDockerRepo configures yum package manager with docker repos
-func (pm *DistroPackageManger) configureYumPackageManagerWithDockerRepo() error {
+func (pm *DistroPackageManger) configureYumPackageManagerWithDockerRepo(ctx context.Context) error {
 	// Run update to update all package repo metadata for newly provisioned OS
 	pm.logger.Info("Updating packages to refresh repo metadata...")
-	if resp, err := pm.updateAllPackages(); err != nil {
+	if resp, err := pm.updateAllPackages(ctx); err != nil {
 		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
 	}
 
 	// Check and remove runc if installed, as it conflicts with docker repo
 	if _, errNotFound := exec.LookPath(runcPkgName); errNotFound == nil {
 		pm.logger.Info("Removing runc to avoid package conflicts from docker repos...")
-		if resp, err := pm.removePackage(runcPkgName); err != nil {
+		if resp, err := pm.removePackage(ctx, runcPkgName); err != nil {
 			return errors.Wrapf(err, "failed to remove runc using package manager: %s", resp)
 		}
 	}
 
-	if resp, err := pm.installPackage(yumUtilsManagerPkg); err != nil {
+	if resp, err := pm.installPackage(ctx, yumUtilsManagerPkg); err != nil {
 		return errors.Wrapf(err, "failed to install %s using package manager: %s", yumUtilsManagerPkg, resp)
 	}
 
@@ -115,23 +116,21 @@ func (pm *DistroPackageManger) configureYumPackageManagerWithDockerRepo() error 
 	}
 
 	pm.logger.Info("Updating packages to refresh docker repo metadata...")
-	if resp, err := pm.updateAllPackages(); err != nil {
+	if resp, err := pm.updateAllPackages(ctx); err != nil {
 		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
 	}
 	return nil
 }
 
 // configureAptPackageManagerWithDockerRepo configures apt package manager with docker repos
-func (pm *DistroPackageManger) configureAptPackageManagerWithDockerRepo() error {
-	configureCmds := []*exec.Cmd{
-		exec.Command(pm.manager, pm.updateVerb, "-y"),
-		exec.Command(pm.manager, pm.installVerb, "ca-certificates", "-y"),
+func (pm *DistroPackageManger) configureAptPackageManagerWithDockerRepo(ctx context.Context) error {
+	out, err := pm.updateAllPackages(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
 	}
-	for _, command := range configureCmds {
-		out, err := command.CombinedOutput()
-		if err != nil {
-			return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
-		}
+	out, err = pm.installPackage(ctx, "ca-certificates")
+	if err != nil {
+		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
 	}
 
 	// Download docker gpg key and write it to file
@@ -152,8 +151,7 @@ func (pm *DistroPackageManger) configureAptPackageManagerWithDockerRepo() error 
 
 	// Run update to pull docker repo's metadata
 	// Commands cant be re-used to run again, hence re-declaring update command
-	updateCmd := exec.Command(pm.manager, pm.updateVerb, "-y")
-	out, err := updateCmd.CombinedOutput()
+	out, err = pm.updateAllPackages(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
 	}
@@ -161,8 +159,8 @@ func (pm *DistroPackageManger) configureAptPackageManagerWithDockerRepo() error 
 }
 
 // installPackage installs a package using package manager
-func (pm *DistroPackageManger) installPackage(packageName string) (string, error) {
-	installCmd := exec.Command(pm.manager, pm.installVerb, packageName, "-y")
+func (pm *DistroPackageManger) installPackage(ctx context.Context, packageName string) (string, error) {
+	installCmd := exec.CommandContext(ctx, pm.manager, pm.installVerb, packageName, "-y")
 	out, err := installCmd.CombinedOutput()
 	if err != nil {
 		return string(out), err
@@ -171,8 +169,8 @@ func (pm *DistroPackageManger) installPackage(packageName string) (string, error
 }
 
 // updateAllPackages updates all packages and repo metadata on the system
-func (pm *DistroPackageManger) updateAllPackages() (string, error) {
-	updateCmd := exec.Command(pm.manager, pm.updateVerb, "-y")
+func (pm *DistroPackageManger) updateAllPackages(ctx context.Context) (string, error) {
+	updateCmd := exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y")
 	out, err := updateCmd.CombinedOutput()
 	if err != nil {
 		return string(out), err
@@ -181,8 +179,8 @@ func (pm *DistroPackageManger) updateAllPackages() (string, error) {
 }
 
 // removePackage deletes a package using package manager
-func (pm *DistroPackageManger) removePackage(packageName string) (string, error) {
-	removeCmd := exec.Command(pm.manager, pm.deleteVerb, packageName, "-y")
+func (pm *DistroPackageManger) removePackage(ctx context.Context, packageName string) (string, error) {
+	removeCmd := exec.CommandContext(ctx, pm.manager, pm.deleteVerb, packageName, "-y")
 	out, err := removeCmd.CombinedOutput()
 	if err != nil {
 		return string(out), err
@@ -192,38 +190,38 @@ func (pm *DistroPackageManger) removePackage(packageName string) (string, error)
 
 // GetContainerd gets the Package
 // Satisfies the containerd source interface
-func (pm *DistroPackageManger) GetContainerd() artifact.Package {
+func (pm *DistroPackageManger) GetContainerd(ctx context.Context) artifact.Package {
 	packageName := containerdDistroPkgName
 	if pm.dockerRepo != "" {
 		packageName = containerdDockerPkgName
 	}
 	return artifact.NewPackageSource(
-		exec.Command(pm.manager, pm.installVerb, packageName, "-y"),
-		exec.Command(pm.manager, pm.deleteVerb, packageName, "-y"),
+		exec.CommandContext(ctx, pm.manager, pm.installVerb, packageName, "-y"),
+		exec.CommandContext(ctx, pm.manager, pm.deleteVerb, packageName, "-y"),
 	)
 }
 
 // GetIptables satisfies the getiptables source interface
-func (pm *DistroPackageManger) GetIptables() artifact.Package {
+func (pm *DistroPackageManger) GetIptables(ctx context.Context) artifact.Package {
 	return artifact.NewPackageSource(
-		exec.Command(pm.manager, pm.installVerb, "iptables", "-y"),
-		exec.Command(pm.manager, pm.deleteVerb, "iptables", "-y"),
+		exec.CommandContext(ctx, pm.manager, pm.installVerb, "iptables", "-y"),
+		exec.CommandContext(ctx, pm.manager, pm.deleteVerb, "iptables", "-y"),
 	)
 }
 
 // GetSSMPackage satisfies the getssmpackage source interface
-func (pm *DistroPackageManger) GetSSMPackage() artifact.Package {
+func (pm *DistroPackageManger) GetSSMPackage(ctx context.Context) artifact.Package {
 	// SSM is installed using snap package manager. If apt package manager
 	// is detected, use snap to install/uninstall SSM.
 	if pm.manager == aptPackageManager {
 		return artifact.NewPackageSource(
-			exec.Command(snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
-			exec.Command(snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
+			exec.CommandContext(ctx, snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
+			exec.CommandContext(ctx, snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
 		)
 	}
 	return artifact.NewPackageSource(
-		exec.Command(pm.manager, pm.installVerb, "amazon-ssm-agent", "-y"),
-		exec.Command(pm.manager, pm.deleteVerb, "amazon-ssm-agent", "-y"),
+		exec.CommandContext(ctx, pm.manager, pm.installVerb, "amazon-ssm-agent", "-y"),
+		exec.CommandContext(ctx, pm.manager, pm.deleteVerb, "amazon-ssm-agent", "-y"),
 	)
 }
 

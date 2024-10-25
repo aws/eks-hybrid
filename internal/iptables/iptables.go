@@ -1,6 +1,7 @@
 package iptables
 
 import (
+	"context"
 	"github.com/pkg/errors"
 	"os/exec"
 
@@ -12,13 +13,13 @@ const iptablesBinName = "iptables"
 
 // Source interface for iptables package
 type Source interface {
-	GetIptables() artifact.Package
+	GetIptables(ctx context.Context) artifact.Package
 }
 
 // Install iptables package required for kubelet
-func Install(tracker *tracker.Tracker, source Source) error {
+func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error {
 	if !isIptablesInstalled() {
-		iptablesSrc := source.GetIptables()
+		iptablesSrc := source.GetIptables(ctx)
 		if err := artifact.InstallPackage(iptablesSrc); err != nil {
 			return errors.Wrap(err, "failed to install iptables")
 		}
@@ -28,9 +29,9 @@ func Install(tracker *tracker.Tracker, source Source) error {
 }
 
 // Uninstall iptables package
-func Uninstall(source Source) error {
+func Uninstall(ctx context.Context, source Source) error {
 	if isIptablesInstalled() {
-		iptablesSrc := source.GetIptables()
+		iptablesSrc := source.GetIptables(ctx)
 		if err := artifact.UninstallPackage(iptablesSrc); err != nil {
 			return errors.Wrap(err, "failed to uninstall iptables")
 		}

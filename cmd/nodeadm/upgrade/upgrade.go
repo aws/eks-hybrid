@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
@@ -30,12 +31,15 @@ const (
 )
 
 func NewUpgradeCommand() cli.Command {
-	cmd := command{}
+	cmd := command{
+		downloadTimeout: 10 * time.Minute,
+	}
 
 	fc := flaggy.NewSubcommand("upgrade")
 	fc.Description = "Upgrade components installed using the install sub-command"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the upgrade you want to skip")
+	fc.Duration(&cmd.downloadTimeout, "dt", "download-timeout", "Timeout for downloading artifacts. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 	return &cmd
 }
@@ -44,6 +48,7 @@ type command struct {
 	flaggy            *flaggy.Subcommand
 	skipPhases        []string
 	kubernetesVersion string
+	downloadTimeout   time.Duration
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -68,7 +73,9 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), c.downloadTimeout)
+	defer cancel()
+
 	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
 		log.Info("Validating if pods have been drained...")
 		if err := node.IsDrained(ctx); err != nil {
@@ -126,7 +133,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := uninstall.UninstallBinaries(artifacts, packageManager, log); err != nil {
+	if err := uninstall.UninstallBinaries(ctx, artifacts, packageManager, log); err != nil {
 		return err
 	}
 
@@ -151,7 +158,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(packageManager); err != nil {
+		if err := ssm.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}
@@ -160,7 +167,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := daemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
 			return err
 		}
-		if err := containerd.Uninstall(packageManager); err != nil {
+		if err := containerd.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}
@@ -169,8 +176,16 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	installer := &install.Config{
+		AwsSource:          awsSource,
+		ContainerdSource:   containerdSource,
+		CredentialProvider: credsProvider,
+		Log:                log,
+		DownloadTimeout:    c.downloadTimeout,
+	}
+
 	// Installing new version of artifacts
-	if err := install.Install(ctx, awsSource, credsProvider, containerdSource, log); err != nil {
+	if err := installer.Install(ctx); err != nil {
 		return err
 	}
 

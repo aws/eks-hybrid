@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -29,10 +30,36 @@ func GetHttpFileReader(ctx context.Context, uri string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed creating request from url: %s", uri)
 	}
-	client := http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Do(request)
+
+	httpRetryClient := newRetryableHttpClient(2*time.Second, 3)
+	resp, err := httpRetryClient.Do(request)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed reading file from url: %s", uri)
 	}
 	return resp.Body, nil
+}
+
+type retryHttpClient struct {
+	backoff    time.Duration
+	maxRetries int
+}
+
+func newRetryableHttpClient(backoff time.Duration, maxRetries int) *retryHttpClient {
+	return &retryHttpClient{
+		backoff:    backoff,
+		maxRetries: maxRetries,
+	}
+}
+
+func (hc *retryHttpClient) Do(req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+
+	for i := 0; i < hc.maxRetries; i++ {
+		resp, err = http.DefaultClient.Do(req)
+		if err == nil {
+			return resp, nil
+		}
+	}
+	return nil, fmt.Errorf("max retries achieved for http request: %s", req.Host)
 }
