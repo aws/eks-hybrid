@@ -41,9 +41,9 @@ Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential
 ```sh
 nodeadm install 1.31 --credential-provider ssm 
 ```
-Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential provider, Docker as the containerd source, with a download timeout of 20 minutes.
+Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential provider with a download timeout of 20 minutes.
 ```sh
-nodeadm install 1.31 --credential-provider ssm --containerd-source docker --download-timeout 20m
+nodeadm install 1.31 --credential-provider ssm --download-timeout 20m
 ```
 Install Kubernetes version 1.31 with AWS IAM Roles Anywhere as the credential provider
 ```sh
