@@ -116,8 +116,9 @@ type peeredVPCTest struct {
 	cfnClient       *cloudformation.CloudFormation
 	k8sClient       *kubernetes.Clientset
 	k8sClientConfig *restclient.Config
-	s3Client        *s3.S3
-	iamClient       *iam.IAM
+
+	s3Client  *s3.S3
+	iamClient *iam.IAM
 
 	logger logr.Logger
 
@@ -275,8 +276,9 @@ var _ = Describe("Hybrid Nodes", func() {
 			// assume same name/path used by the setup command.
 			clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath(suite.TestConfig.ClusterName))
 			Expect(err).NotTo(HaveOccurred(), "should load correctly kubeconfig file for cluster %s", suite.TestConfig.ClusterName)
+			test.k8sClientConfig = clientConfig
 
-			test.k8sClient, err = kubernetes.NewForConfig(clientConfig)
+			test.k8sClient, err = kubernetes.NewForConfig(test.k8sClientConfig)
 			Expect(err).NotTo(HaveOccurred(), "expected to build kubernetes client")
 
 			test.cluster, err = getHybridClusterDetails(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName, suite.TestConfig.ClusterRegion, suite.TestConfig.HybridVpcID)
@@ -389,6 +391,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								k8s:           test.k8sClient,
 								nodeIPAddress: ec2.ipAddress,
 								logger:        test.logger,
+								clientConfig:  test.k8sClientConfig,
 							}
 							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
 
@@ -428,6 +431,7 @@ type joinNodeTest struct {
 	k8s           *kubernetes.Clientset
 	nodeIPAddress string
 	logger        logr.Logger
+	clientConfig  *restclient.Config
 }
 
 func (t joinNodeTest) Run(ctx context.Context) error {
@@ -453,6 +457,19 @@ func (t joinNodeTest) Run(ctx context.Context) error {
 		return err
 	}
 	t.logger.Info(fmt.Sprintf("Pod %s created and running on node %s", podName, nodeName))
+
+	t.logger.Info("Checking logs for nginx output", "pod", podName)
+	logs, err := getPodLogs(ctx, t.k8s, podName, podNamespace)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(logs).Should(ContainSubstring("nginx"))
+	t.logger.Info("Successfully validated log output", "pod", podName)
+
+	t.logger.Info("Exec-ing nginx -version", "pod", podName)
+	stdout, stderr, err := execPod(ctx, t.clientConfig, t.k8s, podName, podNamespace, []string{"/sbin/nginx", "-version"})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(stdout).Should(ContainSubstring("nginx"))
+	Expect(stderr).Should(BeEmpty())
+	t.logger.Info("Successfully exec'd nginx -version", "pod", podName)
 
 	t.logger.Info("Deleting test pod", "pod", podName)
 	if err = deletePod(ctx, t.k8s, podName, podNamespace); err != nil {
