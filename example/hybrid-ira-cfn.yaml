@@ -1,41 +1,54 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'v0.0.4: Hybrid Nodes IRA: Create IAM Roles Anywhere resources for EKS hybrid cluster.'
+Description: 'Create the IAM Roles Anywhere resources required for EKS Hybrid Nodes and the EKS Hybrid Nodes IAM role'
 
 Metadata:
   Version:
-    Number: "v0.0.4"
+    Number: "v0.0.5"
 
 Parameters:
+  RoleName:
+    Type: String
+    Description: The role name for the EKS Hybrid Nodes IAM role
+    Default: 'AmazonEKSHybridNodesRole'
+  CertAttributeTrustPolicy:
+    Type: String
+    Description: The certificate attribute to use in the condition for the IAM Roles Anywhere AssumeRole action.
+    Default: '${aws:PrincipalTag/x509Subject/CN}'
+    AllowedValues:
+      - '${aws:PrincipalTag/x509Subject/CN}'
+      - '$(aws:PrincipalTag/x509SAN/Name/CN}'
   CABundleCert:
     Type: String
-  EKSClusterArn:
-    Type: String
+    Description: The PEM formatted CA certificate body
 
 Resources:
-  TrustAnchor:
+  IAMRATrustAnchor:
     Type: AWS::RolesAnywhere::TrustAnchor
     Properties:
       Enabled: true
-      Name: !Sub '${AWS::StackName}-CA'
+      Name: !Sub '${AWS::StackName}-iamra-trust-anchor'
       Source:
         SourceType: CERTIFICATE_BUNDLE
         SourceData:
           X509CertificateData: !Ref CABundleCert
-  
-  AnywhereProfile:
+
+  IAMRAProfile:
     Type: AWS::RolesAnywhere::Profile
+    DependsOn: EKSHybridNodesRole
     Properties:
       Enabled: true
-      Name: !Sub '${AWS::StackName}-nodes'
+      Name: !Sub '${AWS::StackName}-iamra-profile'
       RoleArns:
-        - !GetAtt IntermediateRole.Arn
+        - !GetAtt EKSHybridNodesRole.Arn
+      AcceptRoleSessionName: true
   
-  IRARole:
+  EKSHybridNodesRole:
     Type: AWS::IAM::Role
+    DependsOn: IAMRATrustAnchor
     Properties:
-      RoleName: !Sub '${AWS::StackName}-intermediate-role'
+      RoleName: !Ref RoleName
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'
+        - 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly'
       Policies:
         - PolicyName: EKSDescribeCluster
           PolicyDocument:
@@ -44,7 +57,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - 'eks:DescribeCluster'                    
-                Resource: !Ref EKSClusterArn
+                Resource: '*'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -57,38 +70,38 @@ Resources:
               - 'sts:SetSourceIdentity'
             Condition:
               ArnEquals:
-                'aws:SourceArn': !GetAtt TrustAnchor.TrustAnchorArn
+                'aws:SourceArn': !GetAtt IAMRATrustAnchor.TrustAnchorArn
           - Effect: Allow
             Principal:
               Service:
                 - rolesanywhere.amazonaws.com
-              Action:
-                - 'sts:AssumeRole'
-              Condition:
-                StringEquals:
-                  'sts:RoleSessionName': '${aws:PrincipalTag/x509Subject/CN}'
+            Action:
+               - 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:RoleSessionName': !Ref CertAttributeTrustPolicy
 
 Outputs:
-  IRARole:
-    Description: IAM Role for IAM Roles Anywhere
-    Value: !Ref IRARole
+  EKSHybridNodesRole:
+    Description: EKS Hybrid Nodes IAM role
+    Value: !Ref EKSHybridNodesRole
     Export:
-      Name: IRARole
+      Name: EKSHybridNodesRole
   
-  IRARoleARN:
-    Description: ARN of the EKS Hybrid IRA Role
-    Value: !GetAtt IRARole.Arn
+  EKSHybridNodesRoleARN:
+    Description: ARN of the EKS Hybrid Nodes IAM role
+    Value: !GetAtt EKSHybridNodesRole.Arn
     Export:
-      Name: IRARoleARN
+      Name: EKSHybridNodesRoleARN
 
-  IRATrustAnchorARN:
-    Description: ARN of the EKS Hybrid IRA Trust Anchor
-    Value: !GetAtt TrustAnchor.TrustAnchorArn
+  IAMRATrustAnchorARN:
+    Description: ARN of the IAM Roles Anywhere trust anchor
+    Value: !GetAtt IAMRATrustAnchor.TrustAnchorArn
     Export:
       Name: IRATrustAnchorARN
 
-  IRAProfileARN:
-    Description: ARN of the EKS Hybrid IRA Profile
-    Value: !GetAtt AnywhereProfile.ProfileArn
+  IAMRAProfileARN:
+    Description: ARN of the IAM Roles Anywhere profile
+    Value: !GetAtt IAMRAProfile.ProfileArn
     Export:
-      Name: IRAProfileARN
+      Name: IAMRAProfileARN
