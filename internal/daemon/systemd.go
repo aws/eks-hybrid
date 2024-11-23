@@ -5,8 +5,11 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 var _ DaemonManager = &systemdDaemonManager{}
@@ -37,9 +40,10 @@ func (m *systemdDaemonManager) DaemonReload() error {
 }
 
 func (m *systemdDaemonManager) StartDaemon(name string) error {
-	unitName := getServiceUnitName(name)
-	_, err := m.conn.StartUnitContext(context.TODO(), unitName, ModeReplace, nil)
-	return err
+	if _, err := m.conn.StartUnitContext(context.TODO(), getServiceUnitName(name), ModeReplace, nil); err != nil {
+		return err
+	}
+	return m.waitForStatus(context.TODO(), name, DaemonStatusRunning)
 }
 
 func (m *systemdDaemonManager) StopDaemon(name string) error {
@@ -49,16 +53,18 @@ func (m *systemdDaemonManager) StopDaemon(name string) error {
 		return err
 	}
 	if status == DaemonStatusRunning {
-		_, err := m.conn.StopUnitContext(context.TODO(), unitName, ModeReplace, nil)
-		return err
+		if _, err := m.conn.StopUnitContext(context.TODO(), unitName, ModeReplace, nil); err != nil {
+			return err
+		}
 	}
-	return nil
+	return m.waitForStatus(context.TODO(), name, DaemonStatusStopped)
 }
 
 func (m *systemdDaemonManager) RestartDaemon(name string) error {
-	unitName := getServiceUnitName(name)
-	_, err := m.conn.RestartUnitContext(context.TODO(), unitName, ModeReplace, nil)
-	return err
+	if _, err := m.conn.RestartUnitContext(context.TODO(), getServiceUnitName(name), ModeReplace, nil); err != nil {
+		return err
+	}
+	return m.waitForStatus(context.TODO(), name, DaemonStatusRunning)
 }
 
 func (m *systemdDaemonManager) GetDaemonStatus(name string) (DaemonStatus, error) {
@@ -112,4 +118,20 @@ func (m *systemdDaemonManager) Close() {
 
 func getServiceUnitName(name string) string {
 	return fmt.Sprintf("%s.service", name)
+}
+
+func (m *systemdDaemonManager) waitForStatus(ctx context.Context, name string, targetStatus DaemonStatus) error {
+	return util.NewRetrier(
+		util.WithRetryAlways(),
+		util.WithBackoffFixed(250*time.Millisecond),
+	).Retry(ctx, func() error {
+		status, err := m.GetDaemonStatus(name)
+		if err != nil {
+			return err
+		}
+		if status != targetStatus {
+			return fmt.Errorf("%s status is not %q", name, targetStatus)
+		}
+		return nil
+	})
 }
