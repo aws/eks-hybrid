@@ -81,8 +81,8 @@ func (pm *DistroPackageManager) Configure(ctx context.Context) error {
 		}
 	}
 	pm.logger.Info("Updating packages to refresh package manager repo metadata...")
-	if resp, err := pm.updateAllPackages(ctx); err != nil {
-		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
+	if err := pm.updateAllPackages(ctx); err != nil {
+		return errors.Wrap(err, "failed to run update using package manager")
 	}
 	return nil
 }
@@ -91,8 +91,8 @@ func (pm *DistroPackageManager) Configure(ctx context.Context) error {
 func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx context.Context) error {
 	// Run update to update all package repo metadata for newly provisioned OS
 	pm.logger.Info("Updating packages to refresh repo metadata...")
-	if resp, err := pm.updateAllPackages(ctx); err != nil {
-		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
+	if err := pm.updateAllPackages(ctx); err != nil {
+		return errors.Wrap(err, "failed to run update using package manager")
 	}
 
 	// Check and remove runc if installed, as it conflicts with docker repo
@@ -124,11 +124,11 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 
 // configureAptPackageManagerWithDockerRepo configures apt package manager with docker repos
 func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx context.Context) error {
-	out, err := pm.updateAllPackages(ctx)
+	err := pm.updateAllPackages(ctx)
 	if err != nil {
-		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
+		return errors.Wrap(err, "failed running commands to configure package manager")
 	}
-	out, err = pm.installPackage(ctx, "ca-certificates")
+	out, err := pm.installPackage(ctx, "ca-certificates")
 	if err != nil {
 		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
 	}
@@ -148,7 +148,7 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	if err := util.WriteFileWithDir(aptDockerRepoSourceFilePath, []byte(aptDockerRepoConfig), ubuntuDockerGpgKeyFilePerms); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -163,13 +163,15 @@ func (pm *DistroPackageManager) installPackage(ctx context.Context, packageName 
 }
 
 // updateAllPackages updates all packages and repo metadata on the system
-func (pm *DistroPackageManager) updateAllPackages(ctx context.Context) (string, error) {
-	updateCmd := exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y")
-	out, err := updateCmd.CombinedOutput()
-	if err != nil {
-		return string(out), err
-	}
-	return string(out), nil
+func (pm *DistroPackageManager) updateAllPackages(ctx context.Context) error {
+	return util.NewRetrier(util.WithBackoffExponential()).Retry(ctx, func() error {
+		updateCmd := exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y")
+		_, err := updateCmd.CombinedOutput()
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // removePackage deletes a package using package manager
