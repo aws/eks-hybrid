@@ -88,13 +88,13 @@ func readTestConfig(configPath string) (*TestConfig, error) {
 }
 
 func enabledCredentialsProviders(providers []NodeadmCredentialsProvider) []NodeadmCredentialsProvider {
-	filter := GinkgoLabelFilter()
+	// filter := GinkgoLabelFilter()
 	providerList := []NodeadmCredentialsProvider{}
 
 	for _, provider := range providers {
-		if strings.Contains(filter, string(provider.Name())) {
-			providerList = append(providerList, provider)
-		}
+		// if strings.Contains(filter, string(provider.Name())) {
+		providerList = append(providerList, provider)
+		// }
 	}
 	return providerList
 }

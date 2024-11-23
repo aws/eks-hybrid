@@ -98,6 +98,13 @@ export class NodeadmBuildStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
     });
 
+    const e2eTestReportsBucket = new s3.Bucket(this, `nodeadm-e2e-test-reports-${this.account}`, {
+      bucketName: `nodeadm-e2e-test-reports-${this.account}`,
+      enforceSSL: true,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+    });
+
     nodeadmLogsBucket.addLifecycleRule({
       enabled: true,
       expiration: Duration.days(30),
@@ -188,6 +195,10 @@ export class NodeadmBuildStack extends cdk.Stack {
           GOPROXY: {
             type: codebuild.BuildEnvironmentVariableType.SECRETS_MANAGER,
             value: `${goproxySecret.secretArn}:endpoint`,
+          },
+          TEST_REPORTS_BUCKET: {
+            type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+            value: e2eTestReportsBucket.bucketName,
           },
         },
       },
@@ -384,6 +395,11 @@ export class NodeadmBuildStack extends cdk.Stack {
           effect: iam.Effect.ALLOW,
           actions: ['s3:GetObject', 's3:ListBucket'],
           resources: [eksHybridBetaBucketARN, `${eksHybridBetaBucketARN}/*`, nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['s3:PutObject*', 's3:ListBucket'],
+          resources: [e2eTestReportsBucket.bucketArn, `${e2eTestReportsBucket.bucketArn}/*`],
         }),
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
