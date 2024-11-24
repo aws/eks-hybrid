@@ -80,6 +80,10 @@ func (pm *DistroPackageManager) Configure(ctx context.Context) error {
 			return pm.configureAptPackageManagerWithDockerRepo(ctx)
 		}
 	}
+	pm.logger.Info("Updating packages to refresh package manager repo metadata...")
+	if resp, err := pm.updateAllPackages(ctx); err != nil {
+		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
+	}
 	return nil
 }
 
@@ -115,10 +119,6 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 		return errors.Wrapf(err, "failed adding docker repo to package manager: %s", out)
 	}
 
-	pm.logger.Info("Updating packages to refresh docker repo metadata...")
-	if resp, err := pm.updateAllPackages(ctx); err != nil {
-		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
-	}
 	return nil
 }
 
@@ -148,13 +148,7 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	if err := util.WriteFileWithDir(aptDockerRepoSourceFilePath, []byte(aptDockerRepoConfig), ubuntuDockerGpgKeyFilePerms); err != nil {
 		return err
 	}
-
-	// Run update to pull docker repo's metadata
-	// Commands cant be re-used to run again, hence re-declaring update command
-	out, err = pm.updateAllPackages(ctx)
-	if err != nil {
-		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
-	}
+	
 	return nil
 }
 
