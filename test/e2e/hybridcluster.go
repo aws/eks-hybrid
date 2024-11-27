@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/eks"
+	"k8s.io/apimachinery/pkg/util/version"
 )
 
 type HybridCluster struct {
@@ -105,4 +106,13 @@ func getHybridClusterDetails(ctx context.Context, eksClient *eks.EKS, ec2Client 
 	}
 
 	return cluster, nil
+}
+
+func getPreviousK8sVersion(kubernetesVersion string) (string, error) {
+	currentVersion, err := version.ParseSemantic(kubernetesVersion + ".0")
+	if err != nil {
+		return "", fmt.Errorf("parsing kubernetes version: %v", err)
+	}
+	prevVersion := fmt.Sprintf("%d.%d", currentVersion.Major(), currentVersion.Minor()-1)
+	return prevVersion, nil
 }
