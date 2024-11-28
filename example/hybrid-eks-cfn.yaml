@@ -82,15 +82,13 @@ Resources:
         SubnetIds: 
           - !Ref SubnetId1
           - !Ref SubnetId2
-        EndpointPublicAccess: !If [HasPublicAccess, false, false]
-        EndpointPrivateAccess: !If [HasPrivateAccess, true, true]
+        EndpointPublicAccess: !If [HasPublicAccess, true, false]
+        EndpointPrivateAccess: !If [HasPrivateAccess, true, false]
       RemoteNetworkConfig:
         RemoteNodeNetworks:
           - Cidrs: [!Ref RemoteNodeCIDR]
-        RemotePodNetworks: !If
-          - HasRemotePodCIDR
-          - Cidrs: [!Ref RemotePodCIDR]
-          - !Ref 'AWS::NoValue'
+        RemotePodNetworks:
+          - Cidrs: [!If [HasRemotePodCIDR, !Ref RemotePodCIDR, !Ref 'AWS::NoValue']]
 
 Outputs:
   EKSClusterName:
