@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"time"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -71,26 +72,36 @@ func New(containerdSource containerd.SourceName, logger *zap.Logger) (*DistroPac
 
 // Configure configures the package manager.
 func (pm *DistroPackageManager) Configure(ctx context.Context) error {
+	// Run update to update all package repo metadata for newly provisioned OS
+	pm.logger.Info("Updating packages to refresh repo metadata...")
+	if err := pm.updateAllPackagesWithRetries(ctx); err != nil {
+		return errors.Wrapf(err, "failed to run update using package manager")
+	}
+
+	if pm.dockerRepo == "" {
+		return nil
+	}
 	// Add docker repos to the package manager
-	if pm.dockerRepo != "" {
-		if pm.manager == yumPackageManager {
-			return pm.configureYumPackageManagerWithDockerRepo(ctx)
-		}
-		if pm.manager == aptPackageManager {
-			return pm.configureAptPackageManagerWithDockerRepo(ctx)
+	if pm.manager == yumPackageManager {
+		if err := pm.configureYumPackageManagerWithDockerRepo(ctx); err != nil {
+			return err
 		}
 	}
+	if pm.manager == aptPackageManager {
+		if err := pm.configureAptPackageManagerWithDockerRepo(ctx); err != nil {
+			return err
+		}
+	}
+	pm.logger.Info("Updating packages to refresh docker repo metadata...")
+	if err := pm.updateAllPackagesWithRetries(ctx); err != nil {
+		return errors.Wrapf(err, "failed to run update using package manager")
+	}
+
 	return nil
 }
 
 // configureYumPackageManagerWithDockerRepo configures yum package manager with docker repos
 func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx context.Context) error {
-	// Run update to update all package repo metadata for newly provisioned OS
-	pm.logger.Info("Updating packages to refresh repo metadata...")
-	if resp, err := pm.updateAllPackages(ctx); err != nil {
-		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
-	}
-
 	// Check and remove runc if installed, as it conflicts with docker repo
 	if _, errNotFound := exec.LookPath(runcPkgName); errNotFound == nil {
 		pm.logger.Info("Removing runc to avoid package conflicts from docker repos...")
@@ -115,20 +126,12 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 		return errors.Wrapf(err, "failed adding docker repo to package manager: %s", out)
 	}
 
-	pm.logger.Info("Updating packages to refresh docker repo metadata...")
-	if resp, err := pm.updateAllPackages(ctx); err != nil {
-		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
-	}
 	return nil
 }
 
 // configureAptPackageManagerWithDockerRepo configures apt package manager with docker repos
 func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx context.Context) error {
-	out, err := pm.updateAllPackages(ctx)
-	if err != nil {
-		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
-	}
-	out, err = pm.installPackage(ctx, "ca-certificates")
+	out, err := pm.installPackage(ctx, "ca-certificates")
 	if err != nil {
 		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
 	}
@@ -149,12 +152,6 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 		return err
 	}
 
-	// Run update to pull docker repo's metadata
-	// Commands cant be re-used to run again, hence re-declaring update command
-	out, err = pm.updateAllPackages(ctx)
-	if err != nil {
-		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
-	}
 	return nil
 }
 
@@ -169,13 +166,35 @@ func (pm *DistroPackageManager) installPackage(ctx context.Context, packageName 
 }
 
 // updateAllPackages updates all packages and repo metadata on the system
-func (pm *DistroPackageManager) updateAllPackages(ctx context.Context) (string, error) {
-	updateCmd := exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y")
-	out, err := updateCmd.CombinedOutput()
-	if err != nil {
-		return string(out), err
+func (pm *DistroPackageManager) updateAllPackages(ctx context.Context) *exec.Cmd {
+	return exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y")
+
+}
+func (pm *DistroPackageManager) updateAllPackagesWithRetries(ctx context.Context) error {
+	return retryCmd(ctx, pm.updateAllPackages, 5*time.Second)
+}
+
+type cmdBuilder func(context.Context) *exec.Cmd
+
+func retryCmd(ctx context.Context, newCmd cmdBuilder, backoff time.Duration) error {
+	var err error
+	for {
+		var out []byte
+		cmd := newCmd(ctx)
+		out, err = cmd.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+		err = fmt.Errorf("running command %s: %s [Err %s]", cmd.Args, out, err)
+		select {
+		case <-ctx.Done():
+			if err == nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("%s: %w", ctx.Err(), err)
+		case <-time.After(backoff):
+		}
 	}
-	return string(out), nil
 }
 
 // removePackage deletes a package using package manager
