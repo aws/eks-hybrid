@@ -6,6 +6,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -18,11 +19,12 @@ import (
 )
 
 const (
-	nodePodWaitTimeout      = 3 * time.Minute
-	nodePodDelayInterval    = 5 * time.Second
-	hybridNodeWaitTimeout   = 10 * time.Minute
-	hybridNodeDelayInterval = 5 * time.Second
-	podNamespace            = "default"
+	nodePodWaitTimeout       = 3 * time.Minute
+	nodePodDelayInterval     = 5 * time.Second
+	hybridNodeWaitTimeout    = 10 * time.Minute
+	hybridNodeDelayInterval  = 5 * time.Second
+	hybridNodeUpgradeTimeout = 2 * time.Minute
+	podNamespace             = "default"
 )
 
 // waitForNode wait for the node to join the cluster and fetches the node info from an internal IP address of the node
@@ -253,5 +255,36 @@ func ensureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, i
 	if err != nil {
 		return fmt.Errorf("deleting node %s: %w", node.Name, err)
 	}
+	return nil
+}
+
+func waitForHybridNodeToUpgrade(ctx context.Context, k8s *kubernetes.Clientset, nodeName, targetVersion string, logger logr.Logger) error {
+	consecutiveErrors := 0
+	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeUpgradeTimeout, true, func(ctx context.Context) (done bool, err error) {
+		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			logger.Info("consecutiveErrors", "consecutiveErrors", consecutiveErrors)
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
+			}
+			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
+			return false, nil // continue polling
+		}
+		consecutiveErrors = 0
+
+		kubernetesVersion := strings.TrimPrefix(node.Status.NodeInfo.KubeletVersion, "v")
+		// If the current version matches the target version of kubelet, return true to stop polling
+		if strings.HasPrefix(kubernetesVersion, targetVersion) {
+			logger.Info("Node successfully upgraded to desired kubernetes version", "version", targetVersion)
+			return true, nil
+		}
+
+		return false, nil // continue polling
+	})
+	if err != nil {
+		return fmt.Errorf("waiting for node %s kubernetes version to be upgraded to %s: %w", nodeName, targetVersion, err)
+	}
+
 	return nil
 }

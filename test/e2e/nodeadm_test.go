@@ -30,12 +30,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/kubectl/pkg/drain"
 	"sigs.k8s.io/yaml"
 )
 
 const (
 	ec2InstanceType = "t2.large"
 	ec2VolumeSize   = int32(30)
+	minK8sVersion   = "1.25"
 )
 
 var (
@@ -436,6 +438,120 @@ var _ = Describe("Hybrid Nodes", func() {
 						},
 						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow")),
 					)
+
+					DescribeTable("Upgrade nodeadm flow",
+						func(ctx context.Context, os NodeadmOS, provider NodeadmCredentialsProvider) {
+							Expect(os).NotTo(BeNil())
+							Expect(provider).NotTo(BeNil())
+
+							// Skip upgrade flow for cluster with the minimum kubernetes version
+							if test.cluster.kubernetesVersion == minK8sVersion {
+								Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", minK8sVersion))
+							}
+
+							nodeSpec := NodeSpec{
+								OS:       os,
+								Cluster:  test.cluster,
+								Provider: provider,
+							}
+
+							instanceName := fmt.Sprintf("EKSHybridCI-upgrade-%s-%s-%s",
+								removeSpecialChars(test.cluster.clusterName),
+								removeSpecialChars(os.Name()),
+								removeSpecialChars(string(provider.Name())),
+							)
+
+							files, err := provider.FilesForNode(nodeSpec)
+							Expect(err).NotTo(HaveOccurred())
+
+							nodeadmConfig, err := provider.NodeadmConfig(ctx, nodeSpec)
+							Expect(err).NotTo(HaveOccurred(), "expected to build nodeconfig")
+
+							nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)
+							Expect(err).NotTo(HaveOccurred(), "expected to successfully marshal nodeadm config to YAML")
+
+							var rootPasswordHash string
+							if suite.TestConfig.SetRootPassword {
+								var rootPassword string
+								rootPassword, rootPasswordHash, err = generateOSPassword()
+								Expect(err).NotTo(HaveOccurred(), "expected to successfully generate root password")
+								test.logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
+							}
+
+							nodeKubernetesVersion, err := getPreviousK8sVersion(test.cluster.kubernetesVersion)
+							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
+
+							userdata, err := os.BuildUserData(UserDataInput{
+								KubernetesVersion: nodeKubernetesVersion,
+								NodeadmUrls:       test.nodeadmURLs,
+								NodeadmConfigYaml: string(nodeadmConfigYaml),
+								Provider:          string(provider.Name()),
+								RootPasswordHash:  rootPasswordHash,
+								Files:             files,
+							})
+							Expect(err).NotTo(HaveOccurred(), "expected to successfully build user data")
+
+							amiId, err := os.AMIName(ctx, test.awsSession)
+							Expect(err).NotTo(HaveOccurred(), "expected to successfully retrieve ami id")
+
+							ec2Input := ec2InstanceConfig{
+								clusterName:        test.cluster.clusterName,
+								instanceName:       instanceName,
+								amiID:              amiId,
+								instanceType:       os.InstanceType(),
+								volumeSize:         ec2VolumeSize,
+								subnetID:           test.cluster.subnetID,
+								securityGroupID:    test.cluster.securityGroupID,
+								userData:           userdata,
+								instanceProfileARN: test.stackOut.InstanceProfileARN,
+							}
+
+							test.logger.Info("Creating a hybrid EC2 Instance...")
+							ec2, err := ec2Input.create(ctx, test.ec2ClientV2, test.ssmClient)
+							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
+							test.logger.Info(fmt.Sprintf("EC2 Instance Connect: https://%s.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=%s&region=%s&serialPort=0", suite.TestConfig.ClusterRegion, ec2.instanceID, suite.TestConfig.ClusterRegion))
+
+							DeferCleanup(func(ctx context.Context) {
+								if skipCleanup {
+									test.logger.Info("Skipping EC2 Instance deletion", "instanceID", ec2.instanceID)
+									return
+								}
+								test.logger.Info("Deleting EC2 Instance", "instanceID", ec2.instanceID)
+								Expect(deleteEC2Instance(ctx, test.ec2ClientV2, ec2.instanceID)).NotTo(HaveOccurred(), "EC2 Instance should have been deleted successfully")
+								test.logger.Info("Successfully deleted EC2 Instance", "instanceID", ec2.instanceID)
+							})
+
+							joinNodeTest := joinNodeTest{
+								k8s:           test.k8sClient,
+								nodeIPAddress: ec2.ipAddress,
+								logger:        test.logger,
+							}
+							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
+
+							upgradeNodeTest := upgradeNodeTest{
+								k8s:      test.k8sClient,
+								ssm:      test.ssmClient,
+								cluster:  test.cluster,
+								ec2:      ec2,
+								logger:   test.logger,
+								provider: provider,
+							}
+							Expect(upgradeNodeTest.Run(ctx)).To(Succeed(), "node should have upgraded successfully")
+							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully after nodeadm upgrade")
+
+							test.logger.Info("Resetting hybrid node...")
+
+							uninstallNodeTest := uninstallNodeTest{
+								k8s:      test.k8sClient,
+								ssm:      test.ssmClient,
+								ec2:      ec2,
+								provider: provider,
+								logger:   test.logger,
+							}
+							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
+						},
+						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")),
+					)
 				}
 			}
 		})
@@ -525,6 +641,66 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 	u.logger.Info("Node unregistered successfully", "node", node.Name)
 
 	return nil
+}
+
+type upgradeNodeTest struct {
+	k8s      *kubernetes.Clientset
+	ssm      *ssm.SSM
+	cluster  *HybridCluster
+	ec2      ec2Instance
+	logger   logr.Logger
+	provider NodeadmCredentialsProvider
+}
+
+func (u upgradeNodeTest) Run(ctx context.Context) error {
+	node, err := getNodeByInternalIP(ctx, u.k8s, u.ec2.ipAddress)
+	if err != nil {
+		return err
+	}
+	if node == nil {
+		return fmt.Errorf("returned node is nil")
+	}
+
+	helper := &drain.Helper{
+		Ctx:                             ctx,
+		Client:                          u.k8s,
+		Force:                           true, // Force eviction
+		GracePeriodSeconds:              -1,   // Use pod's default grace period
+		IgnoreAllDaemonSets:             true, // Ignore DaemonSet-managed pods
+		DisableEviction:                 true, // forces drain to use delete rather than evict
+		SkipWaitForDeleteTimeoutSeconds: 0,
+		Out:                             os.Stdout,
+		ErrOut:                          os.Stderr,
+	}
+
+	u.logger.Info("Cordoning hybrid node...")
+	err = drain.RunCordonOrUncordon(helper, node, true)
+	if err != nil {
+		return fmt.Errorf("cordoning node %s: %v", node.Name, err)
+	}
+
+	u.logger.Info("Draining hybrid node...")
+	err = drain.RunNodeDrain(helper, node.Name)
+	if err != nil {
+		return fmt.Errorf("draining node %s: %v", node.Name, err)
+	}
+
+	hybridNode := HybridEC2dNode{
+		ec2Instance: u.ec2,
+		node:        *node,
+	}
+	u.logger.Info("Upgrading hybrid node...")
+	if err = runNodeadmUpgrade(ctx, u.ssm, u.provider.InstanceID(hybridNode), u.cluster.kubernetesVersion, u.logger); err != nil {
+		return err
+	}
+
+	u.logger.Info("Uncordoning hybrid node...")
+	err = drain.RunCordonOrUncordon(helper, node, false)
+	if err != nil {
+		return fmt.Errorf("uncordoning node %s: %v", node.Name, err)
+	}
+
+	return waitForHybridNodeToUpgrade(ctx, u.k8s, node.Name, u.cluster.kubernetesVersion, u.logger)
 }
 
 // removeSpecialChars removes everything except alphanumeric characters and hyphens from a string.
