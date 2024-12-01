@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/ssm"
-	. "github.com/onsi/gomega"
 )
 
 func TestWaitForAWSConfigSuccess(t *testing.T) {

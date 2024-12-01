@@ -26,7 +26,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, iamAuthSrc IAMAuthen
 	}
 	defer authenticator.Close()
 
-	if err := artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0755); err != nil {
+	if err := artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0o755); err != nil {
 		return fmt.Errorf("failed to install aws-iam-authenticator: %w", err)
 	}
 

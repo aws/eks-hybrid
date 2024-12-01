@@ -2,9 +2,10 @@ package system
 
 import (
 	_ "embed"
-	"github.com/aws/eks-hybrid/internal/api"
 	"reflect"
 	"testing"
+
+	"github.com/aws/eks-hybrid/internal/api"
 )
 
 //go:embed _assets/test_10-eks_primary_eni_only.conf

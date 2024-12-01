@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/smithy-go/logging"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/sts"
 	"github.com/aws/eks-hybrid/internal/cli"
@@ -19,7 +20,6 @@ import (
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/validation"
-	"github.com/aws/smithy-go/logging"
 )
 
 func NewCommand() cli.Command {

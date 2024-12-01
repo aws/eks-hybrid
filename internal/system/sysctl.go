@@ -14,7 +14,7 @@ const (
 	sysctlAspectName      = "sysctl"
 	sysctlConfDir         = "/etc/sysctl.d"
 	nodeadmSysctlConfFile = "99-nodeadm.conf"
-	nodeadmSysctlFilePerm = 0644
+	nodeadmSysctlFilePerm = 0o644
 )
 
 var (
@@ -32,6 +32,7 @@ var _ SystemAspect = &sysctlAspect{}
 func NewSysctlAspect(cfg *api.NodeConfig) SystemAspect {
 	return &sysctlAspect{nodeConfig: cfg}
 }
+
 func (s *sysctlAspect) Name() string {
 	return sysctlAspectName
 }

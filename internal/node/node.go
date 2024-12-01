@@ -1,12 +1,12 @@
 package node
 
 import (
+	"go.uber.org/zap"
+
 	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/aws/eks-hybrid/internal/node/ec2"
 	"github.com/aws/eks-hybrid/internal/node/hybrid"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
-
-	"go.uber.org/zap"
 )
 
 func NewNodeProvider(configSource string, logger *zap.Logger) (nodeprovider.NodeProvider, error) {

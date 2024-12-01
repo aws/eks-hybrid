@@ -5,11 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/node/hybrid"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/node/hybrid"
 )
 
 func TestRolesAnywhereAWSConfigurator_Configure(t *testing.T) {

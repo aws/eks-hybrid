@@ -9,10 +9,11 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/util"
 	"go.uber.org/zap"
 	"golang.org/x/mod/semver"
+
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 const (
@@ -20,7 +21,7 @@ const (
 	imageCredentialProviderRoot = "/etc/eks/image-credential-provider"
 	// #nosec G101 //constant path, not credential
 	imageCredentialProviderConfig = "config.json"
-	imageCredentialProviderPerm   = 0644
+	imageCredentialProviderPerm   = 0o644
 	// #nosec G101 //constant path, not credential
 	ecrCredentialProviderBinPathEnvironmentName = "ECR_CREDENTIAL_PROVIDER_BIN_PATH"
 )

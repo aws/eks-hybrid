@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/eks-hybrid/internal/daemon"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/daemon"
 )
 
 func TestWaitForStatusSuccess(t *testing.T) {

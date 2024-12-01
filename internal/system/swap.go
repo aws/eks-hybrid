@@ -10,8 +10,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/aws/eks-hybrid/internal/api"
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/api"
 )
 
 const (
@@ -96,7 +97,7 @@ func (s *swapAspect) swapOff() error {
 // <path-to-swap-file>   	     file/partition   524280   0       -1
 func getSwapfilePaths() ([]string, error) {
 	var paths []string
-	file, err := os.OpenFile("/proc/swaps", os.O_RDONLY, 0444)
+	file, err := os.OpenFile("/proc/swaps", os.O_RDONLY, 0o444)
 	if err != nil {
 		return paths, err
 	}
@@ -140,7 +141,7 @@ type mount struct {
 }
 
 func disableSwapOnFstab() error {
-	file, err := os.OpenFile("/etc/fstab", os.O_RDWR, 0644)
+	file, err := os.OpenFile("/etc/fstab", os.O_RDWR, 0o644)
 	if err != nil {
 		return err
 	}

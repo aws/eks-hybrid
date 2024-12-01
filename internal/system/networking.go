@@ -4,12 +4,14 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/util"
-	"go.uber.org/zap"
 	"os"
 	"os/exec"
 	"text/template"
+
+	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 const (
@@ -20,8 +22,8 @@ const (
 	// https://github.com/amazonlinux/amazon-ec2-net-utils/blob/c6626fb5cd094bbfeb62c456fe088011dbab3f95/systemd/network/80-ec2.network
 	ec2NetworkConfigurationName = "80-ec2.network"
 	eksPrimaryENIOnlyConfName   = "10-eks_primary_eni_only.conf"
-	networkConfDropInDirPerms   = 0755
-	networkConfFilePerms        = 0644
+	networkConfDropInDirPerms   = 0o755
+	networkConfFilePerms        = 0o644
 )
 
 var (
