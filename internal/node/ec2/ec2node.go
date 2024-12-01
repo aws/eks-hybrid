@@ -2,10 +2,11 @@ package ec2
 
 import (
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"go.uber.org/zap"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
-	"go.uber.org/zap"
 )
 
 type ec2NodeProvider struct {

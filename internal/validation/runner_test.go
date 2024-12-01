@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/aws/eks-hybrid/internal/validation"
 	. "github.com/onsi/gomega"
+
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func TestRunnerRunAllSuccess(t *testing.T) {

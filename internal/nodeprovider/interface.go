@@ -3,13 +3,13 @@ package nodeprovider
 import (
 	"context"
 
+	"go.uber.org/zap"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/configenricher"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/system"
-
-	"go.uber.org/zap"
 )
 
 // NodeProvider is an interface that defines functions that a nodeProvider should implement

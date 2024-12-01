@@ -52,9 +52,9 @@ type NetworkConfig struct {
 }
 
 const (
-	outputDir           = "/tmp"
-	ciliumCni           = "cilium"
-	calicoCni           = "calico"
+	outputDir = "/tmp"
+	ciliumCni = "cilium"
+	calicoCni = "calico"
 )
 
 func (t *TestRunner) NewAWSSession() (*session.Session, error) {

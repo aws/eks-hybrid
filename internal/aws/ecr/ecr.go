@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
+
 	"github.com/aws/eks-hybrid/internal/aws/imds"
 	"github.com/aws/eks-hybrid/internal/system"
 )
@@ -65,11 +66,11 @@ func (r *ECRRegistry) String() string {
 	return string(*r)
 }
 
-func (r *ECRRegistry) GetImageReference(repository string, tag string) string {
+func (r *ECRRegistry) GetImageReference(repository, tag string) string {
 	return fmt.Sprintf("%s/%s:%s", r.String(), repository, tag)
 }
 
-func getRegistry(accountID string, ecrSubdomain string, region string, servicesDomain string) string {
+func getRegistry(accountID, ecrSubdomain, region, servicesDomain string) string {
 	return fmt.Sprintf("%s.dkr.%s.%s.%s", accountID, ecrSubdomain, region, servicesDomain)
 }
 

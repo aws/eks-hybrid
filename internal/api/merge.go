@@ -5,8 +5,9 @@ import (
 	"reflect"
 
 	"dario.cat/mergo"
-	"github.com/aws/eks-hybrid/internal/util"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 // Merges two NodeConfigs with custom collision handling
@@ -79,7 +80,7 @@ func (k kubeletTransformer) transformConfig(dst, src reflect.Value) error {
 }
 
 func toInlineDocument(m map[string]interface{}) (InlineDocument, error) {
-	var rawMap = make(InlineDocument)
+	rawMap := make(InlineDocument)
 	for key, value := range m {
 		rawBytes, err := json.Marshal(value)
 		if err != nil {

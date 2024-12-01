@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
@@ -28,7 +29,6 @@ func GetEniInfoForInstanceType(ec2API EC2API, instanceType string) (EniInfo, err
 	describeResp, err := ec2API.DescribeInstanceTypes(context.Background(), &ec2.DescribeInstanceTypesInput{
 		InstanceTypes: []types.InstanceType{types.InstanceType(instanceType)},
 	})
-
 	if err != nil {
 		return EniInfo{}, fmt.Errorf("error describing instance type %s: %w", instanceType, err)
 	}

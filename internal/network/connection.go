@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/url"
 	"time"
-	
 )
 
 const dialTimeout = 5 * time.Second

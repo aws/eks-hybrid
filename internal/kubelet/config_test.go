@@ -3,10 +3,11 @@ package kubelet
 import (
 	"testing"
 
-	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/smithy-go/ptr"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/containerd"
 )
 
 func TestKubeletCredentialProvidersFeatureFlag(t *testing.T) {

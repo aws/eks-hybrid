@@ -27,7 +27,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	}
 	defer imageCredentialProvider.Close()
 
-	if err := artifact.InstallFile(BinPath, imageCredentialProvider, 0755); err != nil {
+	if err := artifact.InstallFile(BinPath, imageCredentialProvider, 0o755); err != nil {
 		return errors.Wrap(err, "failed to install image-credential-provider")
 	}
 

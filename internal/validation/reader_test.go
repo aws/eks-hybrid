@@ -3,8 +3,9 @@ package validation_test
 import (
 	"testing"
 
-	"github.com/aws/eks-hybrid/internal/validation"
 	. "github.com/onsi/gomega"
+
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func TestChannelReader(t *testing.T) {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/aws/eks-hybrid/internal/logger"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/logger"
 )
 
 func TestFromContext(t *testing.T) {

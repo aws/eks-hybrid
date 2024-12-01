@@ -8,8 +8,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/eks-hybrid/internal/util"
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 // default value from kubelet
@@ -50,7 +51,7 @@ func init() {
 // The behavior should align with AL2, which essentially is:
 //
 //	# of ENI * (# of IPv4 per ENI - 1) + 2
-func CalcMaxPods(awsRegion string, instanceType string) int32 {
+func CalcMaxPods(awsRegion, instanceType string) int32 {
 	zap.L().Info("calculate the max pod for instance type", zap.String("instanceType", instanceType))
 	cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(awsRegion))
 	if err != nil {

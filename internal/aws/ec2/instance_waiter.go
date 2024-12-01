@@ -17,7 +17,6 @@ type InstanceCondition func(output *ec2.DescribeInstancesOutput) (bool, error)
 
 // InstanceConditionWaiterOptions are options for InstanceConditionWaiter
 type InstanceConditionWaiterOptions struct {
-
 	// Set of options to modify how an operation is invoked. These apply to all
 	// operations invoked for this client. Use functional options on operation call to
 	// modify this list for per operation behavior.

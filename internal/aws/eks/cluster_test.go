@@ -5,10 +5,10 @@ import (
 	"encoding/base64"
 	"testing"
 
-	. "github.com/onsi/gomega"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	. "github.com/onsi/gomega"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/test"

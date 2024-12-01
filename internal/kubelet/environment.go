@@ -35,6 +35,6 @@ func (k *kubelet) writeKubeletEnvironment() error {
 }
 
 // Add values to the environment variables map in a terse manner
-func (k *kubelet) setEnv(envName string, envArg string) {
+func (k *kubelet) setEnv(envName, envArg string) {
 	k.environment[envName] = envArg
 }

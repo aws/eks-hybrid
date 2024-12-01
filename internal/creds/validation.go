@@ -2,6 +2,7 @@ package creds
 
 import (
 	"github.com/aws/aws-sdk-go-v2/aws"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/ssm"
