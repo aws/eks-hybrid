@@ -34,7 +34,16 @@ func (t *TestRunner) createVPCResources(client *ec2.EC2, vpcSubnetParams vpcSubn
 		return nil, fmt.Errorf("failed to create VPC: %v", err)
 	}
 
-	publicSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.publicSubnetCidr, t.Spec.ClusterRegion+"a", vpcSubnetParams.vpcName+"-public-subnet", vpcSubnetParams.clusterName)
+	azs, err := client.DescribeAvailabilityZones(&ec2.DescribeAvailabilityZonesInput{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe AZs: %v", err)
+	}
+
+	if len(azs.AvailabilityZones) < 2 {
+		return nil, fmt.Errorf("failed to retrieve 2 or more AZs: %v", err)
+	}
+
+	publicSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.publicSubnetCidr, *azs.AvailabilityZones[0].ZoneName, vpcSubnetParams.vpcName+"-public-subnet", vpcSubnetParams.clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create public subnet: %v", err)
 	}
@@ -64,7 +73,7 @@ func (t *TestRunner) createVPCResources(client *ec2.EC2, vpcSubnetParams vpcSubn
 		return nil, fmt.Errorf("failed to associate route table with public subnet: %v", err)
 	}
 
-	privateSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.privateSubnetCidr, t.Spec.ClusterRegion+"b", vpcSubnetParams.vpcName+"-private-subnet", vpcSubnetParams.clusterName)
+	privateSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.privateSubnetCidr, *azs.AvailabilityZones[1].ZoneName, vpcSubnetParams.vpcName+"-private-subnet", vpcSubnetParams.clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create private subnet: %v", err)
 	}
