@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"testing"
 )
 
 type MockEC2Client struct {
@@ -77,5 +78,4 @@ func TestGetEniInfoForInstanceType(t *testing.T) {
 		assert.Equal(t, test.expectedError, err)
 		assert.Equal(t, test.expectedResult, result)
 	}
-
 }

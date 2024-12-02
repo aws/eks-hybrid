@@ -17,17 +17,15 @@ import (
 	"time"
 
 	"dario.cat/mergo"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/smithy-go/ptr"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/mod/semver"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8skubelet "k8s.io/kubelet/config/v1beta1"
 	"sigs.k8s.io/yaml"
-
-	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
-	"github.com/aws/smithy-go/ptr"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/containerd"
@@ -39,7 +37,7 @@ const (
 	kubeletConfigRoot = "/etc/kubernetes/kubelet"
 	kubeletConfigFile = "config.json"
 	kubeletConfigDir  = "config.json.d"
-	kubeletConfigPerm = 0644
+	kubeletConfigPerm = 0o644
 
 	hybridNodeLabel            = "eks.amazonaws.com/compute-type=hybrid"
 	credentialProviderLabelKey = "eks.amazonaws.com/hybrid-credential-provider"

@@ -3,12 +3,12 @@ package bridge
 import (
 	"fmt"
 
-	"github.com/aws/eks-hybrid/api"
-	internalapi "github.com/aws/eks-hybrid/internal/api"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/yaml"
+
+	"github.com/aws/eks-hybrid/api"
+	internalapi "github.com/aws/eks-hybrid/internal/api"
 )
 
 // DecodeNodeConfig unmarshals the given data into an internal NodeConfig object.

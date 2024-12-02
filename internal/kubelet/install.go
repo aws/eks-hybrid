@@ -38,7 +38,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	}
 	defer kubelet.Close()
 
-	if err := artifact.InstallFile(BinPath, kubelet, 0755); err != nil {
+	if err := artifact.InstallFile(BinPath, kubelet, 0o755); err != nil {
 		return errors.Wrap(err, "failed to install kubelet")
 	}
 
@@ -51,7 +51,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 
 	buf := bytes.NewBuffer(kubeletUnitFile)
 
-	if err := artifact.InstallFile(UnitPath, buf, 0644); err != nil {
+	if err := artifact.InstallFile(UnitPath, buf, 0o644); err != nil {
 		return errors.Errorf("failed to install kubelet systemd unit: %v", err)
 	}
 

@@ -159,8 +159,8 @@ func (pm *DistroPackageManager) installPackage(ctx context.Context, packageName 
 // updateAllPackages updates all packages and repo metadata on the system
 func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Context) *exec.Cmd {
 	return exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y", "-o", fmt.Sprintf("Dir::Etc::sourcelist=\"%s\"", aptDockerRepoSourceFilePath))
-
 }
+
 func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.Context) error {
 	return cmd.Retry(ctx, pm.updateDockerAptPackagesCommand, 5*time.Second)
 }

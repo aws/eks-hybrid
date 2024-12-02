@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/eks-hybrid/internal/artifact"
-	"github.com/aws/eks-hybrid/internal/util"
-
 	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
+
+	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 // Source defines a single version source for aws provided artifacts

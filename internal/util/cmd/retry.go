@@ -6,8 +6,9 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/aws/eks-hybrid/internal/logger"
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/logger"
 )
 
 // Builder builds a exec.Cmd. Each invocation should return a new instance

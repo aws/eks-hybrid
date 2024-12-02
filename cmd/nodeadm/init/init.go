@@ -4,15 +4,15 @@ import (
 	"context"
 	"os"
 
+	"github.com/integrii/flaggy"
+	"go.uber.org/zap"
+	"k8s.io/utils/strings/slices"
+
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/tracker"
-
-	"github.com/integrii/flaggy"
-	"go.uber.org/zap"
-	"k8s.io/utils/strings/slices"
 )
 
 const installValidation = "install-validation"

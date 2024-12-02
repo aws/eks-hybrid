@@ -3,10 +3,10 @@ package aws
 import (
 	"context"
 
-	"github.com/aws/eks-hybrid/internal/util"
-
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
+
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 // set build time

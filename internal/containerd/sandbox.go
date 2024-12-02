@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/eks-hybrid/internal/aws/ecr"
-	"github.com/aws/eks-hybrid/internal/util"
 	"github.com/containerd/containerd/integration/remote"
 	"go.uber.org/zap"
 	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"
+
+	"github.com/aws/eks-hybrid/internal/aws/ecr"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 var containerdSandboxImageRegex = regexp.MustCompile(`sandbox_image = "(.*)"`)

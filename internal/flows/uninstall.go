@@ -22,8 +22,10 @@ import (
 
 const eksConfigDir = "/etc/eks"
 
-type SSMUninstall func(ctx context.Context, logger *zap.Logger, pm ssm.PkgSource) error
-type CNIUninstall func() error
+type (
+	SSMUninstall func(ctx context.Context, logger *zap.Logger, pm ssm.PkgSource) error
+	CNIUninstall func() error
+)
 
 type Uninstaller struct {
 	Artifacts      *tracker.InstalledArtifacts

@@ -67,7 +67,7 @@ func (tracker *Tracker) Save() error {
 		return err
 	}
 
-	return util.WriteFileWithDir(trackerFile, data, 0644)
+	return util.WriteFileWithDir(trackerFile, data, 0o644)
 }
 
 func Clear() error {

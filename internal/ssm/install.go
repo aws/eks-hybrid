@@ -7,11 +7,11 @@ import (
 	"os/exec"
 	"path"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )

@@ -26,7 +26,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	}
 	defer kubectl.Close()
 
-	if err := artifact.InstallFile(BinPath, kubectl, 0755); err != nil {
+	if err := artifact.InstallFile(BinPath, kubectl, 0o755); err != nil {
 		return errors.Wrap(err, "failed to install kubectl")
 	}
 
