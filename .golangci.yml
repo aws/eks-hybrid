@@ -1,0 +1,18 @@
+run:
+  timeout: 5m
+  skip-files:
+    - "zz_generated.*\\.go$"
+linters:
+  enable:
+    - gofumpt
+    - gci
+linters-settings:
+  gofumpt:
+    extra-rules: true
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/aws/eks-hybrid)
+    custom-order: true
+    skip-generated: false

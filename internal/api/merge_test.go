@@ -14,7 +14,7 @@ func toInlineDocumentMust(m map[string]interface{}) InlineDocument {
 }
 
 func TestMerge(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name         string
 		baseSpec     NodeConfigSpec
 		patchSpec    NodeConfigSpec

@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/test"
 	"github.com/aws/eks-hybrid/internal/validation"
-	. "github.com/onsi/gomega"
 )
 
 type apiServerResponse struct {

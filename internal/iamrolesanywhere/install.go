@@ -26,7 +26,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, signingHelperSrc Sig
 	}
 	defer signingHelper.Close()
 
-	if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, 0755); err != nil {
+	if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, 0o755); err != nil {
 		return errors.Wrap(err, "failed to install aws_signer_helper")
 	}
 	if err = tracker.Add(artifact.IamRolesAnywhere); err != nil {

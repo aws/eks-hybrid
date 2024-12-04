@@ -34,7 +34,7 @@ type core struct {
 }
 
 func init() {
-	//cannot copy file to /sys for doc build, use this as a hack for testing
+	// cannot copy file to /sys for doc build, use this as a hack for testing
 	cpuDirEnv := os.Getenv("CPU_DIR")
 	if cpuDirEnv != "" {
 		cpusPath = cpuDirEnv
@@ -79,7 +79,6 @@ func GetMilliNumCores() (int, error) {
 
 	}
 	return allLogicalCoresCount * 1000, err
-
 }
 
 func getCPUCount() (int, error) {

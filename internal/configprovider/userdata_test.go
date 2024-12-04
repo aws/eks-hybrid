@@ -9,12 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/eks-hybrid/internal/api"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/aws/eks-hybrid/internal/api"
 )
 
-const boundary = "#"
-const completeNodeConfig = `---
+const (
+	boundary           = "#"
+	completeNodeConfig = `---
 apiVersion: node.eks.aws/v1alpha1
 kind: NodeConfig
 spec:
@@ -31,6 +33,7 @@ spec:
       - --v=2
       - --node-labels=foo=bar,nodegroup=test
 `
+)
 
 const partialNodeConfig = `---
 apiVersion: node.eks.aws/v1alpha1
@@ -84,7 +87,7 @@ func indent(in string) string {
 }
 
 func mimeifyNodeConfigs(configs ...string) string {
-	var mimeDocLines = []string{
+	mimeDocLines := []string{
 		"MIME-Version: 1.0",
 		`Content-Type: multipart/mixed; boundary="#"`,
 	}

@@ -91,7 +91,7 @@ func getPodsOnNode() ([]corev1.Pod, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	clientset, err := kubelet.GetKubeClientFromKubeConfig()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create kubernetes client")

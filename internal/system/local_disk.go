@@ -5,8 +5,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/aws/eks-hybrid/internal/api"
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/api"
 )
 
 const localDiskAspectName = "local-disk"

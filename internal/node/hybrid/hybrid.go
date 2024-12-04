@@ -1,9 +1,9 @@
 package hybrid
 
 import (
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"go.uber.org/zap"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"

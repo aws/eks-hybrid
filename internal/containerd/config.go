@@ -19,7 +19,7 @@ const (
 	containerdConfigFile              = "/etc/containerd/config.toml"
 	containerdConfigImportDir         = "/etc/containerd/config.d"
 	containerdKernelModulesConfigFile = "/etc/modules-load.d/containerd.conf"
-	containerdConfigPerm              = 0644
+	containerdConfigPerm              = 0o644
 )
 
 var (
