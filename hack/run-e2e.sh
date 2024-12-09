@@ -34,21 +34,21 @@ BIN_DIR="$REPO_ROOT/_bin"
 
 mkdir -p $CONFIG_DIR
 
-cat <<EOF > $CONFIG_DIR/e2e-setup-spec.yaml
-spec:
-  clusterName: $CLUSTER_NAME
-  clusterRegion: $REGION
-  kubernetesVersion: $KUBERNETES_VERSION
-  cni: $CNI
-  clusterNetwork:
-    vpcCidr: 10.0.0.0/16
-    publicSubnetCidr: 10.0.10.0/24
-    privateSubnetCidr: 10.0.20.0/24
-  hybridNetwork:
-    vpcCidr: 10.1.0.0/16
-    publicSubnetCidr: 10.1.1.0/24
-    privateSubnetCidr: 10.1.2.0/24
-    podCidr: 10.2.0.0/16
+RESOURCES_YAML=$CONFIG_DIR/e2e-setup-spec.yaml
+cat <<EOF > $RESOURCES_YAML
+clusterName: $CLUSTER_NAME
+clusterRegion: $REGION
+kubernetesVersion: $KUBERNETES_VERSION
+cni: $CNI
+clusterNetwork:
+  vpcCidr: 10.0.0.0/16
+  publicSubnetCidr: 10.0.10.0/24
+  privateSubnetCidr: 10.0.20.0/24
+hybridNetwork:
+  vpcCidr: 10.1.0.0/16
+  publicSubnetCidr: 10.1.1.0/24
+  privateSubnetCidr: 10.1.2.0/24
+  podCidr: 10.2.0.0/16
 EOF
 
 function cleanup(){
@@ -60,17 +60,11 @@ function cleanup(){
 
 trap "cleanup" EXIT
 
-RESOURCES_YAML=$CONFIG_DIR/$CLUSTER_NAME-resources.yaml
-$BIN_DIR/e2e-test setup -s $CONFIG_DIR/e2e-setup-spec.yaml
-
-mv /tmp/setup-resources-output.yaml $RESOURCES_YAML
-
-VPC_ID="$(yq -r '.status.hybridVpcID' $RESOURCES_YAML)"
+$BIN_DIR/e2e-test setup -s $RESOURCES_YAML
 
 cat <<EOF > $CONFIG_DIR/e2e-param.yaml
 clusterName: "$CLUSTER_NAME"
 clusterRegion: "$REGION"
-hybridVpcID: "$VPC_ID"
 nodeadmUrlAMD: "$NODEADM_AMD_URL"
 nodeadmUrlARM: "$NODEADM_ARM_URL"
 logsBucket: "$LOGS_BUCKET"

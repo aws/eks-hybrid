@@ -1,0 +1,310 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create resources needed to run E2E tests
+
+Parameters:
+  ClusterName:
+    Type: String
+    Description: Name of the EKS Hybrid Cluster
+  
+  ClusterRegion:
+    Type: String
+    Description: Region of the EKS Hybrid Cluster
+
+  ClusterVPCCidr:
+    Type: String
+    Description: EKS Hybrid Cluster VPC CIDR block
+  
+  ClusterPublicSubnetCidr:
+    Type: String
+    Description: EKS Hybrid Cluster public subnet VPC CIDR block
+
+  ClusterPrivateSubnetCidr:
+    Type: String
+    Description: EKS Hybrid Cluster private subnet VPC CIDR block
+  
+  HybridNodeVPCCidr:
+    Type: String
+    Description: EC2 Hybrid Nodes VPC CIDR block
+  
+  HybridNodePodCidr:
+    Type: String
+    Description: EKS Hybrid Nodes Pod CIDR block
+
+  HybridNodePublicSubnetCidr:
+    Type: String
+    Description: EKS Hybrid Nodes public subnet VPC CIDR block
+
+  HybridNodePrivateSubnetCidr:
+    Type: String
+    Description: EKS Hybrid Nodes public subnet VPC CIDR block
+
+  TestClusterTagKey:
+    Type: String
+    Description: Tag key of all the resources
+
+Resources:
+  ClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ClusterName}-hybrid-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+  
+  ClusterVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref ClusterVPCCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-cluster-vpc
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+  
+  ClusterVPCPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref ClusterPublicSubnetCidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-public-subnet
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+      VpcId: !Ref ClusterVPC
+  
+  ClusterVPCPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref ClusterPrivateSubnetCidr
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-private-subnet
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+      VpcId: !Ref ClusterVPC
+
+  ClusterPublicSubnetInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-igw
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  ClusterInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ClusterVPC
+      InternetGatewayId: !Ref ClusterPublicSubnetInternetGateway
+
+  ClusterRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ClusterVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-route-table
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  ClusterRouteToInternet:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ClusterPublicSubnetInternetGateway
+      RouteTableId: !Ref ClusterRouteTable
+
+  ClusterPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref ClusterRouteTable
+      SubnetId: !Ref ClusterVPCPublicSubnet
+
+  ClusterDefaultSecurityGroupIngressFromHybridNodeVPC:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt ClusterVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref HybridNodeVPCCidr
+
+  ClusterDefaultSecurityGroupIngressFromHybridNodePodCIDR:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt ClusterVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref HybridNodePodCidr
+
+
+  HybridNodeVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref HybridNodeVPCCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-hybrid-node-vpc
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+  
+  HybridNodeVPCPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref HybridNodePublicSubnetCidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-public-subnet
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+      VpcId: !Ref HybridNodeVPC
+
+  HybridNodeVPCPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref HybridNodePrivateSubnetCidr
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-private-subnet
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+      VpcId: !Ref HybridNodeVPC
+
+  HybridNodePublicSubnetInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-igw
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  HybridNodeInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref HybridNodeVPC
+      InternetGatewayId: !Ref HybridNodePublicSubnetInternetGateway
+
+  HybridNodeRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref HybridNodeVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-route-table
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  HybridNodeRouteToInternet:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref HybridNodePublicSubnetInternetGateway
+      RouteTableId: !Ref HybridNodeRouteTable
+
+  HybridNodePublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref HybridNodeRouteTable
+      SubnetId: !Ref HybridNodeVPCPublicSubnet
+
+  HybridNodeDefaultSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 10250
+      ToPort: 10250
+      CidrIp: !Ref ClusterVPCCidr
+
+  VPCPeeringConnection:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      PeerVpcId: !Ref HybridNodeVPC
+      VpcId: !Ref ClusterVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-vpc-peering
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+    DependsOn:
+      - ClusterVPC
+      - HybridNodeVPC
+
+  ClusterRouteToHybridNode:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ClusterRouteTable
+      DestinationCidrBlock: !Ref HybridNodeVPCCidr
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
+  HybridNodeRouteToCluster:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref HybridNodeRouteTable
+      DestinationCidrBlock: !Ref ClusterVPCCidr
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+
+Outputs:
+  ClusterRole:
+    Description: The name of the IAM Role for EKS Hybrid Cluster.
+    Value: !GetAtt ClusterRole.Arn
+
+  ClusterVPC:
+    Description: The ID of the EKS Hybrid Cluster VPC.
+    Value: !Ref ClusterVPC
+
+  ClusterVPCPublicSubnet:
+    Description: The ID of the EKS Hybrid Cluster VPC Public Subnet.
+    Value: !Ref ClusterVPCPublicSubnet
+
+  ClusterVPCPrivateSubnet:
+    Description: The ID of the EKS Hybrid Cluster VPC Private Subnet.
+    Value: !Ref ClusterVPCPrivateSubnet
+  
+  ClusterSecurityGroup:
+    Description: The ID of the EKS Hybrid Cluster Security Group.
+    Value: !GetAtt ClusterVPC.DefaultSecurityGroup
+
+  HybridNodeVPC:
+    Description: The ID of the EC2 hybrid node VPC.
+    Value: !Ref HybridNodeVPC
+
+  HybridNodeVPCPublicSubnet:
+    Description: The ID of the EC2 Hybrid Node VPC Public Subnet.
+    Value: !Ref HybridNodeVPCPublicSubnet
+
+  HybridNodeVPCPrivateSubnet:
+    Description: The ID of the EC2 Hybrid Node VPC Private Subnet.
+    Value: !Ref HybridNodeVPCPrivateSubnet
+
+  HybridNodeSecurityGroup:
+    Description: The ID of the EC2 Hybrid Node Security Group.
+    Value: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+
+  VPCPeeringConnection:
+    Description: The ID of the VPC Peering Connection.
+    Value: !Ref VPCPeeringConnection
