@@ -31,6 +31,9 @@ LOGS_BUCKET="${7-}"
 
 CONFIG_DIR="$REPO_ROOT/e2e-config"
 BIN_DIR="$REPO_ROOT/_bin"
+REPORTS_DIR="$REPO_ROOT/e2e-reports"
+REPORT_FILE="report.json"
+REPORT_FILE_PATH="${REPORTS_DIR}/${REPORT_FILE}"
 
 mkdir -p $CONFIG_DIR
 
@@ -58,7 +61,14 @@ function cleanup(){
   $REPO_ROOT/hack/e2e-cleanup.sh $CLUSTER_NAME
 }
 
-trap "cleanup" EXIT
+function logs_upload(){
+  if [ -f $REPORT_FILE_PATH ]; then
+    build::common::generate_output_logs $REPORT_FILE_PATH
+    aws s3 sync $REPORTS_DIR s3://$TEST_REPORTS_BUCKET/$CODEBUILD_BUILD_ID/kube-$(echo $KUBERNETES_VERSION | tr '.' '-')-$CNI/$REPORTS_DIR
+  fi
+}
+
+trap "cleanup && logs_upload" EXIT
 
 RESOURCES_YAML=$CONFIG_DIR/$CLUSTER_NAME-resources.yaml
 $BIN_DIR/e2e-test setup -s $CONFIG_DIR/e2e-setup-spec.yaml
@@ -86,4 +96,4 @@ skip=$(yq '.skipped_tests | join("|")' ${SKIP_FILE})
 # on how the CI runner has been configured. However, even if only one CPU is avaialble,
 # there is still value in running the tests in multiple processes, since most of the work is
 # "waiting" for infra to be created and nodes to join the cluster.
-$BIN_DIR/ginkgo --procs 64 -v -tags=e2e --skip="${skip}" $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml
+$BIN_DIR/ginkgo --procs 64 -v -tags=e2e --skip="${skip}" --json-report=$REPORT_FILE --output-dir=$REPORTS_DIR $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml

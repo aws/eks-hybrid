@@ -12,10 +12,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/eks-hybrid/test/e2e/cni"
 	"gopkg.in/yaml.v2"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/aws/eks-hybrid/test/e2e/cni"
 )
 
 const TestClusterTagKey = "Nodeadm-E2E-Tests-Cluster"
