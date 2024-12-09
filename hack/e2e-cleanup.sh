@@ -144,6 +144,7 @@ function delete_instance(){
     cluster_name="$2"
 
     aws ec2 terminate-instances --instance-ids $instance_id
+    aws ec2 wait instance-terminated --instance-ids $instance_id
 }
 
 function delete_peering_connection(){
@@ -151,6 +152,7 @@ function delete_peering_connection(){
     cluster_name="$2"
 
     aws ec2 delete-vpc-peering-connection --vpc-peering-connection-id $peering_connection_id
+    aws ec2 wait vpc-peering-connection-deleted --vpc-peering-connection-id $peering_connection_id
 }
 
 # Before deleting a role, it needs 
@@ -198,6 +200,14 @@ function delete_vpc(){
     for rt in $(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[*].RouteTableId" --output text); do
         if [[ "$rt" != "$main_route_table" ]]; then
             aws ec2 delete-route-table --route-table-id $rt
+        fi
+    done
+
+    for sg in $(aws ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc" --query "SecurityGroups[*].{GroupId:GroupId,GroupName:GroupName}" --output json | jq -c '.[]'); do
+        name=$(echo $sg | jq -r ".GroupName")
+        if [[ "$name" != "default" ]]; then
+            id=$(echo $sg | jq -r ".GroupId")
+            aws ec2 delete-security-group --group-id $id
         fi
     done
 
@@ -339,6 +349,24 @@ for vpc in $(aws ec2 describe-vpcs --filters $TEST_CLUSTER_TAG_KEY_FILTER --quer
         continue
     fi
     delete_vpc $vpc $cluster_name
+done
+
+# these should get detached and deleted during vpc cleanup
+# but the detach and delete are seperate calls so catch
+# any lingering resources
+for internet_gateway in $(aws ec2 describe-internet-gateways --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "InternetGateways[*].{InternetGatewayId:InternetGatewayId,Tags:Tags}" | jq -c '.[]'); do
+    cluster_name="$(get_cluster_name_from_tags "$internet_gateway")"
+    if [ -z "$cluster_name" ]; then
+        continue
+    fi
+    if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
+        continue
+    fi
+    if ! is_eks_cluster_deleted $cluster_name; then
+        continue
+    fi
+    id=$(echo $internet_gateway | jq -r ".InternetGatewayId")
+    aws ec2 delete-internet-gateway --internet-gateway-id $id
 done
 
 # # describe-activations does not allow filters but does return tags

@@ -284,6 +284,7 @@ export class NodeadmBuildStack extends cdk.Stack {
             'ec2:CreateRouteTable',
             'ec2:CreateSubnet',
             'ec2:DeleteRouteTable',
+            "ec2:DeleteSecurityGroup",
             'ec2:DescribeAvailabilityZones',
             'ec2:DescribeImages',
             'ec2:DescribeInstances',
