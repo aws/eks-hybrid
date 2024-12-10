@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
-	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/go-logr/logr"
 )
 
@@ -57,7 +57,7 @@ func (c *Delete) deleteCluster(ctx context.Context, cluster DeleteInput) error {
 	_, err := c.eks.DeleteCluster(ctx, &eks.DeleteClusterInput{
 		Name: aws.String(cluster.ClusterName),
 	})
-	if err != nil && e2e.IsErrorType(err, &types.ResourceNotFoundException{}) {
+	if err != nil && errors.IsType(err, &types.ResourceNotFoundException{}) {
 		c.logger.Info("Cluster already deleted", "cluster", cluster.ClusterName)
 		return nil
 	}
@@ -83,39 +83,15 @@ func waitForClusterDeletion(ctx context.Context, client *eks.Client, clusterName
 	ctx, cancel := context.WithTimeout(ctx, deleteClusterTimeout)
 	defer cancel()
 
-	statusCh := make(chan bool)
-	errCh := make(chan error)
+	return waitForCluster(ctx, client, clusterName, func(output *eks.DescribeClusterOutput, err error) (bool, error) {
+		if err != nil {
+			if errors.IsType(err, &types.ResourceNotFoundException{}) {
+				return true, nil
+			}
 
-	go func(ctx context.Context) {
-		defer close(statusCh)
-		defer close(errCh)
-		for {
-			describeInput := &eks.DescribeClusterInput{
-				Name: aws.String(clusterName),
-			}
-			_, err := client.DescribeCluster(ctx, describeInput)
-			if err != nil {
-				if e2e.IsErrorType(err, &types.ResourceNotFoundException{}) {
-					statusCh <- true
-					return
-				}
-				errCh <- fmt.Errorf("failed to describe cluster %s: %v", clusterName, err)
-				return
-			}
-			select {
-			case <-ctx.Done(): // Check if the context is done (timeout/canceled)
-				errCh <- fmt.Errorf("context canceled or timed out while waiting for cluster %s deletion: %v", clusterName, ctx.Err())
-				return
-			case <-time.After(30 * time.Second): // Retry after 30 secs
-			}
+			return false, fmt.Errorf("describing cluster %s: %w", clusterName, err)
 		}
-	}(ctx)
 
-	// Wait for the cluster to be deleted or for the timeout to expire
-	select {
-	case <-statusCh:
-		return nil
-	case err := <-errCh:
-		return err
-	}
+		return false, nil
+	})
 }
