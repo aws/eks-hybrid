@@ -18,10 +18,9 @@ import (
 
 const (
 	createClusterTimeout = 15 * time.Minute
-	deleteClusterTimeout = 5 * time.Minute
 )
 
-type HybridCluster struct {
+type hybridCluster struct {
 	Name              string
 	Region            string
 	KubernetesVersion string
@@ -31,7 +30,7 @@ type HybridCluster struct {
 	HybridNetwork     NetworkConfig
 }
 
-func (h *HybridCluster) CreateCluster(ctx context.Context, client *eks.Client, logger logr.Logger) error {
+func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
 	hybridCluster := &eks.CreateClusterInput{
 		Name:    aws.String(h.Name),
 		Version: aws.String(h.KubernetesVersion),
@@ -119,76 +118,9 @@ func waitForClusterCreation(ctx context.Context, client *eks.Client, clusterName
 	}
 }
 
-func (h *HybridCluster) UpdateKubeconfig(kubeconfig string) error {
+func (h *hybridCluster) UpdateKubeconfig(kubeconfig string) error {
 	cmd := exec.Command("aws", "eks", "update-kubeconfig", "--name", h.Name, "--region", h.Region, "--kubeconfig", kubeconfig)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
-}
-
-func (c *CleanupResources) DeleteCluster(ctx context.Context, client *eks.Client, logger logr.Logger) error {
-	_, err := client.DeleteCluster(ctx, &eks.DeleteClusterInput{
-		Name: aws.String(c.ClusterName),
-	})
-	if err != nil && e2e.IsErrorType(err, &types.ResourceNotFoundException{}) {
-		logger.Info("Cluster already deleted", "cluster", c.ClusterName)
-		return nil
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to delete EKS hybrid cluster %s: %v", c.ClusterName, err)
-	}
-
-	logger.Info("Cluster deletion initiated", "cluster", c.ClusterName)
-
-	// Wait for the cluster to be fully deleted to check for any errors during the delete.
-	err = waitForClusterDeletion(ctx, client, c.ClusterName)
-	if err != nil {
-		return fmt.Errorf("error waiting for cluster %s deletion: %v", c.ClusterName, err)
-	}
-
-	return nil
-}
-
-// waitForClusterDeletion waits for the cluster to be deleted.
-func waitForClusterDeletion(ctx context.Context, client *eks.Client, clusterName string) error {
-	// Create a context that automatically cancels after the specified timeout
-	ctx, cancel := context.WithTimeout(ctx, deleteClusterTimeout)
-	defer cancel()
-
-	statusCh := make(chan bool)
-	errCh := make(chan error)
-
-	go func(ctx context.Context) {
-		defer close(statusCh)
-		defer close(errCh)
-		for {
-			describeInput := &eks.DescribeClusterInput{
-				Name: aws.String(clusterName),
-			}
-			_, err := client.DescribeCluster(ctx, describeInput)
-			if err != nil {
-				if e2e.IsErrorType(err, &types.ResourceNotFoundException{}) {
-					statusCh <- true
-					return
-				}
-				errCh <- fmt.Errorf("failed to describe cluster %s: %v", clusterName, err)
-				return
-			}
-			select {
-			case <-ctx.Done(): // Check if the context is done (timeout/canceled)
-				errCh <- fmt.Errorf("context canceled or timed out while waiting for cluster %s deletion: %v", clusterName, ctx.Err())
-				return
-			case <-time.After(30 * time.Second): // Retry after 30 secs
-			}
-		}
-	}(ctx)
-
-	// Wait for the cluster to be deleted or for the timeout to expire
-	select {
-	case <-statusCh:
-		return nil
-	case err := <-errCh:
-		return err
-	}
 }

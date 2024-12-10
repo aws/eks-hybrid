@@ -19,32 +19,33 @@ import (
 //go:embed cfn-templates/setup-cfn.yaml
 var setupTemplateBody []byte
 
-type VpcConfig struct {
-	VpcID         string
-	PublicSubnet  string
-	PrivateSubnet string
-	SecurityGroup string
-}
-
-type ResourcesStackOutput struct {
-	ClusterRole          string
-	VPCPeeringConnection string
-	ClusterVpcConfig     VpcConfig
-	HybridNodeVpcConfig  VpcConfig
-}
-
 const (
 	stackWaitTimeout  = 2 * time.Minute
 	stackWaitInterval = 10 * time.Second
 )
 
-func getArchitectureStackName(clusterName string) string {
-	return fmt.Sprintf("EKSHybridCI-Arch-%s", clusterName)
+type vpcConfig struct {
+	vpcID         string
+	publicSubnet  string
+	privateSubnet string
+	securityGroup string
 }
 
-func (t *TestResources) DeployStack(ctx context.Context, client *cloudformation.Client, logger logr.Logger) (*ResourcesStackOutput, error) {
-	stackName := getArchitectureStackName(t.ClusterName)
-	resp, err := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
+type resourcesStackOutput struct {
+	clusterRole          string
+	vpcPeeringConnection string
+	clusterVpcConfig     vpcConfig
+	hybridNodeVpcConfig  vpcConfig
+}
+
+type stack struct {
+	logger logr.Logger
+	cfn    *cloudformation.Client
+}
+
+func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
+	stackName := stackName(test.ClusterName)
+	resp, err := s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
 	if err != nil && !e2e.IsErrorType(err, &types.StackInstanceNotFoundException{}) {
@@ -54,39 +55,39 @@ func (t *TestResources) DeployStack(ctx context.Context, client *cloudformation.
 	params := []types.Parameter{
 		{
 			ParameterKey:   aws.String("ClusterName"),
-			ParameterValue: aws.String(t.ClusterName),
+			ParameterValue: aws.String(test.ClusterName),
 		},
 		{
 			ParameterKey:   aws.String("ClusterRegion"),
-			ParameterValue: aws.String(t.ClusterRegion),
+			ParameterValue: aws.String(test.ClusterRegion),
 		},
 		{
 			ParameterKey:   aws.String("ClusterVPCCidr"),
-			ParameterValue: aws.String(t.ClusterNetwork.VpcCidr),
+			ParameterValue: aws.String(test.ClusterNetwork.VpcCidr),
 		},
 		{
 			ParameterKey:   aws.String("ClusterPublicSubnetCidr"),
-			ParameterValue: aws.String(t.ClusterNetwork.PublicSubnetCidr),
+			ParameterValue: aws.String(test.ClusterNetwork.PublicSubnetCidr),
 		},
 		{
 			ParameterKey:   aws.String("ClusterPrivateSubnetCidr"),
-			ParameterValue: aws.String(t.ClusterNetwork.PrivateSubnetCidr),
+			ParameterValue: aws.String(test.ClusterNetwork.PrivateSubnetCidr),
 		},
 		{
 			ParameterKey:   aws.String("HybridNodeVPCCidr"),
-			ParameterValue: aws.String(t.HybridNetwork.VpcCidr),
+			ParameterValue: aws.String(test.HybridNetwork.VpcCidr),
 		},
 		{
 			ParameterKey:   aws.String("HybridNodePublicSubnetCidr"),
-			ParameterValue: aws.String(t.HybridNetwork.PublicSubnetCidr),
+			ParameterValue: aws.String(test.HybridNetwork.PublicSubnetCidr),
 		},
 		{
 			ParameterKey:   aws.String("HybridNodePrivateSubnetCidr"),
-			ParameterValue: aws.String(t.HybridNetwork.PrivateSubnetCidr),
+			ParameterValue: aws.String(test.HybridNetwork.PrivateSubnetCidr),
 		},
 		{
 			ParameterKey:   aws.String("HybridNodePodCidr"),
-			ParameterValue: aws.String(t.HybridNetwork.PodCidr),
+			ParameterValue: aws.String(test.HybridNetwork.PodCidr),
 		},
 		{
 			ParameterKey:   aws.String("TestClusterTagKey"),
@@ -95,8 +96,8 @@ func (t *TestResources) DeployStack(ctx context.Context, client *cloudformation.
 	}
 
 	if resp == nil || resp.Stacks == nil {
-		logger.Info("Creating hybrid nodes setup stack", "stackName", stackName)
-		_, err = client.CreateStack(ctx, &cloudformation.CreateStackInput{
+		s.logger.Info("Creating hybrid nodes setup stack", "stackName", stackName)
+		_, err = s.cfn.CreateStack(ctx, &cloudformation.CreateStackInput{
 			StackName:    aws.String(stackName),
 			TemplateBody: aws.String(string(setupTemplateBody)),
 			Parameters:   params,
@@ -106,22 +107,22 @@ func (t *TestResources) DeployStack(ctx context.Context, client *cloudformation.
 			},
 			Tags: []types.Tag{{
 				Key:   aws.String(constants.TestClusterTagKey),
-				Value: aws.String(t.ClusterName),
+				Value: aws.String(test.ClusterName),
 			}},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("creating hybrid nodes setup cfn stack: %w", err)
 		}
 
-		logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
+		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
 
-		err = waitForStackOperation(ctx, client, stackName)
+		err = waitForStackOperation(ctx, s.cfn, stackName)
 		if err != nil {
 			return nil, fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	} else {
-		logger.Info("Updating hybrid nodes setup stack", "stackName", stackName)
-		_, err = client.UpdateStack(ctx, &cloudformation.UpdateStackInput{
+		s.logger.Info("Updating hybrid nodes setup stack", "stackName", stackName)
+		_, err = s.cfn.UpdateStack(ctx, &cloudformation.UpdateStackInput{
 			StackName: aws.String(stackName),
 			Capabilities: []types.Capability{
 				types.CapabilityCapabilityIam,
@@ -133,55 +134,59 @@ func (t *TestResources) DeployStack(ctx context.Context, client *cloudformation.
 		if err != nil {
 			// Handle "No updates are to be performed"
 			if strings.Contains(err.Error(), "No updates are to be performed") {
-				logger.Info("No changes detected in the stack, no update necessary.")
+				s.logger.Info("No changes detected in the stack, no update necessary.")
 			} else {
 				return nil, fmt.Errorf("updating CloudFormation stack: %w", err)
 			}
 		}
 
-		logger.Info("Waiting for hybrid nodes setup stack to be updated", "stackName", stackName)
-		err = waitForStackOperation(ctx, client, stackName)
+		s.logger.Info("Waiting for hybrid nodes setup stack to be updated", "stackName", stackName)
+		err = waitForStackOperation(ctx, s.cfn, stackName)
 		if err != nil {
 			return nil, fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	}
 
-	resp, err = client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
+	resp, err = s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("describing hybrid nodes setup cfn stack: %w", err)
 	}
 
-	result := &ResourcesStackOutput{}
+	result := &resourcesStackOutput{}
 	// extract relevant stack outputs
 	for _, output := range resp.Stacks[0].Outputs {
 		switch aws.ToString(output.OutputKey) {
 		case "ClusterRole":
-			result.ClusterRole = *output.OutputValue
+			result.clusterRole = *output.OutputValue
 		case "ClusterVPC":
-			result.ClusterVpcConfig.VpcID = *output.OutputValue
+			result.clusterVpcConfig.vpcID = *output.OutputValue
 		case "ClusterVPCPublicSubnet":
-			result.ClusterVpcConfig.PublicSubnet = *output.OutputValue
+			result.clusterVpcConfig.publicSubnet = *output.OutputValue
 		case "ClusterVPCPrivateSubnet":
-			result.ClusterVpcConfig.PrivateSubnet = *output.OutputValue
+			result.clusterVpcConfig.privateSubnet = *output.OutputValue
 		case "ClusterSecurityGroup":
-			result.ClusterVpcConfig.SecurityGroup = *output.OutputValue
+			result.clusterVpcConfig.securityGroup = *output.OutputValue
 		case "HybridNodeVPC":
-			result.HybridNodeVpcConfig.VpcID = *output.OutputValue
+			result.hybridNodeVpcConfig.vpcID = *output.OutputValue
 		case "HybridNodeVPCPublicSubnet":
-			result.HybridNodeVpcConfig.PublicSubnet = *output.OutputValue
+			result.hybridNodeVpcConfig.publicSubnet = *output.OutputValue
 		case "HybridNodeVPCPrivateSubnet":
-			result.HybridNodeVpcConfig.PrivateSubnet = *output.OutputValue
+			result.hybridNodeVpcConfig.privateSubnet = *output.OutputValue
 		case "HybridNodeSecurityGroup":
-			result.HybridNodeVpcConfig.SecurityGroup = *output.OutputValue
+			result.hybridNodeVpcConfig.securityGroup = *output.OutputValue
 		case "VPCPeeringConnection":
-			result.VPCPeeringConnection = *output.OutputValue
+			result.vpcPeeringConnection = *output.OutputValue
 		}
 	}
 
-	logger.Info("E2E resources stack deployed successfully", "stackName", stackName)
+	s.logger.Info("E2E resources stack deployed successfully", "stackName", stackName)
 	return result, nil
+}
+
+func stackName(clusterName string) string {
+	return fmt.Sprintf("EKSHybridCI-Arch-%s", clusterName)
 }
 
 func waitForStackOperation(ctx context.Context, client *cloudformation.Client, stackName string) error {
@@ -210,19 +215,19 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 	return err
 }
 
-func (c *CleanupResources) DeleteStack(ctx context.Context, client *cloudformation.Client, logger logr.Logger) error {
-	stackName := getArchitectureStackName(c.ClusterName)
-	_, err := client.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+func (s *stack) delete(ctx context.Context, clusterName string) error {
+	stackName := stackName(clusterName)
+	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String(stackName),
 	})
 	if err != nil {
 		return fmt.Errorf("deleting hybrid nodes setup cfn stack: %w", err)
 	}
-	err = waitForStackOperation(ctx, client, stackName)
+	err = waitForStackOperation(ctx, s.cfn, stackName)
 	if err != nil {
 		return fmt.Errorf("waiting for hybrid nodes setup cfn stack to be deleted: %w", err)
 	}
 
-	logger.Info("E2E resources stack deleted successfully", "stackName", stackName)
+	s.logger.Info("E2E resources stack deleted successfully", "stackName", stackName)
 	return nil
 }

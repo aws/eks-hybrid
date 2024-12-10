@@ -1,25 +1,11 @@
 package e2e
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"regexp"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 )
-
-func NewAWSConfig(ctx context.Context, region string) (aws.Config, error) {
-	// Create a new config using shared credentials or environment variables
-	config, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
-	if err != nil {
-		return aws.Config{}, fmt.Errorf("failed to create new AWS config: %v", err)
-	}
-
-	return config, nil
-}
 
 func isErrCode(err error, code string) bool {
 	if err == nil {

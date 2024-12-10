@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
 
 	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 )
 
@@ -37,6 +39,7 @@ func (c *command) Flaggy() *flaggy.Subcommand {
 }
 
 func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+	ctx := context.Background()
 	file, err := os.ReadFile(s.configFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to open configuration file: %v", err)
@@ -48,11 +51,16 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
 	}
 
-	ctx := context.Background()
+	aws, err := config.LoadDefaultConfig(ctx, config.WithRegion(testResources.ClusterRegion))
+	if err != nil {
+		return fmt.Errorf("reading AWS configuration: %w", err)
+	}
 
-	// Create resources using TestRunner object
-	if err := testResources.CreateResources(ctx); err != nil {
-		return fmt.Errorf("failed to create resources: %v", err)
+	logger := e2e.NewLogger()
+	create := cluster.NewCreate(aws, logger)
+
+	if err := create.Run(ctx, testResources); err != nil {
+		return fmt.Errorf("failed to create resources: %w", err)
 	}
 
 	fmt.Println("E2E setup completed successfully!")
