@@ -10,8 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
-	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -48,7 +48,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	resp, err := s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	if err != nil && !e2e.IsErrorType(err, &types.StackInstanceNotFoundException{}) {
+	if err != nil && !errors.IsType(err, &types.StackInstanceNotFoundException{}) {
 		return nil, fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
 	}
 
@@ -195,7 +195,7 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 			StackName: aws.String(stackName),
 		})
 		if err != nil {
-			if e2e.IsErrorType(err, &types.StackInstanceNotFoundException{}) {
+			if errors.IsType(err, &types.StackInstanceNotFoundException{}) {
 				return true, nil
 			}
 			return false, err
