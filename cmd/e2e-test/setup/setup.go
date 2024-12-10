@@ -48,7 +48,7 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	testResources := cluster.TestResources{}
 
 	if err = yaml.Unmarshal(file, &testResources); err != nil {
-		return fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
+		return fmt.Errorf("unmarshaling test infra configuration: %w", err)
 	}
 
 	aws, err := config.LoadDefaultConfig(ctx, config.WithRegion(testResources.ClusterRegion))
@@ -59,10 +59,11 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	logger := e2e.NewLogger()
 	create := cluster.NewCreate(aws, logger)
 
+	logger.Info("Creating cluster infrastructure for E2E tests...")
 	if err := create.Run(ctx, testResources); err != nil {
-		return fmt.Errorf("failed to create resources: %w", err)
+		return fmt.Errorf("creating E2E test infrastructure: %w", err)
 	}
 
-	fmt.Println("E2E setup completed successfully!")
+	fmt.Println("E2E test infrastructure setup completed successfully!")
 	return nil
 }

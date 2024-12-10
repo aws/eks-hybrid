@@ -63,6 +63,7 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 		return fmt.Errorf("creating EKS hybrid cluster: %w", err)
 	}
 
+	logger.Info("Waiting for cluster to be active", "cluster", h.Name)
 	if err := waitForActiveCluster(ctx, client, h.Name); err != nil {
 		return err
 	}
