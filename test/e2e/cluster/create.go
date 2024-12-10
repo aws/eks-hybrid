@@ -31,7 +31,6 @@ type NetworkConfig struct {
 }
 
 const (
-	outputDir = "/tmp"
 	ciliumCni = "cilium"
 	calicoCni = "calico"
 )
@@ -44,7 +43,8 @@ type Create struct {
 
 func NewCreate(aws aws.Config, logger logr.Logger) Create {
 	return Create{
-		eks: eks.NewFromConfig(aws),
+		logger: logger,
+		eks:    eks.NewFromConfig(aws),
 		stack: &stack{
 			cfn:    cloudformation.NewFromConfig(aws),
 			logger: logger,
@@ -53,41 +53,41 @@ func NewCreate(aws aws.Config, logger logr.Logger) Create {
 }
 
 func (c *Create) Run(ctx context.Context, test TestResources) error {
-	resources, err := c.stack.deploy(ctx, test)
+	stackOut, err := c.stack.deploy(ctx, test)
 	if err != nil {
-		return fmt.Errorf("creating architecture: %w", err)
+		return fmt.Errorf("creating stack for cluster infra: %w", err)
 	}
 
 	hybridCluster := hybridCluster{
 		Name:              test.ClusterName,
 		Region:            test.ClusterRegion,
 		KubernetesVersion: test.KubernetesVersion,
-		SecurityGroup:     resources.clusterVpcConfig.securityGroup,
-		SubnetIDs:         []string{resources.clusterVpcConfig.publicSubnet, resources.clusterVpcConfig.privateSubnet},
-		Role:              resources.clusterRole,
+		SecurityGroup:     stackOut.clusterVpcConfig.securityGroup,
+		SubnetIDs:         []string{stackOut.clusterVpcConfig.publicSubnet, stackOut.clusterVpcConfig.privateSubnet},
+		Role:              stackOut.clusterRole,
 		HybridNetwork:     test.HybridNetwork,
 	}
 
-	c.logger.Info("Creating EKS hybrid cluster..", "cluster", test.ClusterName)
+	c.logger.Info("Creating EKS cluster..", "cluster", test.ClusterName)
 	err = hybridCluster.create(ctx, c.eks, c.logger)
 	if err != nil {
-		return fmt.Errorf("creating %s EKS cluster: %v", test.KubernetesVersion, err)
+		return fmt.Errorf("creating %s EKS cluster: %w", test.KubernetesVersion, err)
 	}
 
 	kubeconfig := KubeconfigPath(test.ClusterName)
 	err = hybridCluster.UpdateKubeconfig(kubeconfig)
 	if err != nil {
-		return fmt.Errorf("saving kubeconfig for %s EKS cluster: %v", test.KubernetesVersion, err)
+		return fmt.Errorf("saving kubeconfig for %s EKS cluster: %w", test.KubernetesVersion, err)
 	}
 
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return fmt.Errorf("loading kubeconfig: %v", err)
+		return fmt.Errorf("loading kubeconfig: %w", err)
 	}
 
 	dynamicK8s, err := dynamic.NewForConfig(clientConfig)
 	if err != nil {
-		return fmt.Errorf("creating dynamic Kubernetes client: %v", err)
+		return fmt.Errorf("creating dynamic Kubernetes client: %w", err)
 	}
 
 	switch test.Cni {
@@ -95,18 +95,17 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		cilium := cni.NewCilium(dynamicK8s, test.HybridNetwork.PodCidr)
 		c.logger.Info("Installing cilium on cluster...", "cluster", test.ClusterName)
 		if err = cilium.Deploy(ctx); err != nil {
-			return fmt.Errorf("installing cilium for %s EKS cluster: %v", test.KubernetesVersion, err)
+			return fmt.Errorf("installing cilium for %s EKS cluster: %w", test.KubernetesVersion, err)
 		}
-		c.logger.Info("Cilium installed sucessfully.")
+		c.logger.Info("Cilium installed successfully.")
 	case calicoCni:
 		calico := cni.NewCalico(dynamicK8s, test.HybridNetwork.PodCidr)
 		c.logger.Info("Installing calico on cluster...", "cluster", test.ClusterName)
 		if err = calico.Deploy(ctx); err != nil {
-			return fmt.Errorf("installing calico for %s EKS cluster: %v", test.KubernetesVersion, err)
+			return fmt.Errorf("installing calico for %s EKS cluster: %w", test.KubernetesVersion, err)
 		}
-		c.logger.Info("Calico installed sucessfully.")
+		c.logger.Info("Calico installed successfully.")
 	}
-	c.logger.Info("Setup finished successfully!")
 
 	return nil
 }

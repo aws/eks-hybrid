@@ -42,16 +42,14 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 	logger := e2e.NewLogger()
 
-	logger.Info("Cleaning up E2E resources...")
-
 	file, err := os.ReadFile(s.resourcesFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to open configuration file: %v", err)
+		return fmt.Errorf("failed to open configuration file: %w", err)
 	}
 
 	deleteCluster := cluster.DeleteInput{}
 	if err = yaml.Unmarshal(file, &deleteCluster); err != nil {
-		return fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
+		return fmt.Errorf("unmarshaling cleanup config: %w", err)
 	}
 
 	aws, err := config.LoadDefaultConfig(ctx, config.WithRegion(deleteCluster.ClusterRegion))
@@ -61,9 +59,11 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	delete := cluster.NewDelete(aws, logger)
 
-	err = delete.Run(ctx, deleteCluster)
-	if err != nil {
-		return fmt.Errorf("error cleaning up e2e resources: %v", err)
+	logger.Info("Cleaning up E2E cluster resources...")
+	if err = delete.Run(ctx, deleteCluster); err != nil {
+		return fmt.Errorf("error cleaning up e2e resources: %w", err)
 	}
+
+	logger.Info("Cleanup completed successfully!")
 	return nil
 }

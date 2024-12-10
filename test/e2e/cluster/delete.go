@@ -28,7 +28,8 @@ type Delete struct {
 
 func NewDelete(aws aws.Config, logger logr.Logger) Delete {
 	return Delete{
-		eks: eks.NewFromConfig(aws),
+		logger: logger,
+		eks:    eks.NewFromConfig(aws),
 		stack: &stack{
 			cfn:    cloudformation.NewFromConfig(aws),
 			logger: logger,
@@ -37,23 +38,19 @@ func NewDelete(aws aws.Config, logger logr.Logger) Delete {
 }
 
 func (c *Delete) Run(ctx context.Context, cluster DeleteInput) error {
-	c.logger.Info("Cleaning up E2E cluster resources...")
-
-	c.logger.Info("Deleting EKS hybrid cluster", "cluster", cluster.ClusterName)
 	if err := c.deleteCluster(ctx, cluster); err != nil {
 		return fmt.Errorf("deleting EKS hybrid cluster: %w", err)
 	}
 
-	c.logger.Info("Deleting E2E setup stack...")
 	if err := c.stack.delete(ctx, cluster.ClusterName); err != nil {
 		return fmt.Errorf("deleting E2E setup stack: %w", err)
 	}
 
-	c.logger.Info("Cleanup completed successfully!")
 	return nil
 }
 
 func (c *Delete) deleteCluster(ctx context.Context, cluster DeleteInput) error {
+	c.logger.Info("Deleting EKS hybrid cluster", "cluster", cluster.ClusterName)
 	_, err := c.eks.DeleteCluster(ctx, &eks.DeleteClusterInput{
 		Name: aws.String(cluster.ClusterName),
 	})
@@ -63,15 +60,12 @@ func (c *Delete) deleteCluster(ctx context.Context, cluster DeleteInput) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to delete EKS hybrid cluster %s: %v", cluster.ClusterName, err)
+		return fmt.Errorf("deleting EKS hybrid cluster %s: %w", cluster.ClusterName, err)
 	}
 
-	c.logger.Info("Cluster deletion initiated", "cluster", cluster.ClusterName)
-
-	// Wait for the cluster to be fully deleted to check for any errors during the delete.
-	err = waitForClusterDeletion(ctx, c.eks, cluster.ClusterName)
-	if err != nil {
-		return fmt.Errorf("error waiting for cluster %s deletion: %w", cluster.ClusterName, err)
+	c.logger.Info("Waiting for cluster deletion", "cluster", cluster.ClusterName)
+	if err := waitForClusterDeletion(ctx, c.eks, cluster.ClusterName); err != nil {
+		return fmt.Errorf("waiting for cluster %s deletion: %w", cluster.ClusterName, err)
 	}
 
 	return nil

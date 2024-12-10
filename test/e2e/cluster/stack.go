@@ -115,7 +115,6 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		}
 
 		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
-
 		err = waitForStackOperation(ctx, s.cfn, stackName)
 		if err != nil {
 			return nil, fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
@@ -217,17 +216,19 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 
 func (s *stack) delete(ctx context.Context, clusterName string) error {
 	stackName := stackName(clusterName)
+	s.logger.Info("Deleting E2E test cluster stack", "stackName", stackName)
 	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String(stackName),
 	})
 	if err != nil {
 		return fmt.Errorf("deleting hybrid nodes setup cfn stack: %w", err)
 	}
-	err = waitForStackOperation(ctx, s.cfn, stackName)
-	if err != nil {
+
+	s.logger.Info("Waiting for stack to be deleted", "stackName", stackName)
+	if err := waitForStackOperation(ctx, s.cfn, stackName); err != nil {
 		return fmt.Errorf("waiting for hybrid nodes setup cfn stack to be deleted: %w", err)
 	}
 
-	s.logger.Info("E2E resources stack deleted successfully", "stackName", stackName)
+	s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
 	return nil
 }
