@@ -45,7 +45,7 @@ func Setup(ctx context.Context, logger logr.Logger, awsSession *session.Session,
 	stack := &Stack{
 		ClusterName:            *cluster.Cluster.Name,
 		ClusterArn:             *cluster.Cluster.Arn,
-		Name:                   e2e.GetTruncatedName(stackName, 60),
+		Name:                   e2e.Truncate(stackName, 60),
 		IAMRolesAnywhereCACert: rolesAnywhereCA.CertPEM,
 		CFN:                    cfnClient,
 		IAM:                    iamClient,
