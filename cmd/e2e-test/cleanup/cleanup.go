@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/cluster"
 )
 
 type command struct {
@@ -44,17 +44,12 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("failed to open configuration file: %v", err)
 	}
 
-	cleanup := &e2e.TestRunner{}
+	cleanup := &cluster.CleanupResources{}
 
 	if err = yaml.Unmarshal(file, &cleanup); err != nil {
 		return fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
 	}
 
-	// Create AWS session
-	cleanup.Session, err = cleanup.NewAWSSession()
-	if err != nil {
-		return fmt.Errorf("failed to create AWS session: %v", err)
-	}
 	ctx := context.Background()
 
 	err = cleanup.CleanupE2EResources(ctx)

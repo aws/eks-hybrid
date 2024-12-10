@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/go-logr/logr"
 )
 
@@ -117,7 +117,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 				aws.String("CAPABILITY_NAMED_IAM"),
 			},
 			Tags: []*cloudformation.Tag{{
-				Key:   aws.String(e2e.TestClusterTagKey),
+				Key:   aws.String(constants.TestClusterTagKey),
 				Value: aws.String(s.ClusterName),
 			}},
 		})
@@ -176,7 +176,7 @@ func (s *Stack) createInstanceProfile(ctx context.Context, logger logr.Logger, r
 			InstanceProfileName: aws.String(instanceProfileName),
 			Path:                aws.String("/"),
 			Tags: []*iam.Tag{{
-				Key:   aws.String(e2e.TestClusterTagKey),
+				Key:   aws.String(constants.TestClusterTagKey),
 				Value: aws.String(s.ClusterName),
 			}},
 		})

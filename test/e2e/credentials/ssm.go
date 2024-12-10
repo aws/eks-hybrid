@@ -15,6 +15,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 const ssmActivationName = "eks-hybrid-ssm-provider"
@@ -74,7 +75,7 @@ func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole, ssm
 		DefaultInstanceName: aws.String(ssmActivationName),
 		Tags: []ssmv2Types.Tag{
 			{
-				Key:   aws.String(e2e.TestClusterTagKey),
+				Key:   aws.String(constants.TestClusterTagKey),
 				Value: aws.String(clusterName),
 			},
 		},

@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
@@ -53,7 +54,6 @@ var (
 type TestConfig struct {
 	ClusterName     string `yaml:"clusterName"`
 	ClusterRegion   string `yaml:"clusterRegion"`
-	HybridVpcID     string `yaml:"hybridVpcID"`
 	NodeadmUrlAMD   string `yaml:"nodeadmUrlAMD"`
 	NodeadmUrlARM   string `yaml:"nodeadmUrlARM"`
 	SetRootPassword bool   `yaml:"setRootPassword"`
@@ -491,7 +491,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 
 	// TODO: ideally this should be an input to the tests and not just
 	// assume same name/path used by the setup command.
-	clientConfig, err := clientcmd.BuildConfigFromFlags("", e2e.KubeconfigPath(suite.TestConfig.ClusterName))
+	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(suite.TestConfig.ClusterName))
 	if err != nil {
 		return nil, err
 	}
