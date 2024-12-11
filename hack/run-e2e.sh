@@ -86,4 +86,4 @@ skip=$(yq '.skipped_tests | join("|")' ${SKIP_FILE})
 # on how the CI runner has been configured. However, even if only one CPU is avaialble,
 # there is still value in running the tests in multiple processes, since most of the work is
 # "waiting" for infra to be created and nodes to join the cluster.
-$BIN_DIR/ginkgo --procs 64 -v -tags=e2e --skip="${skip}" $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml
+$BIN_DIR/ginkgo --procs 64 -v -tags=e2e --no-color --skip="${skip}" $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml
