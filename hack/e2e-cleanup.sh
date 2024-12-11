@@ -83,8 +83,11 @@ function get_cluster_name_from_tags(){
         echo ""
         return
     fi
-    
-    cluster_name=$(echo $json | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+
+    # the iam roles anywhere api returns tags where key/value are lower case, whereas the other apis all start with a upper...
+    tags=$(echo $json | jq ".Tags | walk(if type==\"object\" then with_entries(.key|=ascii_downcase) else . end)")
+
+    cluster_name=$(echo $tags | jq -r "map(select(.key == \"$TEST_CLUSTER_TAG_KEY\"))[0].value")
     if [ -z "$cluster_name" ] || [ "$cluster_name" == "null" ]; then
         echo ""
         return
@@ -108,7 +111,7 @@ function role_cluster_name_tag(){
     echo "$cluster_name"
 }
 
-# See above note about tags
+# See above note about role tags
 function instance_profile_cluster_name_tag(){
     instance_profile="$1"
     instance_profile_tags="$(command aws iam get-instance-profile --query "InstanceProfile.{Tags:Tags}" --instance-profile-name=$instance_profile --output json 2>/dev/null)"
@@ -240,12 +243,12 @@ else
     done
 fi
 
-# # list-roles does not allow filtering by tags so we have to pull them all
-# # then request their tags seperately
-# # We have the role =* checks to try and limit which roles we bother checking tags for
-# # but we only delete those with the e2e cluster tag
-# # If the cluster-name is passed to the script, only roles who's tag matches that cluster
-# # are deleted
+# list-roles does not allow filtering by tags so we have to pull them all
+# then request their tags seperately
+# We have the role =* checks to try and limit which roles we bother checking tags for
+# but we only delete those with the e2e cluster tag
+# If the cluster-name is passed to the script, only roles who's tag matches that cluster
+# are deleted
 for role in $(aws iam list-roles --query 'Roles[*].RoleName' --output text); do
     if [[ $role == *-hybrid-node ]] || [[ $role == nodeadm-e2e-tests* ]] || [[ $role == EKSHybridCI-* ]]; then
         cluster_name="$(role_cluster_name_tag $role)"
@@ -260,7 +263,7 @@ for role in $(aws iam list-roles --query 'Roles[*].RoleName' --output text); do
     fi
 done
 
-# # See note above about roles
+# See note above about roles
 for instance_profile in $(aws iam list-instance-profiles  --query 'InstanceProfiles[*].InstanceProfileName' --output text); do
     if [[ $instance_profile == EKSHybridCI-* ]]; then
         cluster_name="$(instance_profile_cluster_name_tag $instance_profile)"
@@ -274,10 +277,10 @@ for instance_profile in $(aws iam list-instance-profiles  --query 'InstanceProfi
     fi
 done
 
-# # describe-stacks does not allow filter but it does return the tags for each stack
-# # This deletion is retried since in some cases it has to be remade with the force flag
-# # If the cluster-name is passed to the script, only stacks who's tag matches that cluster
-# # are deleted
+# describe-stacks does not allow filter but it does return the tags for each stack
+# This deletion is retried since in some cases it has to be remade with the force flag
+# If the cluster-name is passed to the script, only stacks who's tag matches that cluster
+# are deleted
 for stack in $(aws cloudformation describe-stacks --query "Stacks[*].{StackId:StackId,CreationTime:CreationTime,StackName:StackName,StackStatus:StackStatus,Tags:Tags}" --output json | jq -c '.[]'); do
     while : ; do       
         stack_name=$(echo $stack | jq -r ".StackName")
@@ -311,9 +314,52 @@ for stack in $(aws cloudformation describe-stacks --query "Stacks[*].{StackId:St
     done
 done
 
-# # The passed in filters will only return instances with the e2e cluster tag
-# # If a cluster name was passed to the script, it also added to the filters so that we
-# # only are getting instances associated with that cluster
+# skip these in ap-southeast-5
+if [[ "${SKIP_IRA_TEST:-false}" == "false" ]]; then
+    # See note above about roles
+    # these rolesanywhere profiles should be deleted when deleting the above cfn stacks
+    # this is a fallback
+    for profile in $(aws rolesanywhere list-profiles --query 'profiles[*].{name:name,profileId:profileId,profileArn:profileArn}' --output json | jq -c '.[]'); do
+        name=$(echo "$profile" | jq -r ".name")
+        if [[ $name == EKSHybridCI-* ]]; then
+            arn=$(echo "$profile" | jq -r ".profileArn")
+            profile_tags="$(aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json)"
+            cluster_name="$(get_cluster_name_from_tags "$profile_tags")"       
+            if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
+                continue
+            fi
+            if [ -z "$cluster_name" ] || ! is_eks_cluster_deleted $cluster_name; then
+                continue
+            fi
+            id=$(echo "$profile" | jq -r ".profileId")
+            aws rolesanywhere delete-profile --profile-id $id     
+        fi
+    done
+
+    # See note above about roles
+    # these rolesanywhere profiles should be deleted when deleting the above cfn stacks
+    # this is a fallback
+    for anchor in $(aws rolesanywhere list-trust-anchors --query 'trustAnchors[*].{name:name,trustAnchorId:trustAnchorId,trustAnchorArn:trustAnchorArn}' --output json | jq -c '.[]'); do
+        name=$(echo "$anchor" | jq -r ".name")
+        if [[ $name == EKSHybridCI-* ]]; then
+            arn=$(echo "$anchor" | jq -r ".trustAnchorArn")
+            anchor_tags="$(aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json)"
+            cluster_name="$(get_cluster_name_from_tags "$anchor_tags")"       
+            if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
+                continue
+            fi
+            if [ -z "$cluster_name" ] || ! is_eks_cluster_deleted $cluster_name; then
+                continue
+            fi
+            id=$(echo "$anchor" | jq -r ".trustAnchorId")
+            aws rolesanywhere delete-trust-anchor --trust-anchor-id $id     
+        fi
+    done
+fi
+
+# The passed in filters will only return instances with the e2e cluster tag
+# If a cluster name was passed to the script, it also added to the filters so that we
+# only are getting instances associated with that cluster
 for reservations in $(aws ec2 describe-instances --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "Reservations[*].Instances[*].{InstanceId:InstanceId,Tags:Tags,State:State.Name}" --output json | jq -c '.[]'); do
     for ec2 in $(echo $reservations | jq -c '.[]'); do
         if [ "terminated" == "$(echo "$ec2" | jq -r '.State')" ]; then
@@ -369,10 +415,10 @@ for internet_gateway in $(aws ec2 describe-internet-gateways --filters $TEST_CLU
     aws ec2 delete-internet-gateway --internet-gateway-id $id
 done
 
-# # describe-activations does not allow filters but does return tags
-# # If the cluster-name is passed to the script, activations stacks who's tag matches that cluster
-# # are deleted
-# # Before deleting the activation, the associated managed instances are also deleted
+# describe-activations does not allow filters but does return tags
+# If the cluster-name is passed to the script, activations stacks who's tag matches that cluster
+# are deleted
+# Before deleting the activation, the associated managed instances are also deleted
 for activation in $(aws ssm describe-activations --query "ActivationList[*].{ActivationId:ActivationId,Tags:Tags}" --output json | jq -c '.[]'); do
     cluster_name="$(get_cluster_name_from_tags "$activation")"
     if [ -z "$cluster_name" ]; then

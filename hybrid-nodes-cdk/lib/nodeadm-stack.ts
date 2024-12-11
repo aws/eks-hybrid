@@ -490,6 +490,14 @@ export class NodeadmBuildStack extends cdk.Stack {
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
           actions: [
+            "rolesanywhere:ListTrustAnchors",
+            "rolesanywhere:ListProfiles"
+          ],
+          resources: ['*']
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
             "rolesanywhere:DeleteProfile",
             "rolesanywhere:DeleteTrustAnchor",
             "rolesanywhere:GetTrustAnchor",

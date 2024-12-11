@@ -5,7 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"slices"
+	"os"
 	"text/template"
 	"time"
 
@@ -20,8 +20,6 @@ import (
 
 //go:embed cfn-templates/hybrid-cfn.yaml
 var cfnTemplateBody string
-
-var iraUnsupportedRegions = []string{"ap-southeast-5"}
 
 type Stack struct {
 	ClusterName            string
@@ -102,7 +100,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 	if err != nil {
 		return fmt.Errorf("parsing hybrid-cfn.yaml template: %w", err)
 	}
-	cfnTemplateConfig := &hybridCfnTemplateVars{IncludeRolesAnywhere: isIraSupported(*s.CFN.Config.Region)}
+	cfnTemplateConfig := &hybridCfnTemplateVars{IncludeRolesAnywhere: isIraSupported()}
 	err = cfnTemplate.Execute(&buf, cfnTemplateConfig)
 	if err != nil {
 		return fmt.Errorf("applying data to hybrid-cfn.yaml template: %w", err)
@@ -294,6 +292,6 @@ func isNotFound(err error) bool {
 	return err != nil && ok && aerr.Code() == "NoSuchEntity"
 }
 
-func isIraSupported(region string) bool {
-	return !slices.Contains(iraUnsupportedRegions, region)
+func isIraSupported() bool {
+	return os.Getenv("SKIP_IRA_TEST") != "false"
 }
