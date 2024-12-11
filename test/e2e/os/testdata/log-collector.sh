@@ -5,7 +5,7 @@ set -o nounset
 set -o pipefail
 
 LOGS_UPLOAD_NAME="$1"
-FAILBACK_UPLOAD_NAME="$2"
+FAILBACK_UPLOAD_NAME="${2:-}"
 
 declare -A LOGS_UPLOAD_URLS=()
 {{ range $url := .LogsUploadUrls }}

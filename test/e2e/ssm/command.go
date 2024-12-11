@@ -17,8 +17,9 @@ type ssmConfig struct {
 	commands   []string
 }
 
-func (s *ssmConfig) runCommandsOnInstanceWaitForInProgress(ctx context.Context, logger logr.Logger) ([]ssm.GetCommandInvocationOutput, error) {
+func (s *ssmConfig) runCommandsOnInstance(ctx context.Context, logger logr.Logger, opts ...request.WaiterOption) ([]ssm.GetCommandInvocationOutput, error) {
 	outputs := []ssm.GetCommandInvocationOutput{}
+
 	logger.Info(fmt.Sprintf("Running command: %v\n", s.commands))
 	input := &ssm.SendCommandInput{
 		DocumentName: aws.String("AWS-RunShellScript"),
@@ -33,13 +34,23 @@ func (s *ssmConfig) runCommandsOnInstanceWaitForInProgress(ctx context.Context, 
 		logger.Info("ThrottlingException encountered, retrying..")
 		output, err = s.client.SendCommandWithContext(ctx, input)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("got an error calling SendCommandWithContext: %w", err)
-	}
 	invocationInput := &ssm.GetCommandInvocationInput{
 		CommandId:  output.Command.CommandId,
 		InstanceId: aws.String(s.instanceID),
 	}
+	// Will wait on Pending, InProgress, or Cancelling until we reach a terminal status of Success, Cancelled, Failed, TimedOut
+	_ = s.client.WaitUntilCommandExecutedWithContext(ctx, invocationInput)
+	invocationOutput, err := s.client.GetCommandInvocationWithContext(ctx, invocationInput)
+	if err != nil {
+		return nil, fmt.Errorf("got an error calling GetCommandInvocation: %w", err)
+	}
+	logger.Info(invocationOutput.String())
+	outputs = append(outputs, *invocationOutput)
+
+	return outputs, nil
+}
+
+func (s *ssmConfig) runCommandsOnInstanceWaitForInProgress(ctx context.Context, logger logr.Logger) ([]ssm.GetCommandInvocationOutput, error) {
 	opts := func(w *request.Waiter) {
 		w.Acceptors = []request.WaiterAcceptor{
 			{
@@ -49,15 +60,7 @@ func (s *ssmConfig) runCommandsOnInstanceWaitForInProgress(ctx context.Context, 
 			},
 		}
 	}
-	_ = s.client.WaitUntilCommandExecutedWithContext(ctx, invocationInput, opts)
-	invocationOutput, err := s.client.GetCommandInvocationWithContext(ctx, invocationInput)
-	if err != nil {
-		return nil, fmt.Errorf("got an error calling GetCommandInvocation: %w", err)
-	}
-	logger.Info(invocationOutput.String())
-	outputs = append(outputs, *invocationOutput)
-
-	return outputs, nil
+	return s.runCommandsOnInstance(ctx, logger, opts)
 }
 
 func isThrottlingException(err error) bool {

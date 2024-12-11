@@ -3,6 +3,8 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -10,15 +12,19 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/kubectl/pkg/drain"
 )
 
 const (
-	nodePodWaitTimeout      = 3 * time.Minute
-	nodePodDelayInterval    = 5 * time.Second
-	hybridNodeWaitTimeout   = 10 * time.Minute
-	hybridNodeDelayInterval = 5 * time.Second
+	nodePodWaitTimeout       = 3 * time.Minute
+	nodePodDelayInterval     = 5 * time.Second
+	hybridNodeWaitTimeout    = 10 * time.Minute
+	hybridNodeDelayInterval  = 5 * time.Second
+	hybridNodeUpgradeTimeout = 2 * time.Minute
+	MinimumVersion           = "1.25"
 )
 
 // WaitForNode wait for the node to join the cluster and fetches the node info from an internal IP address of the node
@@ -249,5 +255,111 @@ func EnsureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, i
 	if err != nil {
 		return fmt.Errorf("deleting node %s: %w", node.Name, err)
 	}
+	return nil
+}
+
+func WaitForNodeToHaveVersion(ctx context.Context, k8s *kubernetes.Clientset, nodeName, targetVersion string, logger logr.Logger) (*corev1.Node, error) {
+	foundNode := &corev1.Node{}
+	consecutiveErrors := 0
+	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeUpgradeTimeout, true, func(ctx context.Context) (done bool, err error) {
+		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			logger.Info("consecutiveErrors", "consecutiveErrors", consecutiveErrors)
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
+			}
+			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
+			return false, nil // continue polling
+		}
+		consecutiveErrors = 0
+
+		kubernetesVersion := strings.TrimPrefix(node.Status.NodeInfo.KubeletVersion, "v")
+		// If the current version matches the target version of kubelet, return true to stop polling
+		if strings.HasPrefix(kubernetesVersion, targetVersion) {
+			foundNode = node
+			logger.Info("Node successfully upgraded to desired kubernetes version", "version", targetVersion)
+			return true, nil
+		}
+
+		return false, nil // continue polling
+	})
+	if err != nil {
+		return nil, fmt.Errorf("waiting for node %s kubernetes version to be upgraded to %s: %w", nodeName, targetVersion, err)
+	}
+
+	return foundNode, nil
+}
+
+func PreviousVersion(kubernetesVersion string) (string, error) {
+	currentVersion, err := version.ParseSemantic(kubernetesVersion + ".0")
+	if err != nil {
+		return "", fmt.Errorf("parsing version: %v", err)
+	}
+	prevVersion := fmt.Sprintf("%d.%d", currentVersion.Major(), currentVersion.Minor()-1)
+	return prevVersion, nil
+}
+
+func IsPreviousVersionSupported(kubernetesVersion string) (bool, error) {
+	prevVersion, err := PreviousVersion(kubernetesVersion)
+	if err != nil {
+		return false, err
+	}
+	minVersion := version.MustParseSemantic(MinimumVersion + ".0")
+	return version.MustParseSemantic(prevVersion + ".0").AtLeast(minVersion), nil
+}
+
+func DrainNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node) error {
+	helper := &drain.Helper{
+		Ctx:                             ctx,
+		Client:                          k8s,
+		Force:                           true, // Force eviction
+		GracePeriodSeconds:              -1,   // Use pod's default grace period
+		IgnoreAllDaemonSets:             true, // Ignore DaemonSet-managed pods
+		DisableEviction:                 true, // forces drain to use delete rather than evict
+		DeleteEmptyDirData:              true,
+		SkipWaitForDeleteTimeoutSeconds: 0,
+		Out:                             os.Stdout,
+		ErrOut:                          os.Stderr,
+	}
+
+	err := CordonNode(ctx, k8s, node)
+	if err != nil {
+		return err
+	}
+
+	err = drain.RunNodeDrain(helper, node.Name)
+	if err != nil {
+		return fmt.Errorf("draining node %s: %v", node.Name, err)
+	}
+
+	return nil
+}
+
+func UncordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node) error {
+	helper := &drain.Helper{
+		Ctx:    ctx,
+		Client: k8s,
+	}
+
+	err := drain.RunCordonOrUncordon(helper, node, false)
+	if err != nil {
+		return fmt.Errorf("cordoning node %s: %v", node.Name, err)
+	}
+
+	return nil
+}
+
+func CordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node) error {
+	helper := &drain.Helper{
+		Ctx:    ctx,
+		Client: k8s,
+	}
+
+	err := drain.RunCordonOrUncordon(helper, node, true)
+	if err != nil {
+		return fmt.Errorf("cordoning node %s: %v", node.Name, err)
+	}
+
 	return nil
 }

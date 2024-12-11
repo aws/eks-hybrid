@@ -16,6 +16,14 @@ operator:
   replicas: 1
   unmanagedPodWatcher:
     restart: false
+  # the cilium-operator by default tolerations all taints
+  # this makes draining a difficult if the operator is running on that node
+  # since it will just immediately restart
+  # this restricts the toleration to the one needed during initialization
+  # more info: https://github.com/cilium/cilium/pull/28856
+  tolerations:
+    - key: node.kubernetes.io/not-ready
+      operator: Exists
 ipam:
   mode: cluster-pool
 envoy:

@@ -56,7 +56,7 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec e2e.N
 }
 
 func (i *IamRolesAnywhereProvider) nodeName(node e2e.NodeSpec) string {
-	return "node-" + string(i.Name()) + "-" + node.OS.Name()
+	return node.NamePrefix + "-node-" + string(i.Name()) + "-" + node.OS.Name()
 }
 
 func (i *IamRolesAnywhereProvider) VerifyUninstall(ctx context.Context, instanceId string) error {
