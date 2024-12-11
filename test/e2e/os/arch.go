@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	amd64Arch = "x86_64"
+	amd64Arch = "amd64"
 	arm64Arch = "arm64"
+	x8664Arch = "x86_64"
 )
 
 func populateBaseScripts(userDataInput *e2e.UserDataInput) error {
@@ -55,6 +56,13 @@ func getAmiIDFromSSM(ctx context.Context, client *ssm.SSM, amiName string) (*str
 	}
 
 	return output.Parameter.Value, nil
+}
+
+func normalizeArch(arch string) string {
+	if arch == x8664Arch {
+		return amd64Arch
+	}
+	return arch
 }
 
 func getInstanceTypeFromRegionAndArch(region, arch string) string {

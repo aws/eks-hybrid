@@ -44,7 +44,7 @@ func NewRedHat8AMD(rhelUsername, rhelPassword string) *RedHat8 {
 	rh8 := new(RedHat8)
 	rh8.RhelUsername = rhelUsername
 	rh8.RhelPassword = rhelPassword
-	rh8.Architecture = amd64Arch
+	rh8.Architecture = x8664Arch
 	return rh8
 }
 
@@ -57,14 +57,14 @@ func NewRedHat8ARM(rhelUsername, rhelPassword string) *RedHat8 {
 }
 
 func (r RedHat8) Name() string {
-	if r.Architecture == amd64Arch {
+	if r.Architecture == x8664Arch {
 		return "rhel8-amd64"
 	}
 	return "rhel8-arm64"
 }
 
 func (r RedHat8) InstanceType(region string) string {
-	return getInstanceTypeFromRegionAndArch(region, r.Architecture)
+	return getInstanceTypeFromRegionAndArch(region, normalizeArch(r.Architecture))
 }
 
 func (r RedHat8) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
@@ -102,7 +102,7 @@ func NewRedHat9AMD(rhelUsername, rhelPassword string) *RedHat9 {
 	rh9 := new(RedHat9)
 	rh9.RhelUsername = rhelUsername
 	rh9.RhelPassword = rhelPassword
-	rh9.Architecture = amd64Arch
+	rh9.Architecture = x8664Arch
 	return rh9
 }
 
@@ -115,14 +115,14 @@ func NewRedHat9ARM(rhelUsername, rhelPassword string) *RedHat9 {
 }
 
 func (r RedHat9) Name() string {
-	if r.Architecture == amd64Arch {
+	if r.Architecture == x8664Arch {
 		return "rhel9-amd64"
 	}
 	return "rhel9-arm64"
 }
 
 func (r RedHat9) InstanceType(region string) string {
-	return getInstanceTypeFromRegionAndArch(region, r.Architecture)
+	return getInstanceTypeFromRegionAndArch(region, normalizeArch(r.Architecture))
 }
 
 func (r RedHat9) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {

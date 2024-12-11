@@ -48,14 +48,14 @@ type Ubuntu2004 struct {
 
 func NewUbuntu2004AMD() *Ubuntu2004 {
 	u := new(Ubuntu2004)
-	u.Architecture = "amd64"
+	u.Architecture = amd64Arch
 	u.ContainerdSource = "distro"
 	return u
 }
 
 func NewUbuntu2004DockerSource() *Ubuntu2004 {
 	u := new(Ubuntu2004)
-	u.Architecture = "amd64"
+	u.Architecture = amd64Arch
 	u.ContainerdSource = "docker"
 	return u
 }
@@ -76,7 +76,7 @@ func (u Ubuntu2004) Name() string {
 }
 
 func (u Ubuntu2004) InstanceType(region string) string {
-	return getInstanceTypeFromRegionAndArch(region, u.Architecture)
+	return getInstanceTypeFromRegionAndArch(region, normalizeArch(u.Architecture))
 }
 
 func (u Ubuntu2004) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
@@ -112,14 +112,14 @@ type Ubuntu2204 struct {
 
 func NewUbuntu2204AMD() *Ubuntu2204 {
 	u := new(Ubuntu2204)
-	u.Architecture = "amd64"
+	u.Architecture = amd64Arch
 	u.ContainerdSource = "distro"
 	return u
 }
 
 func NewUbuntu2204DockerSource() *Ubuntu2204 {
 	u := new(Ubuntu2204)
-	u.Architecture = "amd64"
+	u.Architecture = amd64Arch
 	u.ContainerdSource = "docker"
 	return u
 }
@@ -140,7 +140,7 @@ func (u Ubuntu2204) Name() string {
 }
 
 func (u Ubuntu2204) InstanceType(region string) string {
-	return getInstanceTypeFromRegionAndArch(region, u.Architecture)
+	return getInstanceTypeFromRegionAndArch(region, normalizeArch(u.Architecture))
 }
 
 func (u Ubuntu2204) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
@@ -176,14 +176,14 @@ type Ubuntu2404 struct {
 
 func NewUbuntu2404AMD() *Ubuntu2404 {
 	u := new(Ubuntu2404)
-	u.Architecture = "amd64"
+	u.Architecture = amd64Arch
 	u.ContainerdSource = "distro"
 	return u
 }
 
 func NewUbuntu2404DockerSource() *Ubuntu2404 {
 	u := new(Ubuntu2404)
-	u.Architecture = "amd64"
+	u.Architecture = amd64Arch
 	u.ContainerdSource = "docker"
 	return u
 }
@@ -204,7 +204,7 @@ func (u Ubuntu2404) Name() string {
 }
 
 func (u Ubuntu2404) InstanceType(region string) string {
-	return getInstanceTypeFromRegionAndArch(region, u.Architecture)
+	return getInstanceTypeFromRegionAndArch(region, normalizeArch(u.Architecture))
 }
 
 func (u Ubuntu2404) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
