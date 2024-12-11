@@ -19,34 +19,34 @@ type amazonLinuxCloudInitData struct {
 }
 
 type AmazonLinux2023 struct {
-	Architecture string
+	amiArchitecture string
+	architecture    architecture
 }
 
 func NewAmazonLinux2023AMD() *AmazonLinux2023 {
 	al := new(AmazonLinux2023)
-	al.Architecture = x8664Arch
+	al.amiArchitecture = x8664Arch
+	al.architecture = amd64
 	return al
 }
 
 func NewAmazonLinux2023ARM() *AmazonLinux2023 {
 	al := new(AmazonLinux2023)
-	al.Architecture = arm64Arch
+	al.amiArchitecture = arm64Arch
+	al.architecture = arm64
 	return al
 }
 
 func (a AmazonLinux2023) Name() string {
-	if a.Architecture == x8664Arch {
-		return "al23-amd64"
-	}
-	return "al23-arm64"
+	return "al23-" + a.architecture.String()
 }
 
 func (a AmazonLinux2023) InstanceType(region string) string {
-	return getInstanceTypeFromRegionAndArch(region, normalizeArch(a.Architecture))
+	return getInstanceTypeFromRegionAndArch(region, a.architecture)
 }
 
 func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
-	amiId, err := getAmiIDFromSSM(ctx, ssm.New(awsSession), "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-"+a.Architecture)
+	amiId, err := getAmiIDFromSSM(ctx, ssm.New(awsSession), "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-"+a.amiArchitecture)
 	return *amiId, err
 }
 
@@ -60,7 +60,7 @@ func (a AmazonLinux2023) BuildUserData(userDataInput e2e.UserDataInput) ([]byte,
 		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
 	}
 
-	if a.Architecture == arm64Arch {
+	if a.architecture.arm() {
 		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 	}
 

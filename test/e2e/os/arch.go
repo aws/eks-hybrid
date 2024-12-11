@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssm"
+
 	"github.com/aws/eks-hybrid/test/e2e"
 )
 
@@ -15,6 +16,25 @@ const (
 	arm64Arch = "arm64"
 	x8664Arch = "x86_64"
 )
+
+type architecture string
+
+const (
+	amd64 architecture = "amd64"
+	arm64 architecture = "arm64"
+)
+
+func (a architecture) String() string {
+	return string(a)
+}
+
+func (a architecture) arm() bool {
+	return a == arm64
+}
+
+func (a architecture) amd() bool {
+	return a == amd64
+}
 
 func populateBaseScripts(userDataInput *e2e.UserDataInput) error {
 	logCollector, err := executeTemplate(logCollectorScript, userDataInput)
@@ -58,15 +78,8 @@ func getAmiIDFromSSM(ctx context.Context, client *ssm.SSM, amiName string) (*str
 	return output.Parameter.Value, nil
 }
 
-func normalizeArch(arch string) string {
-	if arch == x8664Arch {
-		return amd64Arch
-	}
-	return arch
-}
-
-func getInstanceTypeFromRegionAndArch(region, arch string) string {
-	if arch == amd64Arch {
+func getInstanceTypeFromRegionAndArch(region string, arch architecture) string {
+	if arch.amd() {
 		if region == "ap-southeast-5" {
 			return "m6i.large"
 		}
