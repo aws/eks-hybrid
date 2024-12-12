@@ -80,10 +80,7 @@ func getAmiIDFromSSM(ctx context.Context, client *ssm.SSM, amiName string) (*str
 
 func getInstanceTypeFromRegionAndArch(region string, arch architecture) string {
 	if arch.amd() {
-		if region == "ap-southeast-5" {
-			return "m6i.large"
-		}
-		return "m5.2xlarge"
+		return "t3.large"
 	}
-	return "t4g.2xlarge"
+	return "t4g.large"
 }
