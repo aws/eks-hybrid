@@ -137,7 +137,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 			Capabilities: []*string{
 				aws.String("CAPABILITY_NAMED_IAM"),
 			},
-			TemplateBody: aws.String(string(cfnTemplateBody)),
+			TemplateBody: aws.String(buf.String()),
 			Parameters:   params,
 		})
 
