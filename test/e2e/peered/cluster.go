@@ -87,7 +87,7 @@ func findPeeredVPC(ctx context.Context, client *ec2.Client, clusterVpcID string)
 		return "", fmt.Errorf("more than one peered VPC found for VPC %s", clusterVpcID)
 	}
 
-	return *resp.VpcPeeringConnections[0].RequesterVpcInfo.VpcId, nil
+	return *resp.VpcPeeringConnections[0].AccepterVpcInfo.VpcId, nil
 }
 
 func findSubnetInVPC(ctx context.Context, client *ec2.Client, vpcID string) (subnetID string, err error) {
