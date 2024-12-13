@@ -1,20 +1,26 @@
 package kubernetes
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	restclient "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/drain"
 )
 
@@ -362,4 +368,49 @@ func CordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Nod
 	}
 
 	return nil
+}
+
+func GetPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (string, error) {
+	req := k8s.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
+	podLogs, err := req.Stream(ctx)
+	if err != nil {
+		return "", fmt.Errorf("opening log stream: %w", err)
+	}
+	defer podLogs.Close()
+
+	buf := new(bytes.Buffer)
+	if _, err = io.Copy(buf, podLogs); err != nil {
+		return "", fmt.Errorf("getting logs from stream: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
+func ExecPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
+	req := k8s.CoreV1().RESTClient().Post().Resource("pods").Name(name).Namespace(namespace).SubResource("exec")
+	req.VersionedParams(
+		&v1.PodExecOptions{
+			Command: cmd,
+			Stdin:   false,
+			Stdout:  true,
+			Stderr:  true,
+			TTY:     true,
+		},
+		scheme.ParameterCodec,
+	)
+	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+	if err != nil {
+		return "", "", err
+	}
+	var stdoutBuf, stderrBuf bytes.Buffer
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdoutBuf,
+		Stderr: &stderrBuf,
+	})
+	if err != nil {
+		return "", "", err
+	}
+
+	return stdoutBuf.String(), stderrBuf.String(), nil
 }
