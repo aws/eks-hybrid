@@ -100,7 +100,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 	if err != nil {
 		return fmt.Errorf("parsing hybrid-cfn.yaml template: %w", err)
 	}
-	cfnTemplateConfig := &hybridCfnTemplateVars{IncludeRolesAnywhere: isIraSupported()}
+	cfnTemplateConfig := &hybridCfnTemplateVars{IncludeRolesAnywhere: !skipIRATest()}
 	err = cfnTemplate.Execute(&buf, cfnTemplateConfig)
 	if err != nil {
 		return fmt.Errorf("applying data to hybrid-cfn.yaml template: %w", err)
@@ -292,6 +292,6 @@ func isNotFound(err error) bool {
 	return err != nil && ok && aerr.Code() == "NoSuchEntity"
 }
 
-func isIraSupported() bool {
-	return os.Getenv("SKIP_IRA_TEST") != "false"
+func skipIRATest() bool {
+	return os.Getenv("SKIP_IRA_TEST") == "true"
 }
