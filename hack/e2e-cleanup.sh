@@ -84,10 +84,12 @@ function get_cluster_name_from_tags(){
         return
     fi
 
-    # the iam roles anywhere api returns tags where key/value are lower case, whereas the other apis all start with a upper...
-    tags=$(echo $json | jq ".Tags | walk(if type==\"object\" then with_entries(.key|=ascii_downcase) else . end)")
-
-    cluster_name=$(echo $tags | jq -r "map(select(.key == \"$TEST_CLUSTER_TAG_KEY\"))[0].value")
+    cluster_name=$(echo $json | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+    if [ -z "$cluster_name" ] || [ "$cluster_name" == "null" ]; then
+        # the iam roles anywhere api returns tags where key/value are lower case, whereas the other apis all start with a upper...
+        cluster_name=$(echo $json | jq -r ".Tags | map(select(.key == \"$TEST_CLUSTER_TAG_KEY\"))[0].value")       
+    fi
+    
     if [ -z "$cluster_name" ] || [ "$cluster_name" == "null" ]; then
         echo ""
         return
