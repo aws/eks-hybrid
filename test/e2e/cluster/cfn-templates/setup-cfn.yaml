@@ -5,6 +5,10 @@ Parameters:
   ClusterName:
     Type: String
     Description: Name of the EKS Hybrid Cluster
+
+  ClusterRoleName:
+    Type: String
+    Description: Name of the EKS Hybrid Cluster Role
   
   ClusterRegion:
     Type: String
@@ -46,7 +50,7 @@ Resources:
   ClusterRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${ClusterName}-hybrid-role
+      RoleName: !Ref ClusterRoleName
       AssumeRolePolicyDocument:
         Statement:
           - Action: sts:AssumeRole
@@ -135,6 +139,22 @@ Resources:
     Properties:
       RouteTableId: !Ref ClusterRouteTable
       SubnetId: !Ref ClusterVPCPublicSubnet
+
+  ClusterPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ClusterVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-private-route-table
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  ClusterPrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref ClusterPrivateRouteTable
+      SubnetId: !Ref ClusterVPCPrivateSubnet
 
   ClusterDefaultSecurityGroupIngressFromHybridNodeVPC:
     Type: AWS::EC2::SecurityGroupIngress
@@ -258,6 +278,13 @@ Resources:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref ClusterRouteTable
+      DestinationCidrBlock: !Ref HybridNodeVPCCidr
+      VpcPeeringConnectionId: !Ref VPCPeeringConnection
+  
+  ClusterPrivateRouteToHybridNode:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ClusterPrivateRouteTable
       DestinationCidrBlock: !Ref HybridNodeVPCCidr
       VpcPeeringConnectionId: !Ref VPCPeeringConnection
 

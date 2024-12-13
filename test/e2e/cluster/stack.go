@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/go-logr/logr"
@@ -22,6 +23,7 @@ var setupTemplateBody []byte
 const (
 	stackWaitTimeout  = 2 * time.Minute
 	stackWaitInterval = 10 * time.Second
+	clusterRoleSuffix = "-hybrid-role"
 )
 
 type vpcConfig struct {
@@ -57,6 +59,11 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			ParameterKey:   aws.String("ClusterName"),
 			ParameterValue: aws.String(test.ClusterName),
 		},
+		{
+			ParameterKey:   aws.String("ClusterRoleName"),
+			ParameterValue: aws.String(e2e.Truncate(test.ClusterName, 64-len(clusterRoleSuffix)) + clusterRoleSuffix),
+		},
+
 		{
 			ParameterKey:   aws.String("ClusterRegion"),
 			ParameterValue: aws.String(test.ClusterRegion),

@@ -204,7 +204,9 @@ export class NodeadmBuildStack extends cdk.Stack {
         new iam.PolicyStatement({
           actions: [
             'iam:AttachRolePolicy',
+            'iam:DetachRolePolicy',
             'iam:GetRole',
+            'iam:GetRolePolicy',
             'iam:ListRoles',
             'iam:ListRoleTags',
             'iam:PassRole',
@@ -217,8 +219,6 @@ export class NodeadmBuildStack extends cdk.Stack {
         new iam.PolicyStatement({
           actions: [
             'iam:DeleteRolePolicy',
-            'iam:DetachRolePolicy',
-            'iam:GetRolePolicy',
             'iam:ListAttachedRolePolicies',
             'iam:ListInstanceProfilesForRole',
             'iam:ListRolePolicies',  
@@ -294,8 +294,10 @@ export class NodeadmBuildStack extends cdk.Stack {
             'ec2:DescribeSubnets',
             'ec2:DescribeVpcPeeringConnections',
             'ec2:DescribeVpcs',
+            'ec2:ModifyVpcAttribute',
             'ec2:ModifySubnetAttribute',
-            'ec2:RunInstances',
+            'ec2:RevokeSecurityGroupIngress',
+            'ec2:RunInstances'
           ],
           resources: ['*'],
           effect: iam.Effect.ALLOW,
@@ -313,9 +315,11 @@ export class NodeadmBuildStack extends cdk.Stack {
         new iam.PolicyStatement({
           actions: [
             'ec2:DeleteInternetGateway',
+            'ec2:DeleteRoute',
             'ec2:DeleteSubnet',
             'ec2:DeleteVpc',
             'ec2:DeleteVpcPeeringConnection',
+            'ec2:DisassociateRouteTable',
             'ec2:DetachInternetGateway',
             'ec2:RebootInstances',
             'ec2:TerminateInstances',
