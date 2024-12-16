@@ -9,8 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
-	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/go-logr/logr"
+
+	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 const deleteClusterTimeout = 5 * time.Minute

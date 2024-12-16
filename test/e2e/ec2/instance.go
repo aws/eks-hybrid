@@ -13,8 +13,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/smithy-go"
+
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 // instanceConfig holds the configuration for the EC2 instance.

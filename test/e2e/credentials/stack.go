@@ -14,8 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/go-logr/logr"
+
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 //go:embed cfn-templates/hybrid-cfn.yaml
