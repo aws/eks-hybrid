@@ -18,9 +18,8 @@ var (
 	_             daemon.Daemon = &ssm{}
 	SsmDaemonName               = "amazon-ssm-agent"
 
-	checksumMismatchErrorRegex = regexp.MustCompile(`.*checksum mismatch with latest ssm-setup-cli*`)
-	activationExpiredRegex     = regexp.MustCompile(`.*ActivationExpired*`)
-	invalidActivationRegex     = regexp.MustCompile(`.*InvalidActivation*`)
+	activationExpiredRegex = regexp.MustCompile(`.*ActivationExpired*`)
+	invalidActivationRegex = regexp.MustCompile(`.*InvalidActivation*`)
 )
 
 const (

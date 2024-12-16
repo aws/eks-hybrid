@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	clientgo "k8s.io/client-go/kubernetes"
-	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
 
@@ -80,18 +79,17 @@ func TestE2E(t *testing.T) {
 }
 
 type peeredVPCTest struct {
-	aws             awsconfig.Config // TODO: move everything to aws sdk v2
-	awsSession      *session.Session
-	eksClient       *eks.EKS
-	ec2Client       *ec2v1.EC2
-	ec2ClientV2     *ec2v2.Client
-	ssmClient       *ssmv1.SSM
-	ssmClientV2     *ssmv2.Client
-	cfnClient       *cloudformation.CloudFormation
-	k8sClient       *clientgo.Clientset
-	k8sClientConfig *restclient.Config
-	s3Client        *s3v1.S3
-	iamClient       *iam.IAM
+	aws         awsconfig.Config // TODO: move everything to aws sdk v2
+	awsSession  *session.Session
+	eksClient   *eks.EKS
+	ec2Client   *ec2v1.EC2
+	ec2ClientV2 *ec2v2.Client
+	ssmClient   *ssmv1.SSM
+	ssmClientV2 *ssmv2.Client
+	cfnClient   *cloudformation.CloudFormation
+	k8sClient   *clientgo.Clientset
+	s3Client    *s3v1.S3
+	iamClient   *iam.IAM
 
 	logger logr.Logger
 

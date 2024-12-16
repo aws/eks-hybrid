@@ -115,19 +115,3 @@ func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) er
 	}
 	return os.RemoveAll(installerPath)
 }
-
-// redownloadInstaller deletes and downloads a new ssm installer
-func redownloadInstaller(region string) error {
-	if err := os.RemoveAll(installerPath); err != nil {
-		return err
-	}
-	trackerConf, err := tracker.GetCurrentState()
-	if err != nil {
-		return err
-	}
-	installer := NewSSMInstaller(region)
-	if err := Install(context.Background(), trackerConf, installer); err != nil {
-		return errors.Wrapf(err, "failed to install ssm installer")
-	}
-	return trackerConf.Save()
-}
