@@ -59,10 +59,13 @@ func CreateCA() (*Certificate, error) {
 	}
 
 	caPEM := new(bytes.Buffer)
-	pem.Encode(caPEM, &pem.Block{
+	err = pem.Encode(caPEM, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: caBytes,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("encoding CA certificate: %w", err)
+	}
 
 	privateKeyBytes, err := x509.MarshalECPrivateKey(privateKey)
 	if err != nil {
@@ -70,7 +73,9 @@ func CreateCA() (*Certificate, error) {
 	}
 
 	keyPEM := new(bytes.Buffer)
-	pem.Encode(keyPEM, &pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyBytes})
+	if err := pem.Encode(keyPEM, &pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyBytes}); err != nil {
+		return nil, fmt.Errorf("encoding private key: %w", err)
+	}
 
 	if err := os.WriteFile(caCertFile, caPEM.Bytes(), 0o600); err != nil {
 		return nil, fmt.Errorf("writing CA cert to file: %w", err)
@@ -121,10 +126,13 @@ func CreateCertificateForNode(ca *x509.Certificate, caPrivKey any, nodeName stri
 	}
 
 	certPEM := new(bytes.Buffer)
-	pem.Encode(certPEM, &pem.Block{
+	err = pem.Encode(certPEM, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: certBytes,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("encoding certificate: %w", err)
+	}
 
 	privateKeyBytes, err := x509.MarshalECPrivateKey(privateKey)
 	if err != nil {
@@ -132,7 +140,9 @@ func CreateCertificateForNode(ca *x509.Certificate, caPrivKey any, nodeName stri
 	}
 
 	keyPEM := new(bytes.Buffer)
-	pem.Encode(keyPEM, &pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyBytes})
+	if err := pem.Encode(keyPEM, &pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyBytes}); err != nil {
+		return nil, fmt.Errorf("encoding private key: %w", err)
+	}
 
 	return &Certificate{
 		CertPEM: certPEM.Bytes(),
