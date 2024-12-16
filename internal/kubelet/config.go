@@ -462,7 +462,7 @@ func (k *kubelet) writeKubeletConfigToDir() error {
 		return err
 	}
 
-	if k.nodeConfig.Spec.Kubelet.Config != nil && len(k.nodeConfig.Spec.Kubelet.Config) > 0 {
+	if len(k.nodeConfig.Spec.Kubelet.Config) > 0 {
 		dirPath := path.Join(kubeletConfigRoot, kubeletConfigDir)
 		k.flags["config-dir"] = dirPath
 
