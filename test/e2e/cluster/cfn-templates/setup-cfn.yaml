@@ -6,10 +6,6 @@ Parameters:
     Type: String
     Description: Name of the EKS Hybrid Cluster
 
-  ClusterRoleName:
-    Type: String
-    Description: Name of the EKS Hybrid Cluster Role
-  
   ClusterRegion:
     Type: String
     Description: Region of the EKS Hybrid Cluster
@@ -50,7 +46,6 @@ Resources:
   ClusterRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Ref ClusterRoleName
       AssumeRolePolicyDocument:
         Statement:
           - Action: sts:AssumeRole
