@@ -1,7 +1,10 @@
 run:
   timeout: 5m
-  skip-files:
-    - "zz_generated.*\\.go$"
+  build-tags:
+    - e2e
+issues:
+  exclude-files:
+  - "zz_generated.*\\.go$"
 linters:
   enable:
     - gofumpt

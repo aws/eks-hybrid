@@ -82,7 +82,7 @@ test-integration: ## Run integration tests.
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint.
-	$(GOLANGCI_LINT) run --new-from-rev main
+	$(GOLANGCI_LINT) run -v
 
 ##@ Build
 
