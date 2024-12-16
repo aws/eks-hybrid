@@ -202,10 +202,6 @@ func (ksc *kubeletConfig) withOutpostSetup(cfg *api.NodeConfig) error {
 		}
 		output := strings.Join(ipHostMappings, "\n") + "\n"
 
-		if err != nil {
-			return err
-		}
-
 		// append to /etc/hosts file with shuffled mappings of "IP address to API server domain name"
 		f, err := os.OpenFile("/etc/hosts", os.O_APPEND|os.O_WRONLY, kubeletConfigPerm)
 		if err != nil {
@@ -422,7 +418,7 @@ func (k *kubelet) writeKubeletConfigToFile() error {
 	}
 
 	var kubeletConfigBytes []byte
-	if k.nodeConfig.Spec.Kubelet.Config != nil && len(k.nodeConfig.Spec.Kubelet.Config) > 0 {
+	if len(k.nodeConfig.Spec.Kubelet.Config) > 0 {
 		mergedMap, err := util.DocumentMerge(kubeletConfig, k.nodeConfig.Spec.Kubelet.Config, mergo.WithOverride)
 		if err != nil {
 			return err
