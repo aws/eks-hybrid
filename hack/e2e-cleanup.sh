@@ -135,8 +135,9 @@ function get_cluster_name_from_tags(){
 }
 
 # Some resources like tags require a second api call to retrieve tags, or other data
-# for these cases, we do not retry the request because if the cleanup is potentially running twice
-# or tests are finishing up and deleting resources, we have seen cases where the tag will be deleted
+# for these cases, we do not retry the request because if the cleanup is potentially running via another
+# concurrent test or tests are finishing up and deleting resources, the tag could be properly deleted
+# by this other tests, we wouldnt end up deleting it anyway since the cluster name tag wouldnt match
 # before we try to make the get tags call
 function role_cluster_name_tag(){
     role="$1"
@@ -160,6 +161,19 @@ function instance_profile_cluster_name_tag(){
         return        
     fi
     cluster_name="$(get_cluster_name_from_tags "$instance_profile_tags")"
+    echo "$cluster_name"
+}
+
+# See above note about role tags
+function iam_ra_cluster_name_tag_from_resource(){
+    arn="$1"
+    >&2 echo "($(pwd)) \$ command aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json" 
+    tags="$(command aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json 2>/dev/null)"
+    if [ $? != 0 ]; then
+        echo ""
+        return        
+    fi
+    cluster_name="$(get_cluster_name_from_tags "$tags")"
     echo "$cluster_name"
 }
 
@@ -225,11 +239,19 @@ function delete_cluster_if_should_cleanup(){
     aws eks delete-cluster --name $cluster_name
 }
 
+function wait_for_instance_terminated(){
+    instance_id="$1"
+
+    >&2 echo "($(pwd)) \$ command aws ec2 wait instance-terminated --instance-ids $instance_id" 
+    # ignore error and do not retry in case instances is gone
+    # by the time this call is made
+    command aws ec2 wait instance-terminated --instance-ids $instance_id
+}
+
 function delete_instance(){
     instance_id="$1"
 
     aws ec2 terminate-instances --instance-ids $instance_id
-    aws ec2 wait instance-terminated --instance-ids $instance_id
 }
 
 function delete_peering_connection(){
@@ -311,7 +333,8 @@ function delete_vpc(){
 # only are getting instances associated with that cluster
 for reservations in $(aws ec2 describe-instances --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "Reservations[*].Instances[*].{InstanceId:InstanceId,Tags:Tags,State:State.Name}" --output json | jq -c '.[]'); do
     for ec2 in $(echo $reservations | jq -c '.[]'); do
-        if [ "terminated" == "$(echo "$ec2" | jq -r '.State')" ]; then
+        state="$(echo "$ec2" | jq -r '.State')"
+        if [ "terminated" == "$state" ]; then
             continue
         fi
         cluster_name="$(get_cluster_name_from_tags "$ec2")"
@@ -319,7 +342,10 @@ for reservations in $(aws ec2 describe-instances --filters $TEST_CLUSTER_TAG_KEY
             continue
         fi
         instance_id=$(echo $ec2 | jq -r ".InstanceId")
-        delete_instance $instance_id
+        if [ "shutting-down" != "$state" ]; then
+            delete_instance $instance_id
+        fi
+        wait_for_instance_terminated $instance_id
     done
 done
 
@@ -411,8 +437,7 @@ if [[ "${SKIP_IRA_TEST:-false}" == "false" ]]; then
         name=$(echo "$profile" | jq -r ".name")
         if [[ $name == EKSHybridCI-* ]]; then
             arn=$(echo "$profile" | jq -r ".profileArn")
-            profile_tags="$(aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json)"
-            cluster_name="$(get_cluster_name_from_tags "$profile_tags")"       
+            cluster_name="$(iam_ra_cluster_name_tag_from_resource $arn)" 
             if ! should_cleanup_cluster "$cluster_name"; then
                 continue
             fi
@@ -428,8 +453,7 @@ if [[ "${SKIP_IRA_TEST:-false}" == "false" ]]; then
         name=$(echo "$anchor" | jq -r ".name")
         if [[ $name == EKSHybridCI-* ]]; then
             arn=$(echo "$anchor" | jq -r ".trustAnchorArn")
-            anchor_tags="$(aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json)"
-            cluster_name="$(get_cluster_name_from_tags "$anchor_tags")"       
+            cluster_name="$(iam_ra_cluster_name_tag_from_resource "$arn")"       
             if ! should_cleanup_cluster "$cluster_name"; then
                 continue
             fi
