@@ -17,7 +17,7 @@ if [ ! ${LOGS_UPLOAD_URLS[$LOGS_UPLOAD_NAME]+1} ]; then
     exit
 fi
 
-LOG_SCRIPT_URL="https://raw.githubusercontent.com/jaxesn/amazon-eks-ami/refs/heads/jgw/hybrid-script/log-collector-script/linux/eks-log-collector.sh"
+LOG_SCRIPT_URL="https://raw.githubusercontent.com/awslabs/amazon-eks-ami/refs/heads/main/log-collector-script/linux/eks-log-collector.sh"
 
 curl -s --retry 5  $LOG_SCRIPT_URL -o /tmp/eks-log-collector.sh
 
