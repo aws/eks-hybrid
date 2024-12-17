@@ -56,14 +56,25 @@ func (s *swapAspect) Setup() error {
 // If partition type swap exists, user needs to manually remove the partition swap before
 // running nodeadm init.
 func partitionSwapExists() (bool, error) {
-	cmd := "swapon -s | awk '$2==\"partition\" {print}'"
-	out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	f, err := os.Open("/proc/swaps")
 	if err != nil {
-		return false, fmt.Errorf("failed to check if partition type swap exists: %v", err)
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking if partition type swap exists: %v", err)
 	}
-	if len(string(out)) != 0 {
-		return true, nil
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if fields[1] == "partition" {
+			return true, nil
+		}
 	}
+	if err := scanner.Err(); err != nil {
+		return false, fmt.Errorf("checking if partition type swap exists: %v", err)
+	}
+
 	return false, nil
 }
 

@@ -1,13 +1,14 @@
-FROM golang:1.23 AS imds-mock-build
-ARG GOPROXY
-RUN go env -w GOPROXY=${GOPROXY}
-RUN GOBIN=/bin go install github.com/aws/amazon-ec2-metadata-mock/cmd@v1.11.2
-RUN mv /bin/cmd /imds-mock
+FROM public.ecr.aws/eks-distro-build-tooling/golang:1.23 AS imds-mock-build
+ARG TARGETARCH
+RUN curl -Lo /imds-mock https://github.com/aws/amazon-ec2-metadata-mock/releases/download/v1.12.0/ec2-metadata-mock-linux-${TARGETARCH}
+RUN chmod +x /imds-mock
 
-FROM golang:1.23 AS nodeadm-build
+FROM public.ecr.aws/eks-distro-build-tooling/golang:1.23 AS nodeadm-build
 WORKDIR /go/src/github.com/aws/eks-hybrid
 ARG GOPROXY
 RUN go env -w GOPROXY=${GOPROXY}
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
 RUN make build
 RUN mv _bin/nodeadm /nodeadm
