@@ -11,6 +11,10 @@ Parameters:
   ClusterRoleName:
     Type: String
     Default: 'EKSClusterRole'
+  VpcId:
+    Type: String
+    Description: The VPC that a Security Group will be created in for the EKS Cluster, required if a SecurityGroupId is not configured
+    Default: ''
   SubnetId1:
     Type: String
     Description: The ID of the first subnet in your VPC where EKS will attach ENIs
@@ -19,7 +23,8 @@ Parameters:
     Description: The ID of the second subnet in your VPC where EKS will attach ENIs
   SecurityGroupId:
     Type: String
-    Description: The ID of the security group that enables ingress for your RemoteNodeCIDR and optionally RemotePodCIDR
+    Description: The ID of the security group that enables ingress for your RemoteNodeCIDR and optionally RemotePodCIDR. This will override the creeation of a SecurityGroup using VpcId.
+    Default: ''
   RemoteNodeCIDR:
     Type: String
     Description: The CIDR blocks for hybrid nodes
@@ -47,10 +52,10 @@ Parameters:
     Default: '1.31'
 
 Conditions:
-  HasRemoteNodeCIDR: !Not [!Equals [!Ref RemoteNodeCIDR, '']]
   HasRemotePodCIDR: !Not [!Equals [!Ref RemotePodCIDR, '']]
   HasPublicAccess: !Equals [!Ref ClusterEndpointConnectivity, 'Public']
   HasPrivateAccess: !Equals [!Ref ClusterEndpointConnectivity, 'Private']
+  NoSecurityGroupId: !Equals [!Ref SecurityGroupId, '']
 
 Resources:
   EKSClusterRole:
@@ -67,6 +72,26 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
       RoleName: !Ref ClusterRoleName
 
+  EKSClusterSG:
+    Condition: NoSecurityGroupId
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    Properties:
+      GroupDescription: Security group for ingress from hybrid nodes to EKS control plane
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref RemoteNodeCIDR
+        - !If
+          - HasRemotePodCIDR
+          - IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            CidrIp: !Ref RemotePodCIDR
+          - !Ref "AWS::NoValue"
+
   EKSCluster:
     Type: AWS::EKS::Cluster
     DependsOn: EKSClusterRole
@@ -78,7 +103,7 @@ Resources:
         AuthenticationMode: !Ref ClusterAuthMode
       ResourcesVpcConfig:
         SecurityGroupIds:
-          - !Ref SecurityGroupId
+          - !If [NoSecurityGroupId, !Ref EKSClusterSG, !Ref SecurityGroupId]
         SubnetIds: 
           - !Ref SubnetId1
           - !Ref SubnetId2
