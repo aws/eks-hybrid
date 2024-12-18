@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -489,7 +488,7 @@ func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kub
 func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
 	req := k8s.CoreV1().RESTClient().Post().Resource("pods").Name(name).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(
-		&v1.PodExecOptions{
+		&corev1.PodExecOptions{
 			Command: cmd,
 			Stdin:   false,
 			Stdout:  true,
@@ -513,4 +512,17 @@ func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Cli
 	}
 
 	return stdoutBuf.String(), stderrBuf.String(), nil
+}
+
+func GetDaemonSet(ctx context.Context, k8s *kubernetes.Clientset, namespace string, name string, logger logr.Logger) error {
+	daemonSet, err := k8s.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	if daemonSet == nil {
+		return fmt.Errorf("DaemonSet %s does not exist", name)
+	}
+
+	return nil
 }

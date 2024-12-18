@@ -47,6 +47,7 @@ func (s *SsmProvider) NodeadmConfig(ctx context.Context, node e2e.NodeSpec) (*ap
 					ActivationID:   *ssmActivationDetails.ActivationId,
 					ActivationCode: *ssmActivationDetails.ActivationCode,
 				},
+				EnableCredentialsFile: true,
 			},
 		},
 	}, nil

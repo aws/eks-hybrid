@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
@@ -252,6 +253,16 @@ var _ = Describe("Hybrid Nodes", func() {
 								Succeed(), "node should have joined the cluster successfully",
 							)
 
+							test.logger.Info("Testing Pod Identity add-on functionality")
+							podIdentityTest := podIdentityAddonTest{
+								cluster:   test.cluster.Name,
+								k8s:       test.k8sClient,
+								logger:    test.logger,
+								eksClient: test.eksClient,
+							}
+
+							Expect(podIdentityTest.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+
 							test.logger.Info("Resetting hybrid node...")
 							cleanNode := test.newCleanNode(provider, instance.IP)
 							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
@@ -461,4 +472,28 @@ func (t *peeredVPCTest) instanceName(testName string, os e2e.NodeadmOS, provider
 		e2e.SanitizeForAWSName(os.Name()),
 		e2e.SanitizeForAWSName(string(provider.Name())),
 	)
+}
+
+type podIdentityAddonTest struct {
+	cluster   string
+	k8s       *clientgo.Clientset
+	logger    logr.Logger
+	eksClient *eks.Client
+}
+
+func (p podIdentityAddonTest) Run(ctx context.Context) error {
+	p.logger.Info("Verify pod identity add-on is installed")
+
+	podIdentityAddon := addon.Addon{
+		Name:    "eks-pod-identity-agent",
+		Cluster: p.cluster,
+	}
+
+	if err := podIdentityAddon.Get(ctx, p.eksClient, p.logger); err != nil {
+		return err
+	}
+
+	daemonSetName := "eks-pod-identity-agent-hybrid"
+	p.logger.Info("Check if daemon set exists", "daemonSet", daemonSetName)
+	return kubernetes.GetDaemonSet(ctx, p.k8s, "kube-system", daemonSetName, p.logger)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/go-logr/logr"
 
+	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
@@ -78,7 +79,13 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 
 	logger.Info("Successfully started EKS hybrid cluster")
 
-	return nil
+	podIdentityAddon := addon.Addon{
+		Cluster:       h.Name,
+		Name:          "eks-pod-identity-agent",
+		Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
+	}
+
+	return podIdentityAddon.Create(ctx, client, logger)
 }
 
 // waitForActiveCluster waits until the cluster is in the 'ACTIVE' state.

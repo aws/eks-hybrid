@@ -46,6 +46,7 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec e2e.N
 					CertificatePath: rolesAnywhereCertPath,
 					PrivateKeyPath:  rolesAnywhereKeyPath,
 				},
+				EnableCredentialsFile: true,
 			},
 		},
 	}, nil
