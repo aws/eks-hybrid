@@ -107,8 +107,6 @@ type peeredVPCTest struct {
 	skipCleanup            bool
 }
 
-var credentialProviders = []e2e.NodeadmCredentialsProvider{&credentials.SsmProvider{}, &credentials.IamRolesAnywhereProvider{}}
-
 var _ = SynchronizedBeforeSuite(
 	// This function only runs once, on the first process
 	// Here is where we want to run the setup infra code that should only run once
@@ -170,7 +168,8 @@ var _ = SynchronizedBeforeSuite(
 	},
 )
 
-var _ = Describe("Hybrid Nodes", func() {
+var _ = Describe("Hybrid Nodes with peered VPC", func() {
+	credentialProviders := []e2e.NodeadmCredentialsProvider{&credentials.SsmProvider{}, &credentials.IamRolesAnywhereProvider{}}
 	osList := []e2e.NodeadmOS{
 		osystem.NewUbuntu2004AMD(),
 		osystem.NewUbuntu2004ARM(),
@@ -189,191 +188,194 @@ var _ = Describe("Hybrid Nodes", func() {
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 	}
 
-	When("using peered VPC", func() {
-		var test *peeredVPCTest
+	var test *peeredVPCTest
+	var createTestEntries []TableEntry
+	var upgradeTestEntries []TableEntry
 
-		// Here is where we setup everything we need for the test. This includes
-		// reading the setup output shared by the "before suite" code. This is the only place
-		// that should be reading that global state, anything needed in the test code should
-		// be passed down through "local" variable state. The global state should never be modified.
-		BeforeEach(func(ctx context.Context) {
-			Expect(suite).NotTo(BeNil(), "suite configuration should have been set")
-			Expect(suite.TestConfig).NotTo(BeNil(), "test configuration should have been set")
-			Expect(suite.CredentialsStackOutput).NotTo(BeNil(), "credentials stack output should have been set")
+	for _, os := range osList {
+		for _, provider := range credentialProviders {
+			createTestEntries = append(createTestEntries, buildEntry(os, provider, "simpleflow"))
+			upgradeTestEntries = append(upgradeTestEntries, buildEntry(os, provider, "upgradeflow"))
+		}
+	}
 
-			var err error
-			test, err = buildPeeredVPCTestForSuite(ctx, suite)
-			Expect(err).NotTo(HaveOccurred(), "should build peered VPC test config")
+	// Here is where we setup everything we need for the test. This includes
+	// reading the setup output shared by the "before suite" code. This is the only place
+	// that should be reading that global state, anything needed in the test code should
+	// be passed down through "local" variable state. The global state should never be modified.
+	BeforeEach(func(ctx context.Context) {
+		Expect(suite).NotTo(BeNil(), "suite configuration should have been set")
+		Expect(suite.TestConfig).NotTo(BeNil(), "test configuration should have been set")
+		Expect(suite.CredentialsStackOutput).NotTo(BeNil(), "credentials stack output should have been set")
 
-			for _, provider := range credentialProviders {
-				switch p := provider.(type) {
-				case *credentials.SsmProvider:
-					p.SSM = test.ssmClient
-					p.SSMv2 = test.ssmClientV2
-					p.Role = test.stackOut.SSMNodeRoleName
-				case *credentials.IamRolesAnywhereProvider:
-					p.RoleARN = test.stackOut.IRANodeRoleARN
-					p.ProfileARN = test.stackOut.IRAProfileARN
-					p.TrustAnchorARN = test.stackOut.IRATrustAnchorARN
-					p.CA = test.rolesAnywhereCA
-				}
+		var err error
+		test, err = buildPeeredVPCTestForSuite(ctx, suite)
+		Expect(err).NotTo(HaveOccurred(), "should build peered VPC test config")
+
+		for _, provider := range credentialProviders {
+			switch p := provider.(type) {
+			case *credentials.SsmProvider:
+				p.SSM = test.ssmClient
+				p.SSMv2 = test.ssmClientV2
+				p.Role = test.stackOut.SSMNodeRoleName
+			case *credentials.IamRolesAnywhereProvider:
+				p.RoleARN = test.stackOut.IRANodeRoleARN
+				p.ProfileARN = test.stackOut.IRAProfileARN
+				p.TrustAnchorARN = test.stackOut.IRATrustAnchorARN
+				p.CA = test.rolesAnywhereCA
 			}
-		})
+		}
+	})
 
-		When("using ec2 instance as hybrid nodes", func() {
-			for _, os := range osList {
-				for _, provider := range credentialProviders {
-					DescribeTable("Joining a node",
-						func(ctx context.Context, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
-							Expect(os).NotTo(BeNil())
-							Expect(provider).NotTo(BeNil())
+	When("using ec2 instance as hybrid nodes", func() {
+		DescribeTable("Joining a node",
+			func(ctx context.Context, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
+				Expect(os).NotTo(BeNil())
+				Expect(provider).NotTo(BeNil())
 
-							instanceName := fmt.Sprintf("EKSHybridCI-%s-%s-%s",
-								e2e.SanitizeForAWSName(test.cluster.Name),
-								e2e.SanitizeForAWSName(os.Name()),
-								e2e.SanitizeForAWSName(string(provider.Name())),
-							)
+				instanceName := fmt.Sprintf("EKSHybridCI-%s-%s-%s",
+					e2e.SanitizeForAWSName(test.cluster.Name),
+					e2e.SanitizeForAWSName(os.Name()),
+					e2e.SanitizeForAWSName(string(provider.Name())),
+				)
 
-							k8sVersion := test.cluster.KubernetesVersion
-							if test.overrideNodeK8sVersion != "" {
-								k8sVersion = suite.TestConfig.NodeK8sVersion
-							}
-
-							createNodeTest := createNodeTest{
-								awsSession:         test.awsSession,
-								cluster:            test.cluster,
-								ec2ClientV2:        test.ec2ClientV2,
-								instanceName:       instanceName,
-								instanceProfileARN: test.stackOut.InstanceProfileARN,
-								k8sClient:          test.k8sClient,
-								k8sVersion:         k8sVersion,
-								logger:             test.logger,
-								logsBucket:         test.logsBucket,
-								nodeadmURLs:        test.nodeadmURLs,
-								nodeNamePrefix:     "simpleflow",
-								os:                 os,
-								provider:           provider,
-								s3Client:           test.s3Client,
-								setRootPassword:    test.setRootPassword,
-								skipCleanup:        test.skipCleanup,
-								ssmClient:          test.ssmClient,
-							}
-							instance, err := createNodeTest.Run(ctx)
-							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
-
-							joinNodeTest := joinNodeTest{
-								clientConfig:  test.k8sClientConfig,
-								k8s:           test.k8sClient,
-								nodeIPAddress: instance.IP,
-								logger:        test.logger,
-							}
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully")
-
-							test.logger.Info("Resetting hybrid node...")
-
-							uninstallNodeTest := uninstallNodeTest{
-								k8s:      test.k8sClient,
-								ssm:      test.ssmClient,
-								ec2:      instance,
-								provider: provider,
-								logger:   test.logger,
-							}
-							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
-
-							test.logger.Info("Rebooting EC2 Instance.")
-							Expect(ec2.RebootEC2Instance(ctx, test.ec2ClientV2, instance.ID)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
-							test.logger.Info("EC2 Instance rebooted successfully.")
-
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
-
-							if test.skipCleanup {
-								test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
-								return
-							}
-
-							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
-						},
-						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow")),
-					)
-
-					DescribeTable("Upgrade nodeadm flow",
-						func(ctx context.Context, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
-							Expect(os).NotTo(BeNil())
-							Expect(provider).NotTo(BeNil())
-
-							// Skip upgrade flow for cluster with the minimum kubernetes version
-							isSupport, err := kubernetes.IsPreviousVersionSupported(test.cluster.KubernetesVersion)
-							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-							if !isSupport {
-								Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
-							}
-
-							instanceName := fmt.Sprintf("EKSHybridCI-upgrade-%s-%s-%s",
-								e2e.SanitizeForAWSName(test.cluster.Name),
-								e2e.SanitizeForAWSName(os.Name()),
-								e2e.SanitizeForAWSName(string(provider.Name())),
-							)
-
-							nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
-							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-
-							createNodeTest := createNodeTest{
-								awsSession:         test.awsSession,
-								cluster:            test.cluster,
-								ec2ClientV2:        test.ec2ClientV2,
-								instanceName:       instanceName,
-								instanceProfileARN: test.stackOut.InstanceProfileARN,
-								k8sClient:          test.k8sClient,
-								k8sVersion:         nodeKubernetesVersion,
-								logger:             test.logger,
-								logsBucket:         test.logsBucket,
-								nodeadmURLs:        test.nodeadmURLs,
-								nodeNamePrefix:     "upgradeflow",
-								os:                 os,
-								provider:           provider,
-								s3Client:           test.s3Client,
-								skipCleanup:        test.skipCleanup,
-								setRootPassword:    test.setRootPassword,
-								ssmClient:          test.ssmClient,
-							}
-							instance, err := createNodeTest.Run(ctx)
-							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
-
-							joinNodeTest := joinNodeTest{
-								clientConfig:  test.k8sClientConfig,
-								k8s:           test.k8sClient,
-								nodeIPAddress: instance.IP,
-								logger:        test.logger,
-							}
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
-
-							upgradeNodeTest := upgradeNodeTest{
-								k8s:      test.k8sClient,
-								ssm:      test.ssmClient,
-								cluster:  test.cluster,
-								ec2:      instance,
-								logger:   test.logger,
-								provider: provider,
-							}
-							Expect(upgradeNodeTest.Run(ctx)).To(Succeed(), "node should have upgraded successfully")
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully after nodeadm upgrade")
-
-							test.logger.Info("Resetting hybrid node...")
-
-							uninstallNodeTest := uninstallNodeTest{
-								k8s:      test.k8sClient,
-								ssm:      test.ssmClient,
-								ec2:      instance,
-								provider: provider,
-								logger:   test.logger,
-							}
-							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
-						},
-						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")),
-					)
+				k8sVersion := test.cluster.KubernetesVersion
+				if test.overrideNodeK8sVersion != "" {
+					k8sVersion = suite.TestConfig.NodeK8sVersion
 				}
-			}
-		})
+
+				createNodeTest := createNodeTest{
+					awsSession:         test.awsSession,
+					cluster:            test.cluster,
+					ec2ClientV2:        test.ec2ClientV2,
+					instanceName:       instanceName,
+					instanceProfileARN: test.stackOut.InstanceProfileARN,
+					k8sClient:          test.k8sClient,
+					k8sVersion:         k8sVersion,
+					logger:             test.logger,
+					logsBucket:         test.logsBucket,
+					nodeadmURLs:        test.nodeadmURLs,
+					nodeNamePrefix:     "simpleflow",
+					os:                 os,
+					provider:           provider,
+					s3Client:           test.s3Client,
+					setRootPassword:    test.setRootPassword,
+					skipCleanup:        test.skipCleanup,
+					ssmClient:          test.ssmClient,
+				}
+				instance, err := createNodeTest.Run(ctx)
+				Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
+
+				joinNodeTest := joinNodeTest{
+					clientConfig:  test.k8sClientConfig,
+					k8s:           test.k8sClient,
+					nodeIPAddress: instance.IP,
+					logger:        test.logger,
+				}
+				Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully")
+
+				test.logger.Info("Resetting hybrid node...")
+
+				uninstallNodeTest := uninstallNodeTest{
+					k8s:      test.k8sClient,
+					ssm:      test.ssmClient,
+					ec2:      instance,
+					provider: provider,
+					logger:   test.logger,
+				}
+				Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
+
+				test.logger.Info("Rebooting EC2 Instance.")
+				Expect(ec2.RebootEC2Instance(ctx, test.ec2ClientV2, instance.ID)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
+				test.logger.Info("EC2 Instance rebooted successfully.")
+
+				Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
+
+				if test.skipCleanup {
+					test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
+					return
+				}
+
+				Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
+			},
+			createTestEntries,
+		)
+
+		DescribeTable("Upgrade nodeadm flow",
+			func(ctx context.Context, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
+				Expect(os).NotTo(BeNil())
+				Expect(provider).NotTo(BeNil())
+
+				// Skip upgrade flow for cluster with the minimum kubernetes version
+				isSupport, err := kubernetes.IsPreviousVersionSupported(test.cluster.KubernetesVersion)
+				Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
+				if !isSupport {
+					Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
+				}
+
+				instanceName := fmt.Sprintf("EKSHybridCI-upgrade-%s-%s-%s",
+					e2e.SanitizeForAWSName(test.cluster.Name),
+					e2e.SanitizeForAWSName(os.Name()),
+					e2e.SanitizeForAWSName(string(provider.Name())),
+				)
+
+				nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
+				Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
+
+				createNodeTest := createNodeTest{
+					awsSession:         test.awsSession,
+					cluster:            test.cluster,
+					ec2ClientV2:        test.ec2ClientV2,
+					instanceName:       instanceName,
+					instanceProfileARN: test.stackOut.InstanceProfileARN,
+					k8sClient:          test.k8sClient,
+					k8sVersion:         nodeKubernetesVersion,
+					logger:             test.logger,
+					logsBucket:         test.logsBucket,
+					nodeadmURLs:        test.nodeadmURLs,
+					nodeNamePrefix:     "upgradeflow",
+					os:                 os,
+					provider:           provider,
+					s3Client:           test.s3Client,
+					skipCleanup:        test.skipCleanup,
+					setRootPassword:    test.setRootPassword,
+					ssmClient:          test.ssmClient,
+				}
+				instance, err := createNodeTest.Run(ctx)
+				Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
+
+				joinNodeTest := joinNodeTest{
+					clientConfig:  test.k8sClientConfig,
+					k8s:           test.k8sClient,
+					nodeIPAddress: instance.IP,
+					logger:        test.logger,
+				}
+				Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
+
+				upgradeNodeTest := upgradeNodeTest{
+					k8s:      test.k8sClient,
+					ssm:      test.ssmClient,
+					cluster:  test.cluster,
+					ec2:      instance,
+					logger:   test.logger,
+					provider: provider,
+				}
+				Expect(upgradeNodeTest.Run(ctx)).To(Succeed(), "node should have upgraded successfully")
+				Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully after nodeadm upgrade")
+
+				test.logger.Info("Resetting hybrid node...")
+
+				uninstallNodeTest := uninstallNodeTest{
+					k8s:      test.k8sClient,
+					ssm:      test.ssmClient,
+					ec2:      instance,
+					provider: provider,
+					logger:   test.logger,
+				}
+				Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
+			},
+			upgradeTestEntries,
+		)
 	})
 })
 
@@ -759,4 +761,8 @@ func (u upgradeNodeTest) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func buildEntry(os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, flow string) TableEntry {
+	return Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), flow))
 }
