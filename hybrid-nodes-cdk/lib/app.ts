@@ -4,6 +4,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as fs from 'fs';
 import { NodeadmBuildStack } from './nodeadm-stack';
 import * as readline from 'readline';
+import { CniEcrStack } from './cni-ecr';
 
 const app = new cdk.App();
 
@@ -31,6 +32,13 @@ if (fs.existsSync('cdk_dev_env.json')) {
   }
 
   new NodeadmBuildStack(app, 'HybridNodesCdkStack', {
+    env: {
+      account: devStackConfig.account_id,
+      region: devStackConfig.region
+    }
+  });
+
+  new CniEcrStack(app, 'HybridNodesEcrStack', {
     env: {
       account: devStackConfig.account_id,
       region: devStackConfig.region
