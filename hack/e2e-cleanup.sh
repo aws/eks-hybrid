@@ -407,9 +407,11 @@ for stack in $(aws cloudformation describe-stacks --query "Stacks[*].{StackId:St
     fi
 done
 
-for stack in "${TEST_STACKS[@]}"; do
-    delete_stack "$stack"
-done
+if [ "${#TEST_STACKS[@]}" -gt 0 ]; then
+    for stack in "${TEST_STACKS[@]}"; do
+        delete_stack "$stack"
+    done
+fi
 
 # When a cluster name is supplied it along with all its resources are deleted
 # No other resources are deleted
@@ -425,9 +427,11 @@ else
     done
 fi
 
-for stack in "${ARCH_STACKS[@]}"; do
-    delete_stack "$stack"
-done
+if [ "${#ARCH_STACKS[@]}" -gt 0 ]; then
+    for stack in "${ARCH_STACKS[@]}"; do
+        delete_stack "$stack"
+    done
+fi
 
 if [[ "${SKIP_IRA_TEST:-false}" == "false" ]]; then
     # See note above about roles
