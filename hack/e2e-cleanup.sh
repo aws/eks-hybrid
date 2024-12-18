@@ -389,8 +389,8 @@ done
 # This deletion is retried since in some cases it has to be remade with the force flag
 # If the cluster-name is passed to the script, only stacks who's tag matches that cluster
 # are deleted
-ARCH_STACKS=()
-TEST_STACKS=()
+declare -A ARCH_STACKS=()
+declare -A TEST_STACKS=()
 for stack in $(aws cloudformation describe-stacks --query "Stacks[*].{StackId:StackId,CreationTime:CreationTime,StackName:StackName,StackStatus:StackStatus,Tags:Tags} | reverse(sort_by(@, &CreationTime))" --output json | jq -c '.[]'); do
     stack_name=$(echo $stack | jq -r ".StackName")
     if [[ $stack_name != EKSHybridCI-* ]]; then
