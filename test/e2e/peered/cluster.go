@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	eksTypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go/aws"
 )
 
@@ -53,13 +53,13 @@ func GetHybridCluster(ctx context.Context, eksClient *eks.Client, ec2Client *ec2
 	return cluster, nil
 }
 
-func getClusterDetails(ctx context.Context, client *eks.Client, clusterName string) (eksTypes.Cluster, error) {
+func getClusterDetails(ctx context.Context, client *eks.Client, clusterName string) (eks_sdk.Cluster, error) {
 	input := &eks.DescribeClusterInput{
 		Name: aws.String(clusterName),
 	}
 	result, err := client.DescribeCluster(ctx, input)
 	if err != nil {
-		return eksTypes.Cluster{}, fmt.Errorf("getting cluster details: %w", err)
+		return eks_sdk.Cluster{}, fmt.Errorf("getting cluster details: %w", err)
 	}
 
 	return *result.Cluster, nil
