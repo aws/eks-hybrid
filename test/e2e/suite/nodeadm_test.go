@@ -14,12 +14,12 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	ec2v1 "github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go/service/iam"
 	s3v1 "github.com/aws/aws-sdk-go/service/s3"
 	ssmv1 "github.com/aws/aws-sdk-go/service/ssm"
