@@ -6,8 +6,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
+	eksTypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/eks"
 )
 
 type HybridCluster struct {
@@ -20,10 +21,10 @@ type HybridCluster struct {
 }
 
 // GetHybridCluster returns the hybrid cluster details.
-func GetHybridCluster(ctx context.Context, eksClient *eks.EKS, ec2Client *ec2.Client, clusterName string) (*HybridCluster, error) {
+func GetHybridCluster(ctx context.Context, eksClient *eks.Client, ec2Client *ec2.Client, clusterName string) (*HybridCluster, error) {
 	cluster := &HybridCluster{
 		Name:   clusterName,
-		Region: *eksClient.Config.Region,
+		Region: eksClient.Options().Region,
 	}
 
 	clusterDetails, err := getClusterDetails(ctx, eksClient, clusterName)
@@ -52,14 +53,13 @@ func GetHybridCluster(ctx context.Context, eksClient *eks.EKS, ec2Client *ec2.Cl
 	return cluster, nil
 }
 
-func getClusterDetails(ctx context.Context, client *eks.EKS, clusterName string) (eks.Cluster, error) {
+func getClusterDetails(ctx context.Context, client *eks.Client, clusterName string) (eksTypes.Cluster, error) {
 	input := &eks.DescribeClusterInput{
 		Name: aws.String(clusterName),
 	}
-
-	result, err := client.DescribeClusterWithContext(ctx, input)
+	result, err := client.DescribeCluster(ctx, input)
 	if err != nil {
-		return eks.Cluster{}, fmt.Errorf("getting cluster details: %w", err)
+		return eksTypes.Cluster{}, fmt.Errorf("getting cluster details: %w", err)
 	}
 
 	return *result.Cluster, nil

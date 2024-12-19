@@ -19,7 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	ec2v1 "github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go/service/iam"
 	s3v1 "github.com/aws/aws-sdk-go/service/s3"
 	ssmv1 "github.com/aws/aws-sdk-go/service/ssm"
@@ -83,7 +83,7 @@ func TestE2E(t *testing.T) {
 type peeredVPCTest struct {
 	aws             awsconfig.Config // TODO: move everything to aws sdk v2
 	awsSession      *session.Session
-	eksClient       *eks.EKS
+	eksClient       *eks.Client
 	ec2Client       *ec2v1.EC2
 	ec2ClientV2     *ec2v2.Client
 	ssmClient       *ssmv1.SSM
@@ -655,7 +655,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 
 	test.aws = aws
 	test.awsSession = awsSession
-	test.eksClient = eks.New(awsSession)
+	test.eksClient = eks.NewFromConfig(aws)
 	test.ec2Client = ec2v1.New(awsSession)
 	test.ec2ClientV2 = ec2v2.NewFromConfig(aws) // TODO: move everything else to ec2 sdk v2
 	test.ssmClient = ssmv1.New(awsSession)
