@@ -21,7 +21,6 @@ set -o pipefail
 VERSION="$1"
 
 curl -s --retry 5 -o tigera-operator.yaml https://raw.githubusercontent.com/projectcalico/calico/$VERSION/manifests/tigera-operator.yaml
-sed -i -e 's/quay.io/381492195191.dkr.ecr.us-west-2.amazonaws.com/g' tigera-operator.yaml
 
 # the calico-operator by default tolerations all taints
 # this makes draining a difficult if the operator is running on that node
@@ -30,4 +29,5 @@ sed -i -e 's/quay.io/381492195191.dkr.ecr.us-west-2.amazonaws.com/g' tigera-oper
 # more info: https://github.com/projectcalico/calico/issues/6136
 yq -i '(select(.kind == "Deployment").spec.template.spec.tolerations[].key |= "node.kubernetes.io/not-ready")' tigera-operator.yaml  
 
+sed -i -e 's/quay.io/{{.ContainerRegistry}}/g' tigera-operator.yaml
 echo "$VERSION" > VERSION

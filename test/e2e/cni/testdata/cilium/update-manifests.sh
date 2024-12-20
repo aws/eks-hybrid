@@ -19,8 +19,8 @@ set -o pipefail
 
 CILIUM_VERSION=$1
 
-OPERATOR_DIGEST=$(docker buildx imagetools inspect 381492195191.dkr.ecr.us-west-2.amazonaws.com/cilium/operator-generic:$CILIUM_VERSION --format '{{json .Manifest.Digest}}')
-CILIUM_DIGEST=$(docker buildx imagetools inspect 381492195191.dkr.ecr.us-west-2.amazonaws.com/cilium/cilium:$CILIUM_VERSION --format '{{json .Manifest.Digest}}')
+OPERATOR_DIGEST=$(docker buildx imagetools inspect quay.io/cilium/operator-generic:$CILIUM_VERSION --format '{{json .Manifest.Digest}}')
+CILIUM_DIGEST=$(docker buildx imagetools inspect quay.io/cilium/cilium:$CILIUM_VERSION --format '{{json .Manifest.Digest}}')
 
 cat <<EOF > ./cilium-values.yaml
 affinity:
@@ -34,7 +34,7 @@ affinity:
           - hybrid
 operator:
   image:
-    repository: "381492195191.dkr.ecr.us-west-2.amazonaws.com/cilium/operator"
+    repository: "{{.ContainerRegistry}}/cilium/operator"
     tag: "$CILIUM_VERSION"
     imagePullPolicy: "IfNotPresent"
     digest: $OPERATOR_DIGEST
@@ -54,13 +54,13 @@ ipam:
 envoy:
   enabled: false
 image:
-  repository: "381492195191.dkr.ecr.us-west-2.amazonaws.com/cilium/cilium"
+  repository: "{{.ContainerRegistry}}/cilium/cilium"
   tag: "$CILIUM_VERSION"
   imagePullPolicy: "IfNotPresent"
   digest: $CILIUM_DIGEST
 preflight:
   image:
-    repository: "381492195191.dkr.ecr.us-west-2.amazonaws.com/cilium/cilium"
+    repository: "{{.ContainerRegistry}}/cilium/cilium"
     tag: "$CILIUM_VERSION"
     imagePullPolicy: "IfNotPresent"
     digest: $CILIUM_DIGEST

@@ -1,0 +1,8 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+    - mkdir -p /root/.docker && cp hack/docker-ecr-config.json /root/.docker/config.json
+    - ./test/e2e/cni/testdata/cilium/mirror-cilium.sh
+    - ./test/e2e/cni/testdata/calico/mirror-calico.sh 

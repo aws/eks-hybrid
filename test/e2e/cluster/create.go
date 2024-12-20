@@ -92,14 +92,14 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 
 	switch test.Cni {
 	case ciliumCni:
-		cilium := cni.NewCilium(dynamicK8s, test.HybridNetwork.PodCidr)
+		cilium := cni.NewCilium(dynamicK8s, test.HybridNetwork.PodCidr, test.ClusterRegion)
 		c.logger.Info("Installing cilium on cluster...", "cluster", test.ClusterName)
 		if err = cilium.Deploy(ctx); err != nil {
 			return fmt.Errorf("installing cilium for %s EKS cluster: %w", test.KubernetesVersion, err)
 		}
 		c.logger.Info("Cilium installed successfully.")
 	case calicoCni:
-		calico := cni.NewCalico(dynamicK8s, test.HybridNetwork.PodCidr)
+		calico := cni.NewCalico(dynamicK8s, test.HybridNetwork.PodCidr, test.ClusterRegion)
 		c.logger.Info("Installing calico on cluster...", "cluster", test.ClusterName)
 		if err = calico.Deploy(ctx); err != nil {
 			return fmt.Errorf("installing calico for %s EKS cluster: %w", test.KubernetesVersion, err)

@@ -15,30 +15,23 @@
 
 set -e
 
-CALICO_VERSION=$1
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/" && pwd -P)"
 
-DST_REGISTRY="381492195191.dkr.ecr.us-west-2.amazonaws.com"
+CALICO_VERSION="${1:-$(cat "${SCRIPT_ROOT}/VERSION")}"
 
-if ! command -v oras &> /dev/null; then
-    echo "Please install oras"
-    exit 1
-fi
+ECR_ACCOUNT_ID="381492195191"
 
-# We use oras instead of the more typical docker pull/push to make
-# sure we mirror all architectures and digets is preserved.
-aws ecr get-login-password --region us-west-2 | oras login --username AWS --password-stdin ${DST_REGISTRY}
+for region in "us-west-2" "us-west-1"; do
+	registry="${ECR_ACCOUNT_ID}.dkr.ecr.${region}.amazonaws.com"
 
-for image in $(curl -s -L https://github.com/projectcalico/calico/releases/download/$CALICO_VERSION/metadata.yaml | yq  -r ".images[]" ); do
-	repo_with_version=$image
-	if [[ $image == quay* ]]; then
-		repo_with_version=${image#"quay.io/"}
-	else
-		image="docker.io/$image"
-	fi
-	repo=${repo_with_version%:*}
-	
-	aws ecr create-repository --repository-name $repo --region us-west-2 || true
-	
-	dst=${DST_REGISTRY}/${repo_with_version}
-	oras cp ${image} ${dst}
+	for image in $(curl -s -L https://github.com/projectcalico/calico/releases/download/$CALICO_VERSION/metadata.yaml | yq  -r ".images[]" ); do
+		repo_with_version=$image
+		if [[ $image != quay* ]]; then
+			repo_with_version="quay.io/$image"
+		fi
+		# inspecting the image, which returns the manifest/digests
+		# will trigger the pull through cache if the image does not already exist in the repo.
+		# using inspect instead of pull since we do not need the image locally
+		docker buildx imagetools inspect "${registry}/${repo_with_version}"
+	done
 done

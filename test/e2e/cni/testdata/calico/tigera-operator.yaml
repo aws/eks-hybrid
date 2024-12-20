@@ -19806,7 +19806,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: 381492195191.dkr.ecr.us-west-2.amazonaws.com/tigera/operator:v1.36.0
+          image: {{.ContainerRegistry}}/tigera/operator:v1.36.0
           imagePullPolicy: IfNotPresent
           command:
             - operator

@@ -8,6 +8,8 @@ import (
 	"html/template"
 
 	"k8s.io/client-go/dynamic"
+
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 //go:embed testdata/calico/tigera-operator.yaml
@@ -23,12 +25,14 @@ type Calico struct {
 	//
 	// Check the calico-template file for the node pod cidr mask. The default is 24.
 	podCIDR string
+	region  string
 }
 
-func NewCalico(k8s dynamic.Interface, podCIDR string) Calico {
+func NewCalico(k8s dynamic.Interface, podCIDR, region string) Calico {
 	return Calico{
 		K8s:     k8s,
 		podCIDR: podCIDR,
+		region:  region,
 	}
 }
 
@@ -39,7 +43,8 @@ func (c Calico) Deploy(ctx context.Context) error {
 		return err
 	}
 	values := map[string]string{
-		"PodCIDR": c.podCIDR,
+		"PodCIDR":           c.podCIDR,
+		"ContainerRegistry": constants.EcrAccounId + ".dkr.ecr." + c.region + ".amazonaws.com/quay.io",
 	}
 	installation := &bytes.Buffer{}
 	err = tmpl.Execute(installation, values)
@@ -47,7 +52,17 @@ func (c Calico) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	objs, err := yamlToUnstructured(append(tigeraTemplate, installation.Bytes()...))
+	tmpl, err = template.New("tigera").Parse(string(tigeraTemplate))
+	if err != nil {
+		return err
+	}
+	tigera := &bytes.Buffer{}
+	err = tmpl.Execute(tigera, values)
+	if err != nil {
+		return err
+	}
+
+	objs, err := yamlToUnstructured(append(tigera.Bytes(), installation.Bytes()...))
 	if err != nil {
 		return err
 	}

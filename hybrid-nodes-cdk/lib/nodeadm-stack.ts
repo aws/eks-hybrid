@@ -153,12 +153,29 @@ export class NodeadmBuildStack extends cdk.Stack {
       project: codeBuildProject,
     });
 
+    const testsECRCacheProject = new codebuild.PipelineProject(this, 'ecr-cache', {
+      projectName: 'ecr-cache',
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspecs/ecr-cache.yml'),
+      environment: {
+        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
+        computeType: codebuild.ComputeType.SMALL,
+      },
+    });
+
+    testsECRCacheProject.role!.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryPullOnly'));
+
+    const ecrCacheAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'ECR-Cache',
+      input: buildOutput,
+      project: testsECRCacheProject,
+    });
+
     const testsCleanupProject = new codebuild.PipelineProject(this, 'nodeadm-cleanup', {
       projectName: 'nodeadm-cleanup',
       buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspecs/cleanup-nodeadm.yml'),
       environment: {
         buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
-        computeType: codebuild.ComputeType.LARGE,
+        computeType: codebuild.ComputeType.SMALL,
       },
     });
 
@@ -581,8 +598,8 @@ export class NodeadmBuildStack extends cdk.Stack {
           actions: [buildAction],
         },
         {
-          stageName: 'Cleanup',
-          actions: [cleanupAction],          
+          stageName: 'CleanupAndCache',
+          actions: [cleanupAction, ecrCacheAction],          
         },
         {
           stageName: 'E2E-Tests',

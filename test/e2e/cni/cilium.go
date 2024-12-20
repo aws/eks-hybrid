@@ -13,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 //go:embed testdata/cilium/cilium-template.yaml
@@ -25,12 +27,14 @@ type Cilium struct {
 	//
 	// Check the cilium-template file for the node pod cidr mask. The default is 24.
 	podCIDR string
+	region  string
 }
 
-func NewCilium(k8s dynamic.Interface, podCIDR string) Cilium {
+func NewCilium(k8s dynamic.Interface, podCIDR, region string) Cilium {
 	return Cilium{
 		k8s:     k8s,
 		podCIDR: podCIDR,
+		region:  region,
 	}
 }
 
@@ -41,7 +45,8 @@ func (c Cilium) Deploy(ctx context.Context) error {
 		return err
 	}
 	values := map[string]string{
-		"PodCIDR": c.podCIDR,
+		"PodCIDR":           c.podCIDR,
+		"ContainerRegistry": constants.EcrAccounId + ".dkr.ecr." + c.region + ".amazonaws.com/quay.io",
 	}
 	installation := &bytes.Buffer{}
 	err = tmpl.Execute(installation, values)
