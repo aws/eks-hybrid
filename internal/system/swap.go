@@ -56,34 +56,28 @@ func (s *swapAspect) Setup() error {
 // If partition type swap exists, user needs to manually remove the partition swap before
 // running nodeadm init.
 func partitionSwapExists() (bool, error) {
-	f, err := os.Open("/proc/swaps")
+	swapfiles, err := getSwapfilePaths()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("checking if partition type swap exists: %v", err)
+		return false, err
 	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if fields[1] == "partition" {
+	for _, swap := range swapfiles {
+		if swap.swapType == swapTypePartition {
 			return true, nil
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return false, fmt.Errorf("checking if partition type swap exists: %v", err)
-	}
-
 	return false, nil
 }
 
 func (s *swapAspect) swapOff() error {
-	swapfilePaths, err := getSwapfilePaths()
+	swapfiles, err := getSwapfilePaths()
 	if err != nil {
 		return err
 	}
-	for _, path := range swapfilePaths {
+	for _, swap := range swapfiles {
+		path := swap.filePath
+		if swap.swapType == swapTypePartition {
+			return fmt.Errorf("partition type swapfile %s found in /proc/swaps, please remove the swapfile", swap.filePath)
+		}
 		if _, err := os.Stat(path); err == nil {
 			s.logger.Info("Disabling swap...", zap.Reflect("swapfile path", path))
 			offCmd := exec.Command("swapoff", path)
@@ -103,13 +97,17 @@ func (s *swapAspect) swapOff() error {
 }
 
 // Read swapfile paths from /proc/fstab file and return them as a list of string
+// If there is no /proc/swaps file, returns a nil slice
 // /proc/fstab file format will be like:
 // Filename                          Type         Size     Used    Priority
 // <path-to-swap-file>   	     file/partition   524280   0       -1
-func getSwapfilePaths() ([]string, error) {
-	var paths []string
+func getSwapfilePaths() ([]*swap, error) {
+	var paths []*swap
 	file, err := os.OpenFile("/proc/swaps", os.O_RDONLY, 0o444)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return paths, nil
+		}
 		return paths, err
 	}
 	defer file.Close()
@@ -124,10 +122,7 @@ func getSwapfilePaths() ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("/proc/swaps file syntax error at line %d: %s", lineNo, err)
 		}
-		if swap.swapType == swapTypePartition {
-			return nil, fmt.Errorf("partition type swapfile %s found in /proc/swaps, please remove the swapfile", swap.filePath)
-		}
-		paths = append(paths, swap.filePath)
+		paths = append(paths, swap)
 	}
 	return paths, nil
 }
