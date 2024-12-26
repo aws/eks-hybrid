@@ -5,4 +5,5 @@ phases:
     commands:
     - mkdir -p /root/.docker && cp hack/docker-ecr-config.json /root/.docker/config.json
     - ./test/e2e/cni/testdata/cilium/mirror-cilium.sh
-    - ./test/e2e/cni/testdata/calico/mirror-calico.sh 
+    - ./test/e2e/cni/testdata/calico/mirror-calico.sh
+    - for region in "us-west-2" "us-west-1"; do docker buildx imagetools inspect "381492195191.dkr.ecr.${region}.amazonaws.com/ecr-public/nginx/nginx:latest"; done

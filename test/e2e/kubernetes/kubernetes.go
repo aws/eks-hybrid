@@ -22,6 +22,8 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/drain"
+
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 const (
@@ -158,7 +160,7 @@ func GetNginxPodName(name string) string {
 	return "nginx-" + name
 }
 
-func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName, namespace string, logger logr.Logger) error {
+func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName, namespace, region string, logger logr.Logger) error {
 	podName := GetNginxPodName(nodeName)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -169,7 +171,7 @@ func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeNa
 			Containers: []corev1.Container{
 				{
 					Name:  "nginx",
-					Image: "public.ecr.aws/nginx/nginx:latest",
+					Image: fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/nginx/nginx:latest", constants.EcrAccounId, region),
 					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 80,

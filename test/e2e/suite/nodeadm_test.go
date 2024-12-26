@@ -266,6 +266,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								k8s:           test.k8sClient,
 								nodeIPAddress: instance.IP,
 								logger:        test.logger,
+								region:        test.cluster.Region,
 							}
 							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully")
 
@@ -344,6 +345,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								k8s:           test.k8sClient,
 								nodeIPAddress: instance.IP,
 								logger:        test.logger,
+								region:        test.cluster.Region,
 							}
 							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
 
@@ -501,6 +503,7 @@ type joinNodeTest struct {
 	k8s           *clientgo.Clientset
 	nodeIPAddress string
 	logger        logr.Logger
+	region        string
 }
 
 func (t joinNodeTest) Run(ctx context.Context) error {
@@ -522,7 +525,7 @@ func (t joinNodeTest) Run(ctx context.Context) error {
 
 	t.logger.Info("Creating a test pod on the hybrid node...")
 	podName := kubernetes.GetNginxPodName(nodeName)
-	if err = kubernetes.CreateNginxPodInNode(ctx, t.k8s, nodeName, podNamespace, t.logger); err != nil {
+	if err = kubernetes.CreateNginxPodInNode(ctx, t.k8s, nodeName, podNamespace, t.region, t.logger); err != nil {
 		return err
 	}
 	t.logger.Info(fmt.Sprintf("Pod %s created and running on node %s", podName, nodeName))
