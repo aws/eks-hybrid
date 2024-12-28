@@ -101,11 +101,13 @@ func WaitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, 
 		}
 		consecutiveErrors = 0
 
-		if nodeReady(node) {
+		if !nodeReady(node) {
+			logger.Info("Node is not ready yet", "node", nodeName)
+		} else if !nodeCiliumAgentReady(node) {
+			logger.Info("Node's cilium-agent is not ready yet. Verify the cilium-operator is running.", "node", nodeName)
+		} else {
 			logger.Info("Node is ready", "node", nodeName)
 			return true, nil // node is ready, stop polling
-		} else {
-			logger.Info("Node is not ready yet", "node", nodeName)
 		}
 
 		return false, nil // continue polling
@@ -154,6 +156,15 @@ func nodeReady(node *corev1.Node) bool {
 		}
 	}
 	return false
+}
+
+func nodeCiliumAgentReady(node *corev1.Node) bool {
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == "node.cilium.io/agent-not-ready" {
+			return false
+		}
+	}
+	return true
 }
 
 func GetNginxPodName(name string) string {
