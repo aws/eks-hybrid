@@ -32,6 +32,8 @@ const (
 	hybridNodeWaitTimeout    = 10 * time.Minute
 	hybridNodeDelayInterval  = 5 * time.Second
 	hybridNodeUpgradeTimeout = 2 * time.Minute
+	nodeCordonDelayInterval  = 1 * time.Second
+	nodeCordonTimeout        = 30 * time.Second
 	MinimumVersion           = "1.25"
 )
 
@@ -342,12 +344,7 @@ func DrainNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node
 		ErrOut:                          os.Stderr,
 	}
 
-	err := CordonNode(ctx, k8s, node)
-	if err != nil {
-		return err
-	}
-
-	err = drain.RunNodeDrain(helper, node.Name)
+	err := drain.RunNodeDrain(helper, node.Name)
 	if err != nil {
 		return fmt.Errorf("draining node %s: %v", node.Name, err)
 	}
@@ -369,7 +366,7 @@ func UncordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.N
 	return nil
 }
 
-func CordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node) error {
+func CordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node, logger logr.Logger) error {
 	helper := &drain.Helper{
 		Ctx:    ctx,
 		Client: k8s,
@@ -380,7 +377,46 @@ func CordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Nod
 		return fmt.Errorf("cordoning node %s: %v", node.Name, err)
 	}
 
+	// Cordon returns before the node has been tainted and since we immediately run
+	// drain, its possible (common) during our tests that pods get scheduled on the node after
+	// drain gets the list of pods to evict and before the taint has been fully applied
+	// leading to an error during nodeadm upgrade/uninstall due to non-daemonset pods running
+	nodeName := node.ObjectMeta.Name
+	consecutiveErrors := 0
+	err = wait.PollUntilContextTimeout(ctx, nodeCordonDelayInterval, nodeCordonTimeout, true, func(ctx context.Context) (done bool, err error) {
+		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			logger.Info("consecutiveErrors", "consecutiveErrors", consecutiveErrors)
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting node %s: %w", nodeName, err)
+			}
+			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
+			return false, nil // continue polling
+		}
+		consecutiveErrors = 0
+
+		if nodeCordon(node) {
+			logger.Info("Node successfully cordoned")
+			return true, nil
+		}
+
+		return false, nil // continue polling
+	})
+	if err != nil {
+		return fmt.Errorf("waiting for node %s to be cordoned: %w", nodeName, err)
+	}
+
 	return nil
+}
+
+func nodeCordon(node *corev1.Node) bool {
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == "node.kubernetes.io/unschedulable" {
+			return true
+		}
+	}
+	return false
 }
 
 func GetPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (string, error) {
