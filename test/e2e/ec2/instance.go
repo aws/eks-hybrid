@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
+	awsV2 "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -114,7 +114,10 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 			HttpEndpoint: types.InstanceMetadataEndpointStateEnabled,
 		},
 	}, func(o *ec2.Options) {
-		o.Retryer = newDefaultRunEC2Retrier()
+		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
+			o.MaxAttempts = 60
+			o.Retryables = append(o.Retryables, invalidInstanceProfileRetryable{})
+		})
 	})
 	if err != nil {
 		return Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)
@@ -134,25 +137,9 @@ func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 	return nil
 }
 
-func newDefaultRunEC2Retrier() runInstanceRetrier {
-	return runInstanceRetrier{
-		Standard:   retry.NewStandard(),
-		maxRetries: 60,
-		backoff:    2 * time.Second,
-	}
-}
+type invalidInstanceProfileRetryable struct{}
 
-type runInstanceRetrier struct {
-	*retry.Standard
-	maxRetries int
-	backoff    time.Duration
-}
-
-func (c runInstanceRetrier) IsErrorRetryable(err error) bool {
-	if c.Standard.IsErrorRetryable(err) {
-		return true
-	}
-
+func (c invalidInstanceProfileRetryable) IsErrorRetryable(err error) awsV2.Ternary {
 	var awsErr smithy.APIError
 	if ok := errors.As(err, &awsErr); ok {
 		// We retry invalid instance profile errors because sometimes there is a delay between creating
@@ -164,19 +151,11 @@ func (c runInstanceRetrier) IsErrorRetryable(err error) bool {
 		// - Invalid IAM Instance Profile ARN
 		// Depending if the input uses the name or the ARN in the params.
 		if awsErr.ErrorCode() == "InvalidParameterValue" && strings.Contains(awsErr.ErrorMessage(), "Invalid IAM Instance Profile") {
-			return true
+			return awsV2.BoolTernary(true)
 		}
 	}
 
-	return false
-}
-
-func (c runInstanceRetrier) MaxAttempts() int {
-	return c.maxRetries
-}
-
-func (c runInstanceRetrier) RetryDelay(attempt int, err error) (time.Duration, error) {
-	return c.backoff, nil
+	return awsV2.BoolTernary(false)
 }
 
 func RebootEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
