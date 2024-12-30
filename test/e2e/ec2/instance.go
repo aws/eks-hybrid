@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -136,16 +138,18 @@ func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 
 func newDefaultRunEC2Retrier() runInstanceRetrier {
 	return runInstanceRetrier{
-		Standard:   retry.NewStandard(),
-		maxRetries: 60,
-		backoff:    2 * time.Second,
+		Standard:           retry.NewStandard(),
+		maxRetries:         10,
+		backoff:            1,
+		maxJitterInSeconds: 5,
 	}
 }
 
 type runInstanceRetrier struct {
 	*retry.Standard
-	maxRetries int
-	backoff    time.Duration
+	maxRetries         int
+	backoff            float64
+	maxJitterInSeconds float64
 }
 
 func (c runInstanceRetrier) IsErrorRetryable(err error) bool {
@@ -176,7 +180,9 @@ func (c runInstanceRetrier) MaxAttempts() int {
 }
 
 func (c runInstanceRetrier) RetryDelay(attempt int, err error) (time.Duration, error) {
-	return c.backoff, nil
+	backoff := c.backoff * math.Exp2(float64(attempt))
+	jitter := rand.Float64() * c.maxJitterInSeconds
+	return time.Duration(backoff+jitter) * time.Second, nil
 }
 
 func RebootEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
