@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
@@ -46,8 +47,9 @@ func NewCreate(aws aws.Config, logger logr.Logger) Create {
 		logger: logger,
 		eks:    eks.NewFromConfig(aws),
 		stack: &stack{
-			cfn:    cloudformation.NewFromConfig(aws),
-			logger: logger,
+			cfn:       cloudformation.NewFromConfig(aws),
+			logger:    logger,
+			ssmClient: ssm.NewFromConfig(aws),
 		},
 	}
 }

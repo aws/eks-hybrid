@@ -1,8 +1,10 @@
 #cloud-config
-{{- if .RootPasswordHash }}
 users:
   - name: root
     lock_passwd: false
+    ssh_authorized_keys:
+      - {{ .PublicKey }}
+{{- if .RootPasswordHash }}
     hashed_passwd: {{ .RootPasswordHash }}
 {{- end }}
 rh_subscription:
@@ -23,9 +25,6 @@ write_files:
 {{- end }}
 
 runcmd:
-  - sudo dnf install -y {{ .SSMAgentURL }}
-  - sudo systemctl start amazon-ssm-agent
-  - sudo systemctl enable amazon-ssm-agent
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "--containerd-source docker"
 
 final_message: "The system is prepped, after $UPTIME seconds"

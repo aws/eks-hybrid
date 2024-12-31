@@ -1,8 +1,10 @@
 #cloud-config
-{{- if .RootPasswordHash }}
 users:
   - name: root
     lock_passwd: false
+    ssh_authorized_keys:
+      - {{ .PublicKey }}
+{{- if .RootPasswordHash }}
     hashed_passwd: {{ .RootPasswordHash }}
 {{- end }}
 rh_subscription:

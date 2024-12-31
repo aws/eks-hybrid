@@ -25,6 +25,7 @@ type UserDataInput struct {
 	NodeadmUrls       NodeadmURLs
 	NodeadmConfigYaml string
 	Provider          string
+	PublicKey         string
 	RootPasswordHash  string
 	Files             []File
 	LogsUploadUrls    []LogsUploadUrl
@@ -51,14 +52,12 @@ type NodeadmCredentialsProvider interface {
 	Name() creds.CredentialProvider
 	NodeadmConfig(ctx context.Context, node NodeSpec) (*api.NodeConfig, error)
 	VerifyUninstall(ctx context.Context, instanceId string) error
-	InstanceID(node HybridEC2Node) string
 	FilesForNode(spec NodeSpec) ([]File, error)
 }
 
 // HybridEC2Node represents a Hybrid Node backed by an EC2 instance.
 type HybridEC2Node struct {
-	InstanceID string
-	Node       corev1.Node
+	Node corev1.Node
 }
 
 // NodeSpec is a specification for a node.
