@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
+	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
 const (
@@ -42,10 +44,8 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 		return errors.Wrap(err, "failed to install ssm installer")
 	}
 
-	installCmd := exec.Command(installerPath, "-install", "-region", DefaultSsmInstallerRegion)
-	out, err := installCmd.CombinedOutput()
-	if err != nil {
-		return errors.Wrapf(err, "failed to install ssm agent: %s", out)
+	if err = runInstallWithRetries(ctx); err != nil {
+		return errors.Wrapf(err, "failed to install ssm agent")
 	}
 
 	return tracker.Add(artifact.Ssm)
@@ -114,4 +114,14 @@ func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) er
 		return errors.Wrapf(err, "failed to uninstall ssm")
 	}
 	return os.RemoveAll(installerPath)
+}
+
+func runInstallWithRetries(ctx context.Context) error {
+	// Sometimes install fails due to conflicts with other processes
+	// updating packages, specially when automating at machine startup.
+	// We assume errors are transient and just retry for a bit.
+	installCmdBuilder := func(ctx context.Context) *exec.Cmd {
+		return exec.CommandContext(ctx, installerPath, "-install", "-region", DefaultSsmInstallerRegion)
+	}
+	return cmd.Retry(ctx, installCmdBuilder, 5*time.Second)
 }
