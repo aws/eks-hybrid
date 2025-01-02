@@ -44,9 +44,9 @@ assert::file-permission-matches /etc/eks/image-credential-provider/ecr-credentia
 assert::file-permission-matches /usr/local/bin/aws-iam-authenticator 755
 assert::file-permission-matches /opt/ssm/ssm-setup-cli 755
 
-# It's very difficult to simulate amazon-ssm-agent daemon in the integration test environment,
-# skip the preprocess stage of init for now.
+mock::ssm
 nodeadm init --skip run,preprocess --config-source file://config.yaml
+
 # The memory reserved by kubelet is dynamic depending on the host that builts the docker image
 # Remove kubeReserved field before checking its content
 cat <<< $(jq 'del(.kubeReserved)' /etc/kubernetes/kubelet/config.json) > /etc/kubernetes/kubelet/config.json
