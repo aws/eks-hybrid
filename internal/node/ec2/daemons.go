@@ -24,7 +24,7 @@ func (enp *ec2NodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 		return nil, errors.New("aws config not set")
 	}
 	return []daemon.Daemon{
-		containerd.NewContainerdDaemon(enp.daemonManager, enp.nodeConfig, enp.awsConfig),
+		containerd.NewContainerdDaemon(enp.daemonManager, enp.nodeConfig, enp.awsConfig, enp.logger),
 		kubelet.NewKubeletDaemon(enp.daemonManager, enp.nodeConfig, enp.awsConfig),
 	}, nil
 }
