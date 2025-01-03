@@ -51,7 +51,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source, conta
 func Uninstall(ctx context.Context, source Source) error {
 	if isContainerdInstalled() {
 		containerd := source.GetContainerd()
-		if err := artifact.UninstallPackage(ctx, containerd); err != nil {
+		if err := artifact.UninstallPackageWithRetries(ctx, containerd, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to uninstall containerd")
 		}
 

@@ -90,13 +90,16 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 	// Check and remove runc if installed, as it conflicts with docker repo
 	if _, errNotFound := exec.LookPath(runcPkgName); errNotFound == nil {
 		pm.logger.Info("Removing runc to avoid package conflicts from docker repos...")
-		if resp, err := pm.removePackage(ctx, runcPkgName); err != nil {
-			return errors.Wrapf(err, "failed to remove runc using package manager: %s", resp)
+		if err := artifact.UninstallPackageWithRetries(ctx, pm.getRuncPackage(), 5*time.Second); err != nil {
+			return errors.Wrapf(err, "failed to remove runc using package manager")
 		}
 	}
 
-	if resp, err := pm.installPackage(ctx, yumUtilsManagerPkg); err != nil {
-		return errors.Wrapf(err, "failed to install %s using package manager: %s", yumUtilsManagerPkg, resp)
+	// Sometimes install fails due to conflicts with other processes
+	// updating packages, specially when automating at machine startup.
+	// We assume errors are transient and just retry for a bit.
+	if err := artifact.InstallPackageWithRetries(ctx, pm.getYumUtilsPackage(), 5*time.Second); err != nil {
+		return errors.Wrapf(err, "failed to install %s using package manager", yumUtilsManagerPkg)
 	}
 
 	// Get yumUtilsManager full path
@@ -116,9 +119,11 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 
 // configureAptPackageManagerWithDockerRepo configures apt package manager with docker repos
 func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx context.Context) error {
-	out, err := pm.installPackage(ctx, "ca-certificates")
-	if err != nil {
-		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
+	// Sometimes install fails due to conflicts with other processes
+	// updating packages, specially when automating at machine startup.
+	// We assume errors are transient and just retry for a bit.
+	if err := artifact.InstallPackageWithRetries(ctx, pm.getCACertsPackage(), 5*time.Second); err != nil {
+		return errors.Wrapf(err, "failed running commands to configure package manager")
 	}
 
 	// Download docker gpg key and write it to file
@@ -146,16 +151,6 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	return nil
 }
 
-// installPackage installs a package using package manager
-func (pm *DistroPackageManager) installPackage(ctx context.Context, packageName string) (string, error) {
-	installCmd := exec.CommandContext(ctx, pm.manager, pm.installVerb, packageName, "-y")
-	out, err := installCmd.CombinedOutput()
-	if err != nil {
-		return string(out), err
-	}
-	return string(out), nil
-}
-
 // updateAllPackages updates all packages and repo metadata on the system
 func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Context) *exec.Cmd {
 	return exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y", "-o", fmt.Sprintf("Dir::Etc::sourcelist=\"%s\"", aptDockerRepoSourceFilePath))
@@ -163,16 +158,6 @@ func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Conte
 
 func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.Context) error {
 	return cmd.Retry(ctx, pm.updateDockerAptPackagesCommand, 5*time.Second)
-}
-
-// removePackage deletes a package using package manager
-func (pm *DistroPackageManager) removePackage(ctx context.Context, packageName string) (string, error) {
-	removeCmd := exec.CommandContext(ctx, pm.manager, pm.deleteVerb, packageName, "-y")
-	out, err := removeCmd.CombinedOutput()
-	if err != nil {
-		return string(out), err
-	}
-	return string(out), nil
 }
 
 // GetContainerd gets the Package
@@ -209,6 +194,27 @@ func (pm *DistroPackageManager) GetSSMPackage() artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, "amazon-ssm-agent", "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, "amazon-ssm-agent", "-y"),
+	)
+}
+
+func (pm *DistroPackageManager) getCACertsPackage() artifact.Package {
+	return artifact.NewPackageSource(
+		artifact.NewCmd(pm.manager, pm.installVerb, "ca-certificates", "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, "ca-certificates", "-y"),
+	)
+}
+
+func (pm *DistroPackageManager) getYumUtilsPackage() artifact.Package {
+	return artifact.NewPackageSource(
+		artifact.NewCmd(pm.manager, pm.installVerb, yumUtilsManagerPkg, "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, yumUtilsManagerPkg, "-y"),
+	)
+}
+
+func (pm *DistroPackageManager) getRuncPackage() artifact.Package {
+	return artifact.NewPackageSource(
+		artifact.NewCmd(pm.manager, pm.installVerb, runcPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, runcPkgName, "-y"),
 	)
 }
 
