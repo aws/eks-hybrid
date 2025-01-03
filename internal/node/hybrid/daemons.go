@@ -25,7 +25,7 @@ func (hnp *HybridNodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 		return nil, errors.New("aws config not set")
 	}
 	return []daemon.Daemon{
-		containerd.NewContainerdDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig),
+		containerd.NewContainerdDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig, hnp.logger),
 		kubelet.NewKubeletDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig),
 	}, nil
 }
