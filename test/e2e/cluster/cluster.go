@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"time"
 
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go/aws"
@@ -59,32 +60,36 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 			},
 		},
 	}
-	clusterOutput, err := client.CreateCluster(ctx, hybridCluster)
+	_, err := client.CreateCluster(ctx, hybridCluster, func(o *eks.Options) {
+		o.RetryMaxAttempts = 20
+		o.RetryMode = awsv2.RetryModeAdaptive
+	})
 	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
 		return fmt.Errorf("creating EKS hybrid cluster: %w", err)
 	}
 
 	logger.Info("Waiting for cluster to be active", "cluster", h.Name)
-	if err := waitForActiveCluster(ctx, client, h.Name); err != nil {
+	cluster, err := waitForActiveCluster(ctx, client, h.Name)
+	if err != nil {
 		return err
 	}
 
-	if clusterOutput.Cluster != nil {
-		logger.Info("Successfully started EKS hybrid cluster", "output", awsutil.Prettify(clusterOutput))
-	}
+	logger.Info("Successfully started EKS hybrid cluster")
+	logger.Info(awsutil.Prettify(cluster))
 
 	return nil
 }
 
 // waitForActiveCluster waits until the cluster is in the 'ACTIVE' state.
-func waitForActiveCluster(ctx context.Context, client *eks.Client, clusterName string) error {
+func waitForActiveCluster(ctx context.Context, client *eks.Client, clusterName string) (*types.Cluster, error) {
 	ctx, cancel := context.WithTimeout(ctx, createClusterTimeout)
 	defer cancel()
-
-	return waitForCluster(ctx, client, clusterName, func(output *eks.DescribeClusterOutput, err error) (bool, error) {
+	var cluster *types.Cluster
+	err := waitForCluster(ctx, client, clusterName, func(output *eks.DescribeClusterOutput, err error) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("describing cluster %s: %w", clusterName, err)
 		}
+		cluster = output.Cluster
 
 		switch output.Cluster.Status {
 		case types.ClusterStatusActive:
@@ -95,6 +100,7 @@ func waitForActiveCluster(ctx context.Context, client *eks.Client, clusterName s
 			return false, nil
 		}
 	})
+	return cluster, err
 }
 
 func (h *hybridCluster) UpdateKubeconfig(kubeconfig string) error {
