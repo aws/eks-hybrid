@@ -195,6 +195,34 @@ function mock::kubelet() {
   chmod +x /usr/bin/kubelet
 }
 
+function mock::ssm() {
+  # mock ssm agent binary
+  if [ -e  /usr/bin/amazon-ssm-agent]; then
+    printf "#!/usr/bin/env bash\necho SSM" > /usr/bin/amazon-ssm-agent
+    chmod +x /usr/bin/amazon-ssm-agent
+  fi
+
+  if [ -e  /snap/amazon-ssm-agent/current/amazon-ssm-agent]; then
+    printf "#!/usr/bin/env bash\necho SSM" > /snap/amazon-ssm-agent/current/amazon-ssm-agent"
+    chmod +x /snap/amazon-ssm-agent/current/amazon-ssm-agent"
+  fi
+
+  # mock ssm registration
+  cat > /var/lib/amazon/ssm/registration << EOF
+{"ManagedInstanceID": "","Region": "$AWS_REGION"}
+EOF
+
+  # mock ssm credentials
+  mkdir /root/.aws
+  cat > /root/.aws/credentials << EOF
+[default]
+aws_access_key_id     = $AWS_ACCESS_KEY_ID
+aws_secret_access_key = $AWS_SECRET_ACCESS_KEY
+aws_session_token     = $(echo $AWS_SESSION_TOKEN | base64)
+EOF
+
+}
+
 function mock::setup-local-disks() {
   mkdir -p /var/log
   printf '#!/usr/bin/env bash\necho "$1" >> /var/log/setup-local-disks.log' > /usr/bin/setup-local-disks
