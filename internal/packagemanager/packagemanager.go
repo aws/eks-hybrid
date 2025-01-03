@@ -37,6 +37,10 @@ const (
 	containerdDistroPkgName = "containerd"
 	containerdDockerPkgName = "containerd.io"
 	runcPkgName             = "runc"
+
+	caCertsPkgName  = "ca-certificates"
+	iptablesPkgName = "iptables"
+	ssmPkgName      = "amazon-ssm-agent"
 )
 
 var aptDockerRepoConfig = fmt.Sprintf("deb [arch=%s signed-by=%s] %s %s stable\n", runtime.GOARCH, ubuntuDockerGpgKeyPath,
@@ -90,13 +94,16 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 	// Check and remove runc if installed, as it conflicts with docker repo
 	if _, errNotFound := exec.LookPath(runcPkgName); errNotFound == nil {
 		pm.logger.Info("Removing runc to avoid package conflicts from docker repos...")
-		if resp, err := pm.removePackage(ctx, runcPkgName); err != nil {
-			return errors.Wrapf(err, "failed to remove runc using package manager: %s", resp)
+		if err := artifact.UninstallPackageWithRetries(ctx, pm.runcPackage(), 5*time.Second); err != nil {
+			return errors.Wrapf(err, "failed to remove runc using package manager")
 		}
 	}
 
-	if resp, err := pm.installPackage(ctx, yumUtilsManagerPkg); err != nil {
-		return errors.Wrapf(err, "failed to install %s using package manager: %s", yumUtilsManagerPkg, resp)
+	// Sometimes install fails due to conflicts with other processes
+	// updating packages, specially when automating at machine startup.
+	// We assume errors are transient and just retry for a bit.
+	if err := artifact.InstallPackageWithRetries(ctx, pm.yumUtilsPackage(), 5*time.Second); err != nil {
+		return errors.Wrapf(err, "failed to install %s using package manager", yumUtilsManagerPkg)
 	}
 
 	// Get yumUtilsManager full path
@@ -116,9 +123,11 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 
 // configureAptPackageManagerWithDockerRepo configures apt package manager with docker repos
 func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx context.Context) error {
-	out, err := pm.installPackage(ctx, "ca-certificates")
-	if err != nil {
-		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
+	// Sometimes install fails due to conflicts with other processes
+	// updating packages, specially when automating at machine startup.
+	// We assume errors are transient and just retry for a bit.
+	if err := artifact.InstallPackageWithRetries(ctx, pm.caCertsPackage(), 5*time.Second); err != nil {
+		return errors.Wrapf(err, "failed running commands to configure package manager")
 	}
 
 	// Download docker gpg key and write it to file
@@ -146,16 +155,6 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	return nil
 }
 
-// installPackage installs a package using package manager
-func (pm *DistroPackageManager) installPackage(ctx context.Context, packageName string) (string, error) {
-	installCmd := exec.CommandContext(ctx, pm.manager, pm.installVerb, packageName, "-y")
-	out, err := installCmd.CombinedOutput()
-	if err != nil {
-		return string(out), err
-	}
-	return string(out), nil
-}
-
 // updateAllPackages updates all packages and repo metadata on the system
 func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Context) *exec.Cmd {
 	return exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y", "-o", fmt.Sprintf("Dir::Etc::sourcelist=\"%s\"", aptDockerRepoSourceFilePath))
@@ -163,16 +162,6 @@ func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Conte
 
 func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.Context) error {
 	return cmd.Retry(ctx, pm.updateDockerAptPackagesCommand, 5*time.Second)
-}
-
-// removePackage deletes a package using package manager
-func (pm *DistroPackageManager) removePackage(ctx context.Context, packageName string) (string, error) {
-	removeCmd := exec.CommandContext(ctx, pm.manager, pm.deleteVerb, packageName, "-y")
-	out, err := removeCmd.CombinedOutput()
-	if err != nil {
-		return string(out), err
-	}
-	return string(out), nil
 }
 
 // GetContainerd gets the Package
@@ -191,8 +180,8 @@ func (pm *DistroPackageManager) GetContainerd() artifact.Package {
 // GetIptables satisfies the getiptables source interface
 func (pm *DistroPackageManager) GetIptables() artifact.Package {
 	return artifact.NewPackageSource(
-		artifact.NewCmd(pm.manager, pm.installVerb, "iptables", "-y"),
-		artifact.NewCmd(pm.manager, pm.deleteVerb, "iptables", "-y"),
+		artifact.NewCmd(pm.manager, pm.installVerb, iptablesPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, iptablesPkgName, "-y"),
 	)
 }
 
@@ -202,13 +191,34 @@ func (pm *DistroPackageManager) GetSSMPackage() artifact.Package {
 	// is detected, use snap to install/uninstall SSM.
 	if pm.manager == aptPackageManager {
 		return artifact.NewPackageSource(
-			artifact.NewCmd(snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
-			artifact.NewCmd(snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
+			artifact.NewCmd(snapPackageManager, snapRemoveVerb, ssmPkgName),
+			artifact.NewCmd(snapPackageManager, snapRemoveVerb, ssmPkgName),
 		)
 	}
 	return artifact.NewPackageSource(
-		artifact.NewCmd(pm.manager, pm.installVerb, "amazon-ssm-agent", "-y"),
-		artifact.NewCmd(pm.manager, pm.deleteVerb, "amazon-ssm-agent", "-y"),
+		artifact.NewCmd(pm.manager, pm.installVerb, ssmPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, ssmPkgName, "-y"),
+	)
+}
+
+func (pm *DistroPackageManager) caCertsPackage() artifact.Package {
+	return artifact.NewPackageSource(
+		artifact.NewCmd(pm.manager, pm.installVerb, caCertsPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, caCertsPkgName, "-y"),
+	)
+}
+
+func (pm *DistroPackageManager) yumUtilsPackage() artifact.Package {
+	return artifact.NewPackageSource(
+		artifact.NewCmd(pm.manager, pm.installVerb, yumUtilsManagerPkg, "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, yumUtilsManagerPkg, "-y"),
+	)
+}
+
+func (pm *DistroPackageManager) runcPackage() artifact.Package {
+	return artifact.NewPackageSource(
+		artifact.NewCmd(pm.manager, pm.installVerb, runcPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, runcPkgName, "-y"),
 	)
 }
 

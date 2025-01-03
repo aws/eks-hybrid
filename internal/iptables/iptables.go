@@ -37,7 +37,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 func Uninstall(ctx context.Context, source Source) error {
 	if isIptablesInstalled() {
 		iptablesSrc := source.GetIptables()
-		if err := artifact.UninstallPackage(ctx, iptablesSrc); err != nil {
+		if err := artifact.UninstallPackageWithRetries(ctx, iptablesSrc, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to uninstall iptables")
 		}
 	}

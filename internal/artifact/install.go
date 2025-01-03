@@ -55,26 +55,14 @@ func InstallTarGz(dst, src string) error {
 	return nil
 }
 
-func InstallPackage(ctx context.Context, pkgSource Package) error {
-	installCmd := pkgSource.InstallCmd(ctx)
-	out, err := installCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("running install command using package manager: %s, err: %v", out, err)
-	}
-	return nil
-}
-
 // InstallPackageWithRetries installs a package and retries errors until the context is
 // cancelled. The backoff duration is the time to wait between retries.
 func InstallPackageWithRetries(ctx context.Context, pkgSource Package, backoff time.Duration) error {
 	return cmd.Retry(ctx, pkgSource.InstallCmd, backoff)
 }
 
-func UninstallPackage(ctx context.Context, pkgSource Package) error {
-	uninstallCmd := pkgSource.UninstallCmd(ctx)
-	out, err := uninstallCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("running uninstall command using package manager: %s, err: %v", out, err)
-	}
-	return nil
+// UninstallPackageWithRetries uninstalls a package and retries errors until the context is
+// cancelled. The backoff duration is the time to wait between retries.
+func UninstallPackageWithRetries(ctx context.Context, pkgSource Package, backoff time.Duration) error {
+	return cmd.Retry(ctx, pkgSource.UninstallCmd, backoff)
 }
