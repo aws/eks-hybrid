@@ -110,7 +110,7 @@ func Uninstall(ctx context.Context, logger *zap.Logger, pkgSource PkgSource) err
 
 func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) error {
 	ssmPkg := pkgSource.GetSSMPackage()
-	if err := artifact.UninstallPackage(ctx, ssmPkg); err != nil {
+	if err := artifact.UninstallPackageWithRetries(ctx, ssmPkg, 5*time.Second); err != nil {
 		return errors.Wrapf(err, "failed to uninstall ssm")
 	}
 	return os.RemoveAll(installerPath)
