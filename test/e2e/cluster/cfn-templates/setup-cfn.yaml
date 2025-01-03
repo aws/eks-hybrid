@@ -290,6 +290,69 @@ Resources:
       DestinationCidrBlock: !Ref ClusterVPCCidr
       VpcPeeringConnectionId: !Ref VPCPeeringConnection
 
+  JumpboxInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: Allow
+            Principal: 
+              Service: ssm.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal: 
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  JumpboxInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: 
+        - !Ref JumpboxInstanceRole
+
+  JumpboxKeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties: 
+      KeyName: !Sub "${AWS::StackName}-jumpbox-key"
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+  
+  Jumpbox:
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Delete
+    Properties:
+      ImageId: resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+      InstanceType: t4g.micro
+      SubnetId: !Ref HybridNodeVPCPublicSubnet
+      IamInstanceProfile: !Ref JumpboxInstanceProfile
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+        - Key: Jumpbox
+          Value: true
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-jumpbox"
+      UserData:
+        Fn::Base64:
+          Fn::Base64: !Sub |
+            #cloud-config
+            write_files:
+              - content: |
+                  Host *
+                    StrictHostKeyChecking no
+                    UserKnownHostsFile=/dev/null
+                path: /root/.ssh/config                
+            runcmd:
+              - aws ssm get-parameter --name /ec2/keypair/${JumpboxKeyPair.KeyPairId} --with-decryption --query Parameter.Value --output text > /root/.ssh/id_rsa
+              - chmod 0600 /root/.ssh/id_rsa
+
 Outputs:
   ClusterRole:
     Description: The name of the IAM Role for EKS Hybrid Cluster.
@@ -330,3 +393,11 @@ Outputs:
   VPCPeeringConnection:
     Description: The ID of the VPC Peering Connection.
     Value: !Ref VPCPeeringConnection
+
+  JumpboxInstanceId:
+    Description: Instance ID of Jumpbox.
+    Value: !GetAtt Jumpbox.InstanceId
+  
+  JumpboxKeyPairSSMParameter:
+    Description: SSM parameter storing key pair private key
+    Value: !Sub /ec2/keypair/${JumpboxKeyPair.KeyPairId}

@@ -26,10 +26,6 @@ func (i *IamRolesAnywhereProvider) Name() creds.CredentialProvider {
 	return creds.IamRolesAnywhereCredentialProvider
 }
 
-func (i *IamRolesAnywhereProvider) InstanceID(node e2e.HybridEC2Node) string {
-	return node.InstanceID
-}
-
 func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec e2e.NodeSpec) (*api.NodeConfig, error) {
 	return &api.NodeConfig{
 		TypeMeta: metav1.TypeMeta{

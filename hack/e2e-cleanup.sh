@@ -177,6 +177,19 @@ function iam_ra_cluster_name_tag_from_resource(){
     echo "$cluster_name"
 }
 
+# See above note about role tags
+function ssm_parameter_cluster_name_tag(){
+    id="$1"
+    >&2 echo "($(pwd)) \$ command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json" 
+    tags="$(command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json 2>/dev/null)"
+    if [ $? != 0 ]; then
+        echo ""
+        return        
+    fi
+    cluster_name="$(get_cluster_name_from_tags "$tags")"
+    echo "$cluster_name"
+}
+
 # For stack deletion we loop checking the status because in some cases
 # we have to rerequest the delete with the force option
 # we do not retry this call because we expect sometimes for it to come back empty
@@ -516,6 +529,24 @@ for internet_gateway in $(aws ec2 describe-internet-gateways --filters $TEST_CLU
     fi
     id=$(echo $internet_gateway | jq -r ".InternetGatewayId")
     aws ec2 delete-internet-gateway --internet-gateway-id $id
+done
+
+for key_pair in $(aws ec2 describe-key-pairs --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "KeyPairs[*].{KeyPairId:KeyPairId,Tags:Tags}" | jq -c '.[]'); do
+    cluster_name="$(get_cluster_name_from_tags "$key_pair")"
+    if ! should_cleanup_cluster "$cluster_name"; then
+        continue
+    fi
+    id=$(echo $key_pair | jq -r ".KeyPairId")
+    aws ec2 delete-key-pair --key-pair-id $id
+done
+
+# see note about roles
+for ssm_parameter in $(aws ssm describe-parameters  --query "Parameters[*].Name" --output text); do
+    cluster_name="$(ssm_parameter_cluster_name_tag "$ssm_parameter")"
+    if ! should_cleanup_cluster "$cluster_name"; then
+        continue
+    fi
+    aws ssm delete-parameter --name $ssm_parameter
 done
 
 # describe-activations does not allow filters but does return tags

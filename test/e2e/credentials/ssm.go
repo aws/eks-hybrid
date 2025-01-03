@@ -30,10 +30,6 @@ func (s *SsmProvider) Name() creds.CredentialProvider {
 	return creds.SsmCredentialProvider
 }
 
-func (s *SsmProvider) InstanceID(node e2e.HybridEC2Node) string {
-	return node.Node.Name
-}
-
 func (s *SsmProvider) NodeadmConfig(ctx context.Context, node e2e.NodeSpec) (*api.NodeConfig, error) {
 	ssmActivationDetails, err := createSSMActivation(ctx, s.SSMv2, s.Role, ssmActivationName, node.Cluster.Name)
 	if err != nil {

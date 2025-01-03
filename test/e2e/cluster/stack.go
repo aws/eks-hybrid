@@ -10,6 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -21,7 +23,7 @@ import (
 var setupTemplateBody []byte
 
 const (
-	stackWaitTimeout  = 2 * time.Minute
+	stackWaitTimeout  = 5 * time.Minute
 	stackWaitInterval = 10 * time.Second
 )
 
@@ -33,15 +35,18 @@ type vpcConfig struct {
 }
 
 type resourcesStackOutput struct {
-	clusterRole          string
-	vpcPeeringConnection string
-	clusterVpcConfig     vpcConfig
-	hybridNodeVpcConfig  vpcConfig
+	clusterRole                   string
+	vpcPeeringConnection          string
+	clusterVpcConfig              vpcConfig
+	hybridNodeVpcConfig           vpcConfig
+	jumpboxInstanceId             string
+	keypairPrivateKeySSMParameter string
 }
 
 type stack struct {
-	logger logr.Logger
-	cfn    *cloudformation.Client
+	logger    logr.Logger
+	cfn       *cloudformation.Client
+	ssmClient *ssm.Client
 }
 
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
@@ -178,7 +183,24 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			result.hybridNodeVpcConfig.securityGroup = *output.OutputValue
 		case "VPCPeeringConnection":
 			result.vpcPeeringConnection = *output.OutputValue
+		case "JumpboxInstanceId":
+			result.jumpboxInstanceId = *output.OutputValue
+		case "JumpboxKeyPairSSMParameter":
+			result.keypairPrivateKeySSMParameter = *output.OutputValue
 		}
+	}
+	_, err = s.ssmClient.AddTagsToResource(ctx, &ssm.AddTagsToResourceInput{
+		ResourceId:   &result.keypairPrivateKeySSMParameter,
+		ResourceType: ssmTypes.ResourceTypeForTaggingParameter,
+		Tags: []ssmTypes.Tag{
+			{
+				Key:   aws.String(constants.TestClusterTagKey),
+				Value: aws.String(test.ClusterName),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("tagging private key ssm parameter: %w", err)
 	}
 
 	s.logger.Info("E2E resources stack deployed successfully", "stackName", stackName)

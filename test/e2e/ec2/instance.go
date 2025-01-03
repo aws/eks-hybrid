@@ -157,14 +157,3 @@ func (c invalidInstanceProfileRetryable) IsErrorRetryable(err error) awsV2.Terna
 
 	return awsV2.BoolTernary(false)
 }
-
-func RebootEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
-	rebootInstanceInput := &ec2.RebootInstancesInput{
-		InstanceIds: []string{instanceID},
-	}
-
-	if _, err := client.RebootInstances(ctx, rebootInstanceInput); err != nil {
-		return err
-	}
-	return nil
-}

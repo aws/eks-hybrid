@@ -263,6 +263,7 @@ export class NodeadmBuildStack extends cdk.Stack {
         new iam.PolicyStatement({
           actions: [
             'iam:AddRoleToInstanceProfile', // remove after we have cleaned up those without tags in existing accounts
+            'iam:CreateInstanceProfile',
             'iam:DeleteInstanceProfile', // remove after we have cleaned up those without tags in existing accounts
             'iam:GetInstanceProfile',
             'iam:ListInstanceProfiles',
@@ -273,7 +274,6 @@ export class NodeadmBuildStack extends cdk.Stack {
         }),
         new iam.PolicyStatement({
           actions: [
-            'iam:CreateInstanceProfile',
             'iam:TagInstanceProfile'
           ],
           resources: [`arn:aws:iam::${this.account}:instance-profile/*`],
@@ -300,12 +300,14 @@ export class NodeadmBuildStack extends cdk.Stack {
             'ec2:CreateRoute',
             'ec2:CreateRouteTable',
             'ec2:CreateSubnet',
+            'ec2:DeleteKeyPair',
             'ec2:DeleteRouteTable',
-            "ec2:DeleteSecurityGroup",
+            'ec2:DeleteSecurityGroup',
             'ec2:DescribeAvailabilityZones',
             'ec2:DescribeImages',
             'ec2:DescribeInstances',
             'ec2:DescribeInternetGateways',
+            'ec2:DescribeKeyPairs',
             'ec2:DescribeRouteTables',
             'ec2:DescribeSecurityGroups',
             'ec2:DescribeSubnets',
@@ -323,7 +325,8 @@ export class NodeadmBuildStack extends cdk.Stack {
           actions: [
             'ec2:CreateInternetGateway',
             'ec2:CreateTags',
-            'ec2:CreateVpc',       
+            'ec2:CreateVpc',   
+            'ec2:CreateKeyPair',
           ],
           resources: ['*'],
           effect: iam.Effect.ALLOW,
@@ -339,6 +342,7 @@ export class NodeadmBuildStack extends cdk.Stack {
             'ec2:DisassociateRouteTable',
             'ec2:DetachInternetGateway',
             'ec2:RebootInstances',
+            'ec2:StopInstances',
             'ec2:TerminateInstances',
           ],
           resources: ['*'],
@@ -361,8 +365,13 @@ export class NodeadmBuildStack extends cdk.Stack {
         }),
         new iam.PolicyStatement({
           actions: [
+            'ssm:DeleteParameter',
             'ssm:DescribeActivations',
-            'ssm:DescribeInstanceInformation'
+            'ssm:DescribeInstanceInformation',
+            'ssm:DescribeParameters',
+            'ssm:GetParameters',
+            'ssm:ListTagsForResource',
+            'ssm:PutParameter',
           ],
           resources: ['*'],
           effect: iam.Effect.ALLOW,

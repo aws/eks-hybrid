@@ -33,9 +33,11 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
+	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
@@ -68,6 +70,8 @@ type suiteConfiguration struct {
 	CredentialsStackOutput *credentials.StackOutput `json:"ec2StackOutput"`
 	RolesAnywhereCACertPEM []byte                   `json:"rolesAnywhereCACertPEM"`
 	RolesAnywhereCAKeyPEM  []byte                   `json:"rolesAnywhereCAPrivateKeyPEM"`
+	PublicKey              string                   `json:"publicKey"`
+	JumpboxInstanceId      string                   `json:"jumpboxInstanceId"`
 }
 
 func init() {
@@ -105,6 +109,10 @@ type peeredVPCTest struct {
 	overrideNodeK8sVersion string
 	setRootPassword        bool
 	skipCleanup            bool
+
+	publicKey string
+
+	remoteCommandRunner commands.RemoteCommandRunner
 }
 
 var credentialProviders = []e2e.NodeadmCredentialsProvider{&credentials.SsmProvider{}, &credentials.IamRolesAnywhereProvider{}}
@@ -128,7 +136,7 @@ var _ = SynchronizedBeforeSuite(
 		aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
 		Expect(err).NotTo(HaveOccurred())
 
-		infra, err := credentials.Setup(ctx, logger, awsSession, aws, config.ClusterName)
+		infra, err := peered.Setup(ctx, logger, awsSession, aws, config.ClusterName)
 		Expect(err).NotTo(HaveOccurred(), "should setup e2e resources for peered test")
 
 		skipCleanup := os.Getenv("SKIP_CLEANUP") == "true"
@@ -147,9 +155,11 @@ var _ = SynchronizedBeforeSuite(
 			&suiteConfiguration{
 				TestConfig:             config,
 				SkipCleanup:            skipCleanup,
-				CredentialsStackOutput: &infra.StackOutput,
-				RolesAnywhereCACertPEM: infra.RolesAnywhereCA.CertPEM,
-				RolesAnywhereCAKeyPEM:  infra.RolesAnywhereCA.KeyPEM,
+				CredentialsStackOutput: &infra.Credentials.StackOutput,
+				RolesAnywhereCACertPEM: infra.Credentials.RolesAnywhereCA.CertPEM,
+				RolesAnywhereCAKeyPEM:  infra.Credentials.RolesAnywhereCA.KeyPEM,
+				PublicKey:              infra.NodesPublicSSHKey,
+				JumpboxInstanceId:      infra.JumpboxInstanceId,
 			},
 		)
 		Expect(err).NotTo(HaveOccurred(), "suite config should be marshalled successfully")
@@ -253,6 +263,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								nodeNamePrefix:     "simpleflow",
 								os:                 os,
 								provider:           provider,
+								publicKey:          test.publicKey,
 								s3Client:           test.s3Client,
 								setRootPassword:    test.setRootPassword,
 								skipCleanup:        test.skipCleanup,
@@ -273,16 +284,16 @@ var _ = Describe("Hybrid Nodes", func() {
 							test.logger.Info("Resetting hybrid node...")
 
 							uninstallNodeTest := uninstallNodeTest{
-								k8s:      test.k8sClient,
-								ssm:      test.ssmClient,
-								ec2:      instance,
-								provider: provider,
-								logger:   test.logger,
+								k8s:                 test.k8sClient,
+								ec2:                 instance,
+								provider:            provider,
+								logger:              test.logger,
+								remoteCommandRunner: test.remoteCommandRunner,
 							}
 							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 							test.logger.Info("Rebooting EC2 Instance.")
-							Expect(ec2.RebootEC2Instance(ctx, test.ec2ClientV2, instance.ID)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
+							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
 							test.logger.Info("EC2 Instance rebooted successfully.")
 
 							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
@@ -332,6 +343,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								nodeNamePrefix:     "upgradeflow",
 								os:                 os,
 								provider:           provider,
+								publicKey:          test.publicKey,
 								s3Client:           test.s3Client,
 								skipCleanup:        test.skipCleanup,
 								setRootPassword:    test.setRootPassword,
@@ -350,12 +362,11 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
 
 							upgradeNodeTest := upgradeNodeTest{
-								k8s:      test.k8sClient,
-								ssm:      test.ssmClient,
-								cluster:  test.cluster,
-								ec2:      instance,
-								logger:   test.logger,
-								provider: provider,
+								k8s:                 test.k8sClient,
+								cluster:             test.cluster,
+								ec2:                 instance,
+								logger:              test.logger,
+								remoteCommandRunner: test.remoteCommandRunner,
 							}
 							Expect(upgradeNodeTest.Run(ctx)).To(Succeed(), "node should have upgraded successfully")
 							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully after nodeadm upgrade")
@@ -363,11 +374,11 @@ var _ = Describe("Hybrid Nodes", func() {
 							test.logger.Info("Resetting hybrid node...")
 
 							uninstallNodeTest := uninstallNodeTest{
-								k8s:      test.k8sClient,
-								ssm:      test.ssmClient,
-								ec2:      instance,
-								provider: provider,
-								logger:   test.logger,
+								k8s:                 test.k8sClient,
+								ec2:                 instance,
+								provider:            provider,
+								logger:              test.logger,
+								remoteCommandRunner: test.remoteCommandRunner,
 							}
 							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
 						},
@@ -393,6 +404,7 @@ type createNodeTest struct {
 	nodeNamePrefix     string
 	os                 e2e.NodeadmOS
 	provider           e2e.NodeadmCredentialsProvider
+	publicKey          string
 	s3Client           *s3v1.S3
 	setRootPassword    bool
 	skipCleanup        bool
@@ -456,6 +468,7 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 		RootPasswordHash:  rootPasswordHash,
 		Files:             files,
 		LogsUploadUrls:    logsUploadUrls,
+		PublicKey:         c.publicKey,
 	})
 	if err != nil {
 		return ec2.Instance{}, fmt.Errorf("expected to successfully build user data: %w", err)
@@ -563,11 +576,11 @@ func (t joinNodeTest) Run(ctx context.Context) error {
 }
 
 type uninstallNodeTest struct {
-	k8s      *clientgo.Clientset
-	ssm      *ssmv1.SSM
-	ec2      ec2.Instance
-	provider e2e.NodeadmCredentialsProvider
-	logger   logr.Logger
+	k8s                 *clientgo.Clientset
+	ec2                 ec2.Instance
+	provider            e2e.NodeadmCredentialsProvider
+	logger              logr.Logger
+	remoteCommandRunner commands.RemoteCommandRunner
 }
 
 func (u uninstallNodeTest) Run(ctx context.Context) error {
@@ -592,12 +605,7 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 		return err
 	}
 
-	hybridNode := e2e.HybridEC2Node{
-		InstanceID: u.ec2.ID,
-		Node:       *node,
-	}
-
-	if err = ssm.RunNodeadmUninstall(ctx, u.ssm, u.provider.InstanceID(hybridNode), u.logger); err != nil {
+	if err = nodeadm.RunNodeadmUninstall(ctx, u.remoteCommandRunner, u.ec2.IP); err != nil {
 		return err
 	}
 	u.logger.Info("Waiting for hybrid node to be not ready...")
@@ -641,6 +649,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		logger:                 e2e.NewLogger(),
 		logsBucket:             suite.TestConfig.LogsBucket,
 		overrideNodeK8sVersion: suite.TestConfig.NodeK8sVersion,
+		publicKey:              suite.PublicKey,
 		setRootPassword:        suite.TestConfig.SetRootPassword,
 		skipCleanup:            suite.SkipCleanup,
 	}
@@ -666,6 +675,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 	test.s3Client = s3v1.New(awsSession)
 	test.cfnClient = cloudformation.New(awsSession)
 	test.iamClient = iam.New(awsSession)
+	test.remoteCommandRunner = ssm.NewSSHOnSSMCommandRunner(test.ssmClient, suite.JumpboxInstanceId, test.logger)
 
 	ca, err := credentials.ParseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
 	if err != nil {
@@ -704,16 +714,16 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		}
 		test.nodeadmURLs.ARM = nodeadmUrl
 	}
+
 	return test, nil
 }
 
 type upgradeNodeTest struct {
-	cluster  *peered.HybridCluster
-	ec2      ec2.Instance
-	k8s      *clientgo.Clientset
-	logger   logr.Logger
-	provider e2e.NodeadmCredentialsProvider
-	ssm      *ssmv1.SSM
+	cluster             *peered.HybridCluster
+	ec2                 ec2.Instance
+	k8s                 *clientgo.Clientset
+	logger              logr.Logger
+	remoteCommandRunner commands.RemoteCommandRunner
 }
 
 func (u upgradeNodeTest) Run(ctx context.Context) error {
@@ -737,12 +747,8 @@ func (u upgradeNodeTest) Run(ctx context.Context) error {
 		return err
 	}
 
-	hybridNode := e2e.HybridEC2Node{
-		InstanceID: u.ec2.ID,
-		Node:       *node,
-	}
 	u.logger.Info("Upgrading hybrid node...")
-	if err = ssm.RunNodeadmUpgrade(ctx, u.ssm, u.provider.InstanceID(hybridNode), u.cluster.KubernetesVersion, u.logger); err != nil {
+	if err = nodeadm.RunNodeadmUpgrade(ctx, u.remoteCommandRunner, u.ec2.IP, u.cluster.KubernetesVersion); err != nil {
 		return err
 	}
 
