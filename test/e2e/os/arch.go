@@ -5,8 +5,8 @@ import (
 	"context"
 	"text/template"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 
 	"github.com/aws/eks-hybrid/test/e2e"
 )
@@ -64,13 +64,13 @@ func executeTemplate(templateData []byte, values any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func getAmiIDFromSSM(ctx context.Context, client *ssm.SSM, amiName string) (*string, error) {
+func getAmiIDFromSSM(ctx context.Context, client *ssm.Client, amiName string) (*string, error) {
 	getParameterInput := &ssm.GetParameterInput{
 		Name:           aws.String(amiName),
 		WithDecryption: aws.Bool(true),
 	}
 
-	output, err := client.GetParameterWithContext(ctx, getParameterInput)
+	output, err := client.GetParameter(ctx, getParameterInput)
 	if err != nil {
 		return nil, err
 	}

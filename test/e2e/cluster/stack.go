@@ -125,6 +125,12 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		if err != nil {
 			return nil, fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
+	} else if resp.Stacks[0].StackStatus == types.StackStatusCreateInProgress {
+		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
+		err = waitForStackOperation(ctx, s.cfn, stackName)
+		if err != nil {
+			return nil, fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
+		}
 	} else {
 		s.logger.Info("Updating hybrid nodes setup stack", "stackName", stackName)
 		_, err = s.cfn.UpdateStack(ctx, &cloudformation.UpdateStackInput{

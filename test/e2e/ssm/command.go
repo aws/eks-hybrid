@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
 
 	e2eCommands "github.com/aws/eks-hybrid/test/e2e/commands"
 )
+
+const commandTimeout = 10 * time.Minute
 
 // ssm commands run as root user on jumpbox
 func makeSshCommand(instanceIP string, commands []string) string {
@@ -21,12 +21,12 @@ func makeSshCommand(instanceIP string, commands []string) string {
 }
 
 type SSHOnSSM struct {
-	client            *ssm.SSM
+	client            *ssm.Client
 	jumpboxInstanceId string
 	logger            logr.Logger
 }
 
-func NewSSHOnSSMCommandRunner(client *ssm.SSM, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
+func NewSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
 	return &SSHOnSSM{
 		client:            client,
 		jumpboxInstanceId: jumpboxInstanceId,
@@ -39,17 +39,16 @@ func (s *SSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCo
 	s.logger.Info(fmt.Sprintf("Running command: %v\n", command))
 	input := &ssm.SendCommandInput{
 		DocumentName: aws.String("AWS-RunShellScript"),
-		Parameters: map[string][]*string{
-			"commands": aws.StringSlice([]string{command}),
+		Parameters: map[string][]string{
+			"commands": {command},
 		},
-		InstanceIds: []*string{aws.String(s.jumpboxInstanceId)},
+		InstanceIds: []string{s.jumpboxInstanceId},
 	}
-	output, err := s.client.SendCommandWithContext(ctx, input)
-	// Retry if the ThrottlingException occurred
-	for err != nil && isThrottlingException(err) {
-		s.logger.Info("ThrottlingException encountered, retrying..")
-		output, err = s.client.SendCommandWithContext(ctx, input)
+	optsFn := func(opts *ssm.Options) {
+		opts.RetryMode = aws.RetryModeAdaptive
+		opts.RetryMaxAttempts = 60
 	}
+	output, err := s.client.SendCommand(ctx, input, optsFn)
 	if err != nil {
 		return e2eCommands.RemoteCommandOutput{}, fmt.Errorf("got an error calling SendCommand: %w", err)
 	}
@@ -57,23 +56,19 @@ func (s *SSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCo
 		CommandId:  output.Command.CommandId,
 		InstanceId: aws.String(s.jumpboxInstanceId),
 	}
+	waiter := ssm.NewCommandExecutedWaiter(s.client)
 	// Will wait on Pending, InProgress, or Cancelling until we reach a terminal status of Success, Cancelled, Failed, TimedOut
-	_ = s.client.WaitUntilCommandExecutedWithContext(ctx, invocationInput, func(w *request.Waiter) {
-		// some of the nodeadm commands take longer to complete than the default timeout and retries allows
-		// these is mostly for rhel8 instances
-		w.MaxAttempts = 100
-		w.Delay = request.ConstantWaiterDelay(5 * time.Second)
-	})
-	invocationOutput, err := s.client.GetCommandInvocationWithContext(ctx, invocationInput)
+	_ = waiter.Wait(ctx, invocationInput, commandTimeout)
+	invocationOutput, err := s.client.GetCommandInvocation(ctx, invocationInput, optsFn)
 	if err != nil {
 		return e2eCommands.RemoteCommandOutput{}, fmt.Errorf("got an error calling GetCommandInvocation: %w", err)
 	}
 
 	commandOutput := e2eCommands.RemoteCommandOutput{
-		ResponseCode:   *invocationOutput.ResponseCode,
+		ResponseCode:   invocationOutput.ResponseCode,
 		StandardError:  *invocationOutput.StandardErrorContent,
 		StandardOutput: *invocationOutput.StandardOutputContent,
-		Status:         *invocationOutput.Status,
+		Status:         string(invocationOutput.Status),
 	}
 
 	s.logger.Info(fmt.Sprintf("Status: %s", commandOutput.Status))
@@ -82,11 +77,4 @@ func (s *SSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCo
 	s.logger.Info(fmt.Sprintf("Stderr: %s", commandOutput.StandardError))
 
 	return commandOutput, nil
-}
-
-func isThrottlingException(err error) bool {
-	if awsErr, ok := err.(awserr.Error); ok && awsErr != nil {
-		return awsErr.Code() == "ThrottlingException"
-	}
-	return false
 }

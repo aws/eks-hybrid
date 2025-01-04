@@ -1,13 +1,14 @@
 package s3
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 	s3Scheme    = "s3"
 )
 
-func GetNodeadmURL(client *s3.S3, nodeadmUrl string) (string, error) {
+func GetNodeadmURL(ctx context.Context, client *s3.Client, nodeadmUrl string) (string, error) {
 	parsedURL, err := url.Parse(nodeadmUrl)
 	if err != nil {
 		return "", fmt.Errorf("parsing nodeadm URL: %v", err)
@@ -31,7 +32,7 @@ func GetNodeadmURL(client *s3.S3, nodeadmUrl string) (string, error) {
 
 	s3Bucket, s3BucketKey := extractBucketAndKey(parsedURL)
 
-	preSignedURL, err := generatePreSignedURL(client, s3Bucket, s3BucketKey, 30*time.Minute)
+	preSignedURL, err := generatePreSignedURL(ctx, client, s3Bucket, s3BucketKey, 30*time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("getting presigned URL for nodeadm: %v", err)
 	}
@@ -45,28 +46,26 @@ func extractBucketAndKey(s3URL *url.URL) (bucket, key string) {
 	return bucket, key
 }
 
-func generatePreSignedURL(client *s3.S3, bucket, key string, expiration time.Duration) (string, error) {
-	req, _ := client.GetObjectRequest(&s3.GetObjectInput{
+func generatePreSignedURL(ctx context.Context, client *s3.Client, bucket, key string, expiration time.Duration) (string, error) {
+	presignClient := s3.NewPresignClient(client)
+	presignedUrl, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-	})
-
-	url, err := req.Presign(expiration)
+	}, s3.WithPresignExpires(expiration))
 	if err != nil {
 		return "", fmt.Errorf("generating pre-signed URL: %v", err)
 	}
-	return url, nil
+	return presignedUrl.URL, nil
 }
 
-func GeneratePutLogsPreSignedURL(client *s3.S3, bucket, key string, expiration time.Duration) (string, error) {
-	req, _ := client.PutObjectRequest(&s3.PutObjectInput{
+func GeneratePutLogsPreSignedURL(ctx context.Context, client *s3.Client, bucket, key string, expiration time.Duration) (string, error) {
+	presignClient := s3.NewPresignClient(client)
+	presignedUrl, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
-	})
-
-	url, err := req.Presign(expiration)
+	}, s3.WithPresignExpires(expiration))
 	if err != nil {
 		return "", fmt.Errorf("generating pre-signed logs upload URL: %v", err)
 	}
-	return url, nil
+	return presignedUrl.URL, nil
 }

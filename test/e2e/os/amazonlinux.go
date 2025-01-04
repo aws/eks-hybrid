@@ -4,8 +4,8 @@ import (
 	"context"
 	_ "embed"
 
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 
 	"github.com/aws/eks-hybrid/test/e2e"
 )
@@ -45,8 +45,8 @@ func (a AmazonLinux2023) InstanceType(region string) string {
 	return getInstanceTypeFromRegionAndArch(region, a.architecture)
 }
 
-func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
-	amiId, err := getAmiIDFromSSM(ctx, ssm.New(awsSession), "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-"+a.amiArchitecture)
+func (a AmazonLinux2023) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
+	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-"+a.amiArchitecture)
 	return *amiId, err
 }
 

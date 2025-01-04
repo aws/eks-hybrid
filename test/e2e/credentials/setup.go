@@ -5,10 +5,9 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -24,10 +23,10 @@ type Infrastructure struct {
 }
 
 // Setup creates the necessary infrastructure for credentials providers to be used by nodeadm.
-func Setup(ctx context.Context, logger logr.Logger, awsSession *session.Session, config aws.Config, clusterName string) (*Infrastructure, error) {
+func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterName string) (*Infrastructure, error) {
 	eksClient := eks.NewFromConfig(config)
-	cfnClient := cloudformation.New(awsSession)
-	iamClient := iam.New(awsSession)
+	cfnClient := cloudformation.NewFromConfig(config)
+	iamClient := iam.NewFromConfig(config)
 
 	cluster, err := eksClient.DescribeCluster(ctx, &eks.DescribeClusterInput{
 		Name: aws.String(clusterName),

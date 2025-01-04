@@ -7,10 +7,9 @@ import (
 	"os/exec"
 	"time"
 
-	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/go-logr/logr"
 
@@ -62,7 +61,7 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 	}
 	_, err := client.CreateCluster(ctx, hybridCluster, func(o *eks.Options) {
 		o.RetryMaxAttempts = 20
-		o.RetryMode = awsv2.RetryModeAdaptive
+		o.RetryMode = aws.RetryModeAdaptive
 	})
 	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
 		return fmt.Errorf("creating EKS hybrid cluster: %w", err)

@@ -7,7 +7,7 @@ type RemoteCommandRunner interface {
 }
 
 type RemoteCommandOutput struct {
-	ResponseCode   int64
+	ResponseCode   int32
 	StandardError  string
 	StandardOutput string
 	Status         string

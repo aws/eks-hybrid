@@ -4,7 +4,7 @@ import (
 	"context"
 	_ "embed"
 
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -14,7 +14,7 @@ import (
 // NodeadmOS defines an interface for operating system-specific behavior.
 type NodeadmOS interface {
 	Name() string
-	AMIName(ctx context.Context, awsSession *session.Session) (string, error)
+	AMIName(ctx context.Context, awsConfig aws.Config) (string, error)
 	BuildUserData(UserDataInput UserDataInput) ([]byte, error)
 	InstanceType(region string) string
 }

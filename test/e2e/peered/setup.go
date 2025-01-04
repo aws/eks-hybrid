@@ -7,7 +7,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
@@ -22,8 +21,8 @@ type Infrastructure struct {
 }
 
 // Setup creates the necessary infrastructure for credentials providers to be used by nodeadm.
-func Setup(ctx context.Context, logger logr.Logger, awsSession *session.Session, config aws.Config, clusterName string) (*Infrastructure, error) {
-	credsInfra, err := credentials.Setup(ctx, logger, awsSession, config, clusterName)
+func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterName string) (*Infrastructure, error) {
+	credsInfra, err := credentials.Setup(ctx, logger, config, clusterName)
 	if err != nil {
 		return nil, err
 	}

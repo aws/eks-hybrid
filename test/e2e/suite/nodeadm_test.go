@@ -12,17 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	s3v2 "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudformation"
-	ec2v1 "github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/iam"
-	s3v1 "github.com/aws/aws-sdk-go/service/s3"
-	ssmv1 "github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -85,18 +82,15 @@ func TestE2E(t *testing.T) {
 }
 
 type peeredVPCTest struct {
-	aws             awsconfig.Config // TODO: move everything to aws sdk v2
-	awsSession      *session.Session
+	aws             aws.Config // TODO: move everything to aws sdk v2
 	eksClient       *eks.Client
-	ec2Client       *ec2v1.EC2
-	ec2ClientV2     *ec2v2.Client
-	ssmClient       *ssmv1.SSM
-	ssmClientV2     *ssmv2.Client
-	cfnClient       *cloudformation.CloudFormation
+	ec2Client       *ec2v2.Client
+	ssmClient       *ssmv2.Client
+	cfnClient       *cloudformation.Client
 	k8sClient       *clientgo.Clientset
 	k8sClientConfig *rest.Config
-	s3Client        *s3v1.S3
-	iamClient       *iam.IAM
+	s3Client        *s3v2.Client
+	iamClient       *iam.Client
 
 	logger     logr.Logger
 	logsBucket string
@@ -129,14 +123,10 @@ var _ = SynchronizedBeforeSuite(
 		Expect(err).NotTo(HaveOccurred(), "should read valid test configuration")
 
 		logger := e2e.NewLogger()
-		awsSession, err := session.NewSession(&aws.Config{
-			Region: aws.String(config.ClusterRegion),
-		})
-		Expect(err).NotTo(HaveOccurred())
 		aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
 		Expect(err).NotTo(HaveOccurred())
 
-		infra, err := peered.Setup(ctx, logger, awsSession, aws, config.ClusterName)
+		infra, err := peered.Setup(ctx, logger, aws, config.ClusterName)
 		Expect(err).NotTo(HaveOccurred(), "should setup e2e resources for peered test")
 
 		skipCleanup := os.Getenv("SKIP_CLEANUP") == "true"
@@ -219,7 +209,6 @@ var _ = Describe("Hybrid Nodes", func() {
 				switch p := provider.(type) {
 				case *credentials.SsmProvider:
 					p.SSM = test.ssmClient
-					p.SSMv2 = test.ssmClientV2
 					p.Role = test.stackOut.SSMNodeRoleName
 				case *credentials.IamRolesAnywhereProvider:
 					p.RoleARN = test.stackOut.IRANodeRoleARN
@@ -250,24 +239,24 @@ var _ = Describe("Hybrid Nodes", func() {
 							}
 
 							createNodeTest := createNodeTest{
-								awsSession:         test.awsSession,
-								cluster:            test.cluster,
-								ec2ClientV2:        test.ec2ClientV2,
-								instanceName:       instanceName,
-								instanceProfileARN: test.stackOut.InstanceProfileARN,
-								k8sClient:          test.k8sClient,
-								k8sVersion:         k8sVersion,
-								logger:             test.logger,
-								logsBucket:         test.logsBucket,
-								nodeadmURLs:        test.nodeadmURLs,
-								nodeNamePrefix:     "simpleflow",
-								os:                 os,
-								provider:           provider,
-								publicKey:          test.publicKey,
-								s3Client:           test.s3Client,
-								setRootPassword:    test.setRootPassword,
-								skipCleanup:        test.skipCleanup,
-								ssmClient:          test.ssmClient,
+								aws:                 test.aws,
+								cluster:             test.cluster,
+								ec2Client:           test.ec2Client,
+								instanceName:        instanceName,
+								instanceProfileARN:  test.stackOut.InstanceProfileARN,
+								k8sClient:           test.k8sClient,
+								k8sVersion:          k8sVersion,
+								logger:              test.logger,
+								logsBucket:          test.logsBucket,
+								nodeadmURLs:         test.nodeadmURLs,
+								nodeNamePrefix:      "simpleflow",
+								os:                  os,
+								provider:            provider,
+								publicKey:           test.publicKey,
+								remoteCommandRunner: test.remoteCommandRunner,
+								s3Client:            test.s3Client,
+								setRootPassword:     test.setRootPassword,
+								skipCleanup:         test.skipCleanup,
 							}
 							instance, err := createNodeTest.Run(ctx)
 							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
@@ -330,24 +319,24 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
 
 							createNodeTest := createNodeTest{
-								awsSession:         test.awsSession,
-								cluster:            test.cluster,
-								ec2ClientV2:        test.ec2ClientV2,
-								instanceName:       instanceName,
-								instanceProfileARN: test.stackOut.InstanceProfileARN,
-								k8sClient:          test.k8sClient,
-								k8sVersion:         nodeKubernetesVersion,
-								logger:             test.logger,
-								logsBucket:         test.logsBucket,
-								nodeadmURLs:        test.nodeadmURLs,
-								nodeNamePrefix:     "upgradeflow",
-								os:                 os,
-								provider:           provider,
-								publicKey:          test.publicKey,
-								s3Client:           test.s3Client,
-								skipCleanup:        test.skipCleanup,
-								setRootPassword:    test.setRootPassword,
-								ssmClient:          test.ssmClient,
+								aws:                 test.aws,
+								cluster:             test.cluster,
+								ec2Client:           test.ec2Client,
+								instanceName:        instanceName,
+								instanceProfileARN:  test.stackOut.InstanceProfileARN,
+								k8sClient:           test.k8sClient,
+								k8sVersion:          nodeKubernetesVersion,
+								logger:              test.logger,
+								logsBucket:          test.logsBucket,
+								nodeadmURLs:         test.nodeadmURLs,
+								nodeNamePrefix:      "upgradeflow",
+								os:                  os,
+								provider:            provider,
+								publicKey:           test.publicKey,
+								remoteCommandRunner: test.remoteCommandRunner,
+								s3Client:            test.s3Client,
+								skipCleanup:         test.skipCleanup,
+								setRootPassword:     test.setRootPassword,
 							}
 							instance, err := createNodeTest.Run(ctx)
 							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
@@ -391,24 +380,25 @@ var _ = Describe("Hybrid Nodes", func() {
 })
 
 type createNodeTest struct {
-	awsSession         *session.Session
-	cluster            *peered.HybridCluster
-	ec2ClientV2        *ec2v2.Client
-	instanceName       string
-	instanceProfileARN string
-	k8sClient          *clientgo.Clientset
-	k8sVersion         string
-	logger             logr.Logger
-	logsBucket         string
-	nodeadmURLs        e2e.NodeadmURLs
-	nodeNamePrefix     string
-	os                 e2e.NodeadmOS
-	provider           e2e.NodeadmCredentialsProvider
-	publicKey          string
-	s3Client           *s3v1.S3
-	setRootPassword    bool
-	skipCleanup        bool
-	ssmClient          *ssmv1.SSM
+	aws                 aws.Config
+	cluster             *peered.HybridCluster
+	ec2Client           *ec2v2.Client
+	instanceName        string
+	instanceProfileARN  string
+	k8sClient           *clientgo.Clientset
+	k8sVersion          string
+	logger              logr.Logger
+	logsBucket          string
+	nodeadmURLs         e2e.NodeadmURLs
+	nodeNamePrefix      string
+	os                  e2e.NodeadmOS
+	provider            e2e.NodeadmCredentialsProvider
+	publicKey           string
+	remoteCommandRunner commands.RemoteCommandRunner
+	s3Client            *s3v2.Client
+	setRootPassword     bool
+	skipCleanup         bool
+	ssmClient           *ssmv2.Client
 }
 
 func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
@@ -451,7 +441,7 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 	if c.logsBucket != "" {
 		logsS3Prefix := fmt.Sprintf("logs/%s/%s", c.cluster.Name, c.instanceName)
 		for _, name := range []string{"post-install", "post-uninstall", "post-uninstall-install", "post-final-uninstall", "post-upgrade"} {
-			url, err := s3.GeneratePutLogsPreSignedURL(c.s3Client, c.logsBucket, fmt.Sprintf("%s/%s.tar.gz", logsS3Prefix, name), 30*time.Minute)
+			url, err := s3.GeneratePutLogsPreSignedURL(ctx, c.s3Client, c.logsBucket, fmt.Sprintf("%s/%s.tar.gz", logsS3Prefix, name), 30*time.Minute)
 			logsUploadUrls = append(logsUploadUrls, e2e.LogsUploadUrl{Name: name, Url: url})
 			if err != nil {
 				return ec2.Instance{}, fmt.Errorf("expected to successfully sign logs upload path: %w", err)
@@ -474,7 +464,7 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 		return ec2.Instance{}, fmt.Errorf("expected to successfully build user data: %w", err)
 	}
 
-	amiId, err := c.os.AMIName(ctx, c.awsSession)
+	amiId, err := c.os.AMIName(ctx, c.aws)
 	if err != nil {
 		return ec2.Instance{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
 	}
@@ -492,7 +482,7 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 	}
 
 	c.logger.Info("Creating a hybrid EC2 Instance...")
-	instance, err := ec2Input.Create(ctx, c.ec2ClientV2, c.ssmClient)
+	instance, err := ec2Input.Create(ctx, c.ec2Client, c.ssmClient)
 	if err != nil {
 		return ec2.Instance{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
@@ -504,7 +494,7 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 			return
 		}
 		c.logger.Info("Deleting EC2 Instance", "instanceID", instance.ID)
-		Expect(ec2.DeleteEC2Instance(ctx, c.ec2ClientV2, instance.ID)).NotTo(HaveOccurred(), "EC2 Instance should have been deleted successfully")
+		Expect(ec2.DeleteEC2Instance(ctx, c.ec2Client, instance.ID)).NotTo(HaveOccurred(), "EC2 Instance should have been deleted successfully")
 		c.logger.Info("Successfully deleted EC2 Instance", "instanceID", instance.ID)
 		Expect(kubernetes.EnsureNodeWithIPIsDeleted(ctx, c.k8sClient, instance.IP)).To(Succeed(), "node should have been deleted from the cluster")
 	})
@@ -654,27 +644,18 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		skipCleanup:            suite.SkipCleanup,
 	}
 
-	awsSession, err := session.NewSession(&aws.Config{
-		Region: aws.String(suite.TestConfig.ClusterRegion),
-	})
-	if err != nil {
-		return nil, err
-	}
 	aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion))
 	if err != nil {
 		return nil, err
 	}
 
 	test.aws = aws
-	test.awsSession = awsSession
 	test.eksClient = eks.NewFromConfig(aws)
-	test.ec2Client = ec2v1.New(awsSession)
-	test.ec2ClientV2 = ec2v2.NewFromConfig(aws) // TODO: move everything else to ec2 sdk v2
-	test.ssmClient = ssmv1.New(awsSession)
-	test.ssmClientV2 = ssmv2.NewFromConfig(aws)
-	test.s3Client = s3v1.New(awsSession)
-	test.cfnClient = cloudformation.New(awsSession)
-	test.iamClient = iam.New(awsSession)
+	test.ec2Client = ec2v2.NewFromConfig(aws) // TODO: move everything else to ec2 sdk v2
+	test.ssmClient = ssmv2.NewFromConfig(aws)
+	test.s3Client = s3v2.NewFromConfig(aws)
+	test.cfnClient = cloudformation.NewFromConfig(aws)
+	test.iamClient = iam.NewFromConfig(aws)
 	test.remoteCommandRunner = ssm.NewSSHOnSSMCommandRunner(test.ssmClient, suite.JumpboxInstanceId, test.logger)
 
 	ca, err := credentials.ParseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
@@ -695,20 +676,20 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		return nil, err
 	}
 
-	test.cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2ClientV2, suite.TestConfig.ClusterName)
+	test.cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName)
 	if err != nil {
 		return nil, err
 	}
 
 	if suite.TestConfig.NodeadmUrlAMD != "" {
-		nodeadmUrl, err := s3.GetNodeadmURL(test.s3Client, suite.TestConfig.NodeadmUrlAMD)
+		nodeadmUrl, err := s3.GetNodeadmURL(ctx, test.s3Client, suite.TestConfig.NodeadmUrlAMD)
 		if err != nil {
 			return nil, err
 		}
 		test.nodeadmURLs.AMD = nodeadmUrl
 	}
 	if suite.TestConfig.NodeadmUrlARM != "" {
-		nodeadmUrl, err := s3.GetNodeadmURL(test.s3Client, suite.TestConfig.NodeadmUrlARM)
+		nodeadmUrl, err := s3.GetNodeadmURL(ctx, test.s3Client, suite.TestConfig.NodeadmUrlARM)
 		if err != nil {
 			return nil, err
 		}

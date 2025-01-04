@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
-	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
-	ssmv2Types "github.com/aws/aws-sdk-go-v2/service/ssm/types"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -21,9 +19,8 @@ import (
 const ssmActivationName = "eks-hybrid-ssm-provider"
 
 type SsmProvider struct {
-	SSM   *ssm.SSM
-	SSMv2 *ssmv2.Client
-	Role  string
+	SSM  *ssm.Client
+	Role string
 }
 
 func (s *SsmProvider) Name() creds.CredentialProvider {
@@ -31,7 +28,7 @@ func (s *SsmProvider) Name() creds.CredentialProvider {
 }
 
 func (s *SsmProvider) NodeadmConfig(ctx context.Context, node e2e.NodeSpec) (*api.NodeConfig, error) {
-	ssmActivationDetails, err := createSSMActivation(ctx, s.SSMv2, s.Role, ssmActivationName, node.Cluster.Name)
+	ssmActivationDetails, err := createSSMActivation(ctx, s.SSM, s.Role, ssmActivationName, node.Cluster.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -63,13 +60,13 @@ func (s *SsmProvider) FilesForNode(_ e2e.NodeSpec) ([]e2e.File, error) {
 	return nil, nil
 }
 
-func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole, ssmActivationName, clusterName string) (*ssmv2.CreateActivationOutput, error) {
+func createSSMActivation(ctx context.Context, client *ssm.Client, iamRole, ssmActivationName, clusterName string) (*ssm.CreateActivationOutput, error) {
 	// Define the input for the CreateActivation API
-	input := &ssmv2.CreateActivationInput{
+	input := &ssm.CreateActivationInput{
 		IamRole:             aws.String(iamRole),
 		RegistrationLimit:   aws.Int32(2),
 		DefaultInstanceName: aws.String(ssmActivationName),
-		Tags: []ssmv2Types.Tag{
+		Tags: []types.Tag{
 			{
 				Key:   aws.String(constants.TestClusterTagKey),
 				Value: aws.String(clusterName),
@@ -78,9 +75,9 @@ func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole, ssm
 	}
 
 	// Call CreateActivation to create the SSM activation
-	result, err := client.CreateActivation(ctx, input, func(o *ssmv2.Options) {
+	result, err := client.CreateActivation(ctx, input, func(o *ssm.Options) {
 		o.RetryMaxAttempts = 20
-		o.RetryMode = awsv2.RetryModeAdaptive
+		o.RetryMode = aws.RetryModeAdaptive
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating SSM activation: %v", err)
@@ -89,7 +86,7 @@ func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole, ssm
 	return result, nil
 }
 
-func waitForManagedInstanceUnregistered(ctx context.Context, ssmClient *ssm.SSM, instanceId string) error {
+func waitForManagedInstanceUnregistered(ctx context.Context, ssmClient *ssm.Client, instanceId string) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
@@ -101,11 +98,11 @@ func waitForManagedInstanceUnregistered(ctx context.Context, ssmClient *ssm.SSM,
 		defer close(statusCh)
 		defer close(errCh)
 		for {
-			output, err := ssmClient.DescribeInstanceInformationWithContext(ctx, &ssm.DescribeInstanceInformationInput{
-				Filters: []*ssm.InstanceInformationStringFilter{
+			output, err := ssmClient.DescribeInstanceInformation(ctx, &ssm.DescribeInstanceInformationInput{
+				Filters: []types.InstanceInformationStringFilter{
 					{
 						Key:    aws.String("InstanceIds"),
-						Values: []*string{aws.String(instanceId)},
+						Values: []string{instanceId},
 					},
 				},
 			})
