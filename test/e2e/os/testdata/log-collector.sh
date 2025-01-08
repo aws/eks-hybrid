@@ -21,7 +21,7 @@ LOG_SCRIPT_URL="https://raw.githubusercontent.com/awslabs/amazon-eks-ami/refs/he
 
 curl -s --retry 5  $LOG_SCRIPT_URL -o /tmp/eks-log-collector.sh
 
-bash /tmp/eks-log-collector.sh
+bash /tmp/eks-log-collector.sh --eks_hybrid=true
 
 if ls /var/log/eks_* > /dev/null 2>&1; then
     # do not overwrite if the file is already there
