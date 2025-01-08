@@ -1,6 +1,8 @@
 package ec2
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -68,7 +70,15 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 		}, nil
 	}
 
-	userDataEncoded := base64.StdEncoding.EncodeToString(e.UserData)
+	var userDataBuffer bytes.Buffer
+	gzWriter := gzip.NewWriter(&userDataBuffer)
+	if _, err := gzWriter.Write(e.UserData); err != nil {
+		return Instance{}, fmt.Errorf("gzipping user data: %w", err)
+	}
+	if err := gzWriter.Close(); err != nil {
+		return Instance{}, fmt.Errorf("gzipping user data: %w", err)
+	}
+	userDataEncoded := base64.StdEncoding.EncodeToString(userDataBuffer.Bytes())
 
 	runResult, err := ec2Client.RunInstances(ctx, &ec2.RunInstancesInput{
 		ImageId:      aws.String(e.AmiID),
