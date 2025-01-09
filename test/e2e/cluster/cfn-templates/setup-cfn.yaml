@@ -396,7 +396,7 @@ Outputs:
 
   JumpboxInstanceId:
     Description: Instance ID of Jumpbox.
-    Value: !GetAtt Jumpbox.InstanceId
+    Value: !Ref Jumpbox
   
   JumpboxKeyPairSSMParameter:
     Description: SSM parameter storing key pair private key
