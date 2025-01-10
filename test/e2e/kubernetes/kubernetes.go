@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -190,6 +191,17 @@ func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeNa
 							ContainerPort: 80,
 						},
 					},
+					StartupProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							HTTPGet: &corev1.HTTPGetAction{
+								Path: "/",
+								Port: intstr.FromInt32(80),
+							},
+						},
+						InitialDelaySeconds: 1,
+						PeriodSeconds:       1,
+						FailureThreshold:    30,
+					},
 				},
 			},
 			// schedule the pod on the specific node using nodeSelector
@@ -226,10 +238,20 @@ func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name,
 		}
 		consecutiveErrors = 0
 
-		if pod.Status.Phase == corev1.PodRunning {
-			return true, nil // pod is running, stop polling
+		if pod.Status.Phase == corev1.PodSucceeded {
+			return false, fmt.Errorf("test pod exited before containers ready")
 		}
-		return false, nil // continue polling
+		if pod.Status.Phase != corev1.PodRunning {
+			return false, nil // continue polling
+		}
+
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == corev1.ContainersReady && cond.Status != corev1.ConditionTrue {
+				return false, nil // continue polling
+			}
+		}
+
+		return true, nil // pod is running, stop polling
 	})
 }
 
