@@ -402,6 +402,10 @@ type createNodeTest struct {
 }
 
 func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
+	if c.logsBucket != "" {
+		c.logger.Info(fmt.Sprintf("Logs bucket: https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.cluster.Region, c.logsBucket, c.logsPrefix()))
+	}
+
 	nodeSpec := e2e.NodeSpec{
 		OS:         c.os,
 		NamePrefix: c.nodeNamePrefix,
@@ -437,19 +441,6 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 		c.logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
 	}
 
-	var logsUploadUrls []e2e.LogsUploadUrl
-	if c.logsBucket != "" {
-		logsS3Prefix := fmt.Sprintf("logs/%s/%s", c.cluster.Name, c.instanceName)
-		for _, name := range []string{"post-install", "post-uninstall", "post-uninstall-install", "post-final-uninstall", "post-upgrade"} {
-			url, err := s3.GeneratePutLogsPreSignedURL(ctx, c.s3Client, c.logsBucket, fmt.Sprintf("%s/%s.tar.gz", logsS3Prefix, name), 30*time.Minute)
-			logsUploadUrls = append(logsUploadUrls, e2e.LogsUploadUrl{Name: name, Url: url})
-			if err != nil {
-				return ec2.Instance{}, fmt.Errorf("expected to successfully sign logs upload path: %w", err)
-			}
-		}
-		c.logger.Info(fmt.Sprintf("Logs bucket: https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.cluster.Region, c.logsBucket, logsS3Prefix))
-	}
-
 	userdata, err := c.os.BuildUserData(e2e.UserDataInput{
 		KubernetesVersion: c.k8sVersion,
 		NodeadmUrls:       c.nodeadmURLs,
@@ -457,7 +448,6 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 		Provider:          string(c.provider.Name()),
 		RootPasswordHash:  rootPasswordHash,
 		Files:             files,
-		LogsUploadUrls:    logsUploadUrls,
 		PublicKey:         c.publicKey,
 	})
 	if err != nil {
@@ -489,6 +479,10 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 	c.logger.Info(fmt.Sprintf("EC2 Instance Connect: https://%s.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=%s&region=%s&serialPort=0", c.cluster.Region, instance.ID, c.cluster.Region))
 
 	DeferCleanup(func(ctx context.Context) {
+		err := c.collectLogs(ctx, "bundle", instance.IP)
+		if err != nil {
+			c.logger.Error(err, "issue collecting logs")
+		}
 		if c.skipCleanup {
 			c.logger.Info("Skipping EC2 Instance deletion", "instanceID", instance.ID)
 			return
@@ -499,6 +493,26 @@ func (c createNodeTest) Run(ctx context.Context) (ec2.Instance, error) {
 		Expect(kubernetes.EnsureNodeWithIPIsDeleted(ctx, c.k8sClient, instance.IP)).To(Succeed(), "node should have been deleted from the cluster")
 	})
 	return instance, nil
+}
+
+func (c createNodeTest) logsPrefix() string {
+	return fmt.Sprintf("logs/%s/%s", c.cluster.Name, c.instanceName)
+}
+
+func (c createNodeTest) collectLogs(ctx context.Context, bundleName, instanceIP string) error {
+	if c.logsBucket == "" {
+		return nil
+	}
+	key := fmt.Sprintf("%s/%s.tar.gz", c.logsPrefix(), bundleName)
+	url, err := s3.GeneratePutLogsPreSignedURL(ctx, c.s3Client, c.logsBucket, key, 5*time.Minute)
+	if err != nil {
+		return err
+	}
+	err = nodeadm.RunLogCollector(ctx, c.remoteCommandRunner, instanceIP, url)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type joinNodeTest struct {

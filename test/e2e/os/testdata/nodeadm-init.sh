@@ -9,15 +9,11 @@ KUBERNETES_VERSION="$2"
 PROVDER="$3"
 NODEADM_ADDITIONAL_ARGS="${4-}"
 
-function gather_logs(){
+function run_debug(){
     /tmp/nodeadm debug -c file:///nodeadm-config.yaml || true
-    # Arbitrary wait to give enough time for logs to populated with potential errors
-    # if the node successfully joins and reboots in this, we wont get the logs
-    sleep 15
-    /tmp/log-collector.sh "post-install" "post-uninstall-install"
 }
 
-trap "gather_logs" EXIT
+trap "run_debug" EXIT
 
 # nodeadmin uninstall does not remove this folder, which contains the cilium/calico config
 # which kubelet uses to determine if a node is "Ready"

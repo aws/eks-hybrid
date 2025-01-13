@@ -9,8 +9,6 @@ import (
 
 func RunNodeadmUninstall(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
 	commands := []string{
-		"set -eux",
-		"trap \"/tmp/log-collector.sh 'post-uninstall' 'post-final-uninstall'\" EXIT",
 		"/tmp/nodeadm uninstall",
 	}
 
@@ -28,8 +26,6 @@ func RunNodeadmUninstall(ctx context.Context, runner commands.RemoteCommandRunne
 
 func RunNodeadmUpgrade(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, kubernetesVersion string) error {
 	commands := []string{
-		"set -eux",
-		"trap \"/tmp/log-collector.sh 'post-upgrade'\" EXIT",
 		fmt.Sprintf("/tmp/nodeadm upgrade %s -c file:///nodeadm-config.yaml", kubernetesVersion),
 	}
 
@@ -57,6 +53,23 @@ func RebootInstance(ctx context.Context, runner commands.RemoteCommandRunner, in
 	_, err := runner.Run(ctx, instanceIP, commands)
 	if err != nil {
 		return fmt.Errorf("running remote command: %w", err)
+	}
+
+	return nil
+}
+
+func RunLogCollector(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, logBundleUrl string) error {
+	commands := []string{
+		fmt.Sprintf("/tmp/log-collector.sh '%s'", logBundleUrl),
+	}
+
+	output, err := runner.Run(ctx, instanceIP, commands)
+	if err != nil {
+		return fmt.Errorf("running remote command: %w", err)
+	}
+
+	if output.Status != "Success" {
+		return fmt.Errorf("log collector remote command did not succeed")
 	}
 
 	return nil

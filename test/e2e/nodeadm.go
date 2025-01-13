@@ -28,7 +28,6 @@ type UserDataInput struct {
 	PublicKey         string
 	RootPasswordHash  string
 	Files             []File
-	LogsUploadUrls    []LogsUploadUrl
 }
 
 type NodeadmURLs struct {
