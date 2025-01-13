@@ -200,7 +200,7 @@ func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeNa
 						},
 						InitialDelaySeconds: 1,
 						PeriodSeconds:       1,
-						FailureThreshold:    30,
+						FailureThreshold:    int32(nodePodWaitTimeout.Seconds()),
 					},
 				},
 			},
