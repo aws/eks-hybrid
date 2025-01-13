@@ -11,7 +11,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -259,7 +258,7 @@ func waitForPodToBeDeleted(ctx context.Context, k8s *kubernetes.Clientset, name,
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		_, err = k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return true, nil
 		} else if err != nil {
 			return false, err
@@ -514,7 +513,7 @@ func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Cli
 	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
-func GetDaemonSet(ctx context.Context, k8s *kubernetes.Clientset, namespace string, name string, logger logr.Logger) error {
+func GetDaemonSet(ctx context.Context, k8s *kubernetes.Clientset, namespace, name string, logger logr.Logger) error {
 	daemonSet, err := k8s.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return err
