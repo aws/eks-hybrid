@@ -33,8 +33,9 @@ type InstanceConfig struct {
 }
 
 type Instance struct {
-	ID string
-	IP string
+	ID   string
+	Name string
+	IP   string
 }
 
 func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmClient *ssm.Client) (Instance, error) {
@@ -132,7 +133,11 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 		return Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)
 	}
 
-	return Instance{ID: *runResult.Instances[0].InstanceId, IP: *runResult.Instances[0].PrivateIpAddress}, nil
+	return Instance{
+		ID:   *runResult.Instances[0].InstanceId,
+		Name: e.InstanceName,
+		IP:   *runResult.Instances[0].PrivateIpAddress,
+	}, nil
 }
 
 func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
