@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	createClusterTimeout = 15 * time.Minute
+	createClusterTimeout = 30 * time.Minute
 )
 
 type hybridCluster struct {
