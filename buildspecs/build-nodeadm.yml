@@ -3,11 +3,9 @@ version: 0.2
 phases:
   build:
     commands:
-    - make build-cross-platform e2e-tests-binary e2e-test ginkgo
-    - aws s3 cp _bin/amd64/nodeadm s3://$ARTIFACTS_BUCKET/latest-pre/linux/amd64/nodeadm
-    - aws s3 cp _bin/arm64/nodeadm s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/nodeadm
-    - aws s3 cp _bin/e2e-test s3://$ARTIFACTS_BUCKET/latest-pre/e2e-test
-    - aws s3 cp _bin/e2e.test s3://$ARTIFACTS_BUCKET/latest-pre/e2e.test
+    - make build-cross-platform build-cross-e2e-tests-binary build-cross-e2e-test install-cross-ginkgo
+    - aws s3 sync _bin/amd64/ s3://$ARTIFACTS_BUCKET/latest-pre/linux/amd64/
+    - aws s3 sync _bin/arm64/ s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/
 
 cache:
   paths:

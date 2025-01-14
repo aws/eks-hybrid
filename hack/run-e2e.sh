@@ -30,7 +30,8 @@ NODEADM_ARM_URL="${6?Please specify the nodeadm arm url}"
 LOGS_BUCKET="${7-}"
 
 CONFIG_DIR="$REPO_ROOT/e2e-config"
-BIN_DIR="$REPO_ROOT/_bin"
+ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
+BIN_DIR="$REPO_ROOT/_bin/$ARCH"
 
 mkdir -p $CONFIG_DIR
 

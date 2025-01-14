@@ -105,9 +105,19 @@ run: build ## Run nodeadm binary.
 e2e-tests-binary: ## Build binary with e2e tests.
 	CGO_ENABLED=0 $(GO) test -ldflags "-s -w -buildid='' -extldflags -static" -c ./test/e2e/suite -o ./_bin/e2e.test -tags "e2e"
 
+.PHONY: build-cross-e2e-tests-binary
+build-cross-e2e-tests-binary:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) test -ldflags "-s -w -buildid='' -extldflags -static" -c ./test/e2e/suite -o ./_bin/amd64/e2e.test -tags "e2e"
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) test -ldflags "-s -w -buildid='' -extldflags -static" -c ./test/e2e/suite -o ./_bin/arm64/e2e.test -tags "e2e"
+
 .PHONY: e2e-test
 e2e-test: ## Build e2e test setup binary.
 	CGO_ENABLED=0 $(GO) build -ldflags "-s -w -buildid='' -extldflags -static" -o _bin/e2e-test ./cmd/e2e-test/main.go
+
+.PHONY: build-cross-e2e-test
+build-cross-e2e-test:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "-s -w -buildid='' -extldflags -static" -o _bin/amd64/e2e-test ./cmd/e2e-test/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags "-s -w -buildid='' -extldflags -static" -o _bin/arm64/e2e-test ./cmd/e2e-test/main.go
 
 .PHONY: generate-attribution
 generate-attribution:
@@ -176,6 +186,21 @@ $(CRD_REF_DOCS): $(LOCALBIN)
 ginkgo: $(GINKGO) ## Download ginkgo.
 $(GINKGO): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) $(GO) install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+
+.PHONY: install-cross-ginkgo
+install-cross-ginkgo: $(LOCALBIN)/amd64/ginkgo $(LOCALBIN)/arm64/ginkgo
+
+# When cross-compiling with go install, you can not override the output directory
+# with GOBIN.  In the case that it is a different arch than the host
+# go install will put the bins in a `goos_goarch` folder under GOPATH/bin
+$(LOCALBIN)/%/ginkgo: GOARCH=$*
+$(LOCALBIN)/%/ginkgo: GOPATH=$(shell $(GO) env GOPATH | cut -d ':' -f 1)
+$(LOCALBIN)/%/ginkgo: CROSS_ARCH_INSTALL_FILE=$(GOPATH)/bin/linux_$(GOARCH)/$(@F)
+$(LOCALBIN)/%/ginkgo: NATIVE_INSTALL_FILE=$(GOPATH)/bin/$(@F)
+$(LOCALBIN)/%/ginkgo:
+	mkdir -p $(@D)
+	GOOS=linux GOARCH=$(GOARCH) $(GO) install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+	if [ -f $(CROSS_ARCH_INSTALL_FILE) ]; then cp $(CROSS_ARCH_INSTALL_FILE) $@; else cp $(NATIVE_INSTALL_FILE) $@; fi
 
 .PHONY: update-deps
 update-deps:
