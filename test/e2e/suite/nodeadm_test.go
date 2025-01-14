@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -250,14 +249,10 @@ var _ = Describe("Hybrid Nodes", func() {
 								Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 							})
 
-							joinNodeTest := joinNodeTest{
-								clientConfig:  test.k8sClientConfig,
-								k8s:           test.k8sClient,
-								nodeIPAddress: instance.IP,
-								logger:        test.logger,
-								region:        test.cluster.Region,
-							}
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully")
+							verifyNode := test.newVerifyNode(instance.IP)
+							Expect(verifyNode.Run(ctx)).To(
+								Succeed(), "node should have joined the cluster successfully",
+							)
 
 							test.logger.Info("Resetting hybrid node...")
 
@@ -274,7 +269,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
 							test.logger.Info("EC2 Instance rebooted successfully.")
 
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
+							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
 
 							if test.skipCleanup {
 								test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
@@ -320,14 +315,10 @@ var _ = Describe("Hybrid Nodes", func() {
 								Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 							})
 
-							joinNodeTest := joinNodeTest{
-								clientConfig:  test.k8sClientConfig,
-								k8s:           test.k8sClient,
-								nodeIPAddress: instance.IP,
-								logger:        test.logger,
-								region:        test.cluster.Region,
-							}
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
+							verifyNode := test.newVerifyNode(instance.IP)
+							Expect(verifyNode.Run(ctx)).To(
+								Succeed(), "node should have joined the cluster successfully",
+							)
 
 							upgradeNodeTest := upgradeNodeTest{
 								k8s:                 test.k8sClient,
@@ -337,7 +328,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								remoteCommandRunner: test.remoteCommandRunner,
 							}
 							Expect(upgradeNodeTest.Run(ctx)).To(Succeed(), "node should have upgraded successfully")
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully after nodeadm upgrade")
+							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully after nodeadm upgrade")
 
 							test.logger.Info("Resetting hybrid node...")
 
@@ -357,70 +348,6 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 	})
 })
-
-type joinNodeTest struct {
-	clientConfig  *rest.Config
-	k8s           *clientgo.Clientset
-	nodeIPAddress string
-	logger        logr.Logger
-	region        string
-}
-
-func (t joinNodeTest) Run(ctx context.Context) error {
-	// get the hybrid node registered using nodeadm by the internal IP of an EC2 Instance
-	node, err := kubernetes.WaitForNode(ctx, t.k8s, t.nodeIPAddress, t.logger)
-	if err != nil {
-		return err
-	}
-	if node == nil {
-		return fmt.Errorf("returned node is nil")
-	}
-
-	nodeName := node.Name
-
-	t.logger.Info("Waiting for hybrid node to be ready...")
-	if err = kubernetes.WaitForHybridNodeToBeReady(ctx, t.k8s, nodeName, t.logger); err != nil {
-		return err
-	}
-
-	t.logger.Info("Creating a test pod on the hybrid node...")
-	podName := kubernetes.GetNginxPodName(nodeName)
-	if err = kubernetes.CreateNginxPodInNode(ctx, t.k8s, nodeName, podNamespace, t.region, t.logger); err != nil {
-		return err
-	}
-	t.logger.Info(fmt.Sprintf("Pod %s created and running on node %s", podName, nodeName))
-
-	t.logger.Info("Exec-ing nginx -version", "pod", podName)
-	stdout, stderr, err := kubernetes.ExecPod(ctx, t.clientConfig, t.k8s, podName, podNamespace, "/sbin/nginx", "-version")
-	if err != nil {
-		return err
-	}
-	if !strings.Contains(stdout, "nginx") {
-		return fmt.Errorf("pod exec stdout does not contain expected value %s: %s", stdout, "nginx")
-	}
-	if stderr != "" {
-		return fmt.Errorf("pod exec stderr should be empty %s", stderr)
-	}
-	t.logger.Info("Successfully exec'd nginx -version", "pod", podName)
-
-	t.logger.Info("Checking logs for nginx output", "pod", podName)
-	logs, err := kubernetes.GetPodLogs(ctx, t.k8s, podName, podNamespace)
-	if err != nil {
-		return err
-	}
-	if !strings.Contains(logs, "nginx") {
-		return fmt.Errorf("pod log does not contain expected value %s: %s", logs, "nginx")
-	}
-	t.logger.Info("Successfully validated log output", "pod", podName)
-
-	t.logger.Info("Deleting test pod", "pod", podName)
-	if err = kubernetes.DeletePod(ctx, t.k8s, podName, podNamespace); err != nil {
-		return err
-	}
-	t.logger.Info("Pod deleted successfully", "pod", podName)
-
-	return nil
-}
 
 type uninstallNodeTest struct {
 	k8s                 *clientgo.Clientset
@@ -570,6 +497,16 @@ func (t *peeredVPCTest) newPeeredNode() *peered.Node {
 		S3:                  t.s3Client,
 		SkipDelete:          t.skipCleanup,
 		SetRootPassword:     t.setRootPassword,
+	}
+}
+
+func (t *peeredVPCTest) newVerifyNode(nodeIP string) *kubernetes.VerifyNode {
+	return &kubernetes.VerifyNode{
+		ClientConfig:  t.k8sClientConfig,
+		K8s:           t.k8sClient,
+		Logger:        t.logger,
+		Region:        t.cluster.Region,
+		NodeIPAddress: nodeIP,
 	}
 }
 
