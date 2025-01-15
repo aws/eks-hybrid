@@ -199,7 +199,7 @@ $(LOCALBIN)/%/ginkgo: CROSS_ARCH_INSTALL_FILE=$(GOPATH)/bin/linux_$(GOARCH)/$(@F
 $(LOCALBIN)/%/ginkgo: NATIVE_INSTALL_FILE=$(GOPATH)/bin/$(@F)
 $(LOCALBIN)/%/ginkgo:
 	mkdir -p $(@D)
-	GOOS=linux GOARCH=$(GOARCH) $(GO) install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) $(GO) install -ldflags "-extldflags -static" github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 	if [ -f $(CROSS_ARCH_INSTALL_FILE) ]; then cp $(CROSS_ARCH_INSTALL_FILE) $@; else cp $(NATIVE_INSTALL_FILE) $@; fi
 
 .PHONY: update-deps
