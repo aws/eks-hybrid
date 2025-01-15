@@ -23,9 +23,11 @@ func main() {
 	flaggy.SetVersion(version.GitVersion)
 	flaggy.DefaultParser.AdditionalHelpPrepend = "http://github.com/aws/eks-hybrid"
 	flaggy.DefaultParser.ShowHelpOnUnexpected = true
-	flaggy.DefaultParser.SetHelpTemplate(cli.HelpTemplate)
-
 	opts := cli.NewGlobalOptions()
+	log := cli.NewLogger(opts)
+	if err := flaggy.DefaultParser.SetHelpTemplate(cli.HelpTemplate); err != nil {
+		log.Fatal("Failed to set help template:", zap.Error(err))
+	}
 
 	cmds := []cli.Command{
 		config.NewConfigCommand(),
@@ -40,8 +42,6 @@ func main() {
 		flaggy.AttachSubcommand(cmd.Flaggy(), 1)
 	}
 	flaggy.Parse()
-
-	log := cli.NewLogger(opts)
 
 	for _, cmd := range cmds {
 		if cmd.Flaggy().Used {
