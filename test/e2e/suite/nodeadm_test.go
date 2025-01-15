@@ -266,7 +266,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 						},
-						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow")),
+						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow", "init")),
 					)
 
 					DescribeTable("Upgrade nodeadm flow",
