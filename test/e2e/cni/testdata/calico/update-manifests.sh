@@ -27,7 +27,7 @@ curl -s --retry 5 -o tigera-operator.yaml https://raw.githubusercontent.com/proj
 # since it will just immediately restart
 # this restricts the toleration to the one needed during initialization
 # more info: https://github.com/projectcalico/calico/issues/6136
-yq -i '(select(.kind == "Deployment").spec.template.spec.tolerations[].key |= "node.kubernetes.io/not-ready")' tigera-operator.yaml  
+yq -i '(select(.kind == "Deployment").spec.template.spec.tolerations[].key |= "node.kubernetes.io/not-ready")' tigera-operator.yaml
 
 sed -i -e 's/quay.io/{{.ContainerRegistry}}/g' tigera-operator.yaml
 echo "$VERSION" > VERSION

@@ -112,7 +112,7 @@ variable "rhel_version" {
 }
 
 ####################
-# Kubernetes version to install for nodeadm 
+# Kubernetes version to install for nodeadm
 ####################
 variable "k8s_version" {
   type        = string
@@ -126,7 +126,7 @@ variable "k8s_version" {
 }
 
 ####################
-# Rhel credentials 
+# Rhel credentials
 ####################
 variable "rhsm_username" {
   type        = string
@@ -198,7 +198,7 @@ locals {
   k8s_release = var.k8s_version
   timestamp = formatdate("YYYY-MM-DD-hhmm", timestamp())
   qemu_output_directory = "qemu/${var.format}"
-  rhel_os = var.rhel_version 
+  rhel_os = var.rhel_version
   qemu_format = var.format
   iso_url = var.iso_url
   iso_checksum = var.iso_checksum
@@ -206,7 +206,7 @@ locals {
 }
 
 ######################
-# Ubuntu AMI sources 
+# Ubuntu AMI sources
 ######################
 source "amazon-ebs" "ubuntu22" {
   ami_name      = "ami-packer-ubuntu22-${local.timestamp}"
@@ -340,7 +340,7 @@ source "vsphere-iso" "ubuntu22" {
 
   communicator = "ssh"
   ssh_username = "ubuntu"
-  ssh_password = var.pkr_ssh_password # default is "ubuntu" as used in http/user-data, make sure to change in both places 
+  ssh_password = var.pkr_ssh_password # default is "ubuntu" as used in http/user-data, make sure to change in both places
   ssh_timeout  = "60m"
 
   convert_to_template = true
@@ -417,7 +417,7 @@ source "vsphere-iso" "rhel8" {
   cluster    = var.vsphere_cluster != "" ? var.vsphere_cluster : " "
   datastore  = var.vsphere_datastore
   folder     = var.vsphere_folder
-  
+
 
   vm_name              = "iso-packer-rhel8-${local.timestamp}"
   guest_os_type        = "rhel8_64Guest"
@@ -506,7 +506,7 @@ source "vsphere-iso" "rhel9" {
 }
 
 ######################
-# Ubuntu Raw/Qcow2 sources 
+# Ubuntu Raw/Qcow2 sources
 ######################
 
 source "qemu" "ubuntu22" {
@@ -591,7 +591,7 @@ source "qemu" "ubuntu24" {
 }
 
 ######################
-# Rhel Raw/Qcow2 sources 
+# Rhel Raw/Qcow2 sources
 ######################
 
 source "qemu" "rhel8" {
@@ -689,7 +689,7 @@ build {
     "source.vsphere-iso.rhel9",
     "source.qemu.ubuntu22",
     "source.qemu.ubuntu24",
-    "source.qemu.rhel8", 
+    "source.qemu.rhel8",
     "source.qemu.rhel9"
   ]
 
@@ -701,7 +701,7 @@ build {
       "auth_value=${local.auth_value}",
       "k8s_version=${var.k8s_version}"
     ]
-    
+
     only = ["amazon-ebs.ubuntu22", "amazon-ebs.ubuntu24", "vsphere-iso.ubuntu22", "vsphere-iso.ubuntu24", "qemu.ubuntu22", "qemu.ubuntu24"]
   }
 

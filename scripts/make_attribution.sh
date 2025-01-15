@@ -22,10 +22,10 @@ GOLANG_VERSION="$1"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../" && pwd -P)"
 if [ "$CI" = "true" ]; then
     # Prow clone process does not add remote so we have to explicitly add
-    # it. Setting it to HTTPS URL for go-licenses 
+    # it. Setting it to HTTPS URL for go-licenses
     git remote add origin https://github.com/$REPO_OWNER/eks-hybrid.git
 else
-    # go-licenses supports only HTTPS URLs so if the CLI repo is cloned locally 
+    # go-licenses supports only HTTPS URLs so if the CLI repo is cloned locally
     # with SSH URL, we need to temporarily override the remote URL for go-licenses
     # to work as expected
     ORIGIN_URL=$(git remote get-url origin)
@@ -48,7 +48,7 @@ function build::attribution::generate(){
     gather_licenses "$GOLANG_VERSION" _output "./cmd/nodeadm"
     build::exclude_own
     build::generate_attribution $GOLANG_VERSION
-    # Removing temporary override by resetting remote origin URL to original SSH url 
+    # Removing temporary override by resetting remote origin URL to original SSH url
     if [ "$CI" != "true" ] && [ "$CLONE_METHOD" = "ssh" ]; then
         git remote set-url origin $ORIGIN_URL
     elif [ "$CI" = "true" ] && [ "$JOB_TYPE" = "periodic" ]; then

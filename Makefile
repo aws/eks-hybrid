@@ -68,7 +68,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: ## Run validate tests.
-	$(GO) test ./... 
+	$(GO) test ./...
 
 COVERAGEFILE = $(LOCALBIN)/coverage.out
 .PHONY: coverage

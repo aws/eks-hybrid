@@ -1,0 +1,6 @@
+{
+    "aws_account":"AWS_ACCOUNT_NUMBER",
+    "aws_region":"us-west-2",
+    "amiNameInstance1": "AMI_NAME_FOR_INSTANCE_ONE",
+    "amiNameInstance2": "AMI_NAME_FOR_INSTANCE_TWO"
+}

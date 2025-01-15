@@ -22,12 +22,12 @@ export class NodeadmBuildStack extends cdk.Stack {
     const requestTagCondition = {
       StringLike: {
         [`aws:RequestTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`
-      } 
+      }
     }
     const resourceTagCondition = {
       StringLike: {
         [`aws:ResourceTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`
-      } 
+      }
     }
     for (const envVar of requiredEnvVars) {
       if (process.env[envVar] === undefined) {
@@ -238,7 +238,7 @@ export class NodeadmBuildStack extends cdk.Stack {
             'iam:DeleteRolePolicy',
             'iam:ListAttachedRolePolicies',
             'iam:ListInstanceProfilesForRole',
-            'iam:ListRolePolicies',  
+            'iam:ListRolePolicies',
           ],
           resources: [`arn:aws:iam::${this.account}:role/*`],
           effect: iam.Effect.ALLOW,
@@ -296,7 +296,7 @@ export class NodeadmBuildStack extends cdk.Stack {
             'ec2:AssociateRouteTable',
             'ec2:AttachInternetGateway',
             'ec2:AuthorizeSecurityGroupIngress',
-            'ec2:CreateVpcPeeringConnection',  
+            'ec2:CreateVpcPeeringConnection',
             'ec2:CreateRoute',
             'ec2:CreateRouteTable',
             'ec2:CreateSubnet',
@@ -325,7 +325,7 @@ export class NodeadmBuildStack extends cdk.Stack {
           actions: [
             'ec2:CreateInternetGateway',
             'ec2:CreateTags',
-            'ec2:CreateVpc',   
+            'ec2:CreateVpc',
             'ec2:CreateKeyPair',
           ],
           resources: ['*'],
@@ -608,7 +608,7 @@ export class NodeadmBuildStack extends cdk.Stack {
         },
         {
           stageName: 'CleanupAndCache',
-          actions: [cleanupAction, ecrCacheAction],          
+          actions: [cleanupAction, ecrCacheAction],
         },
         {
           stageName: 'E2E-Tests',

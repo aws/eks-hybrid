@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# check that credentials were provided 
+# check that credentials were provided
 if [ -z "$rhsm_username" ] || [ -z "$rhsm_password" ] || [ -z "$nodeadm_link" ] || [ -z "$auth_value" ] || [ -z "$rhel_version" ] || [ -z "$k8s_version" ]; then
     echo "Error: Please set required environment variables."
     exit 1

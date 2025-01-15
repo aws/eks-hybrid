@@ -13,7 +13,7 @@ Parameters:
   ClusterVPCCidr:
     Type: String
     Description: EKS Hybrid Cluster VPC CIDR block
-  
+
   ClusterPublicSubnetCidr:
     Type: String
     Description: EKS Hybrid Cluster public subnet VPC CIDR block
@@ -21,11 +21,11 @@ Parameters:
   ClusterPrivateSubnetCidr:
     Type: String
     Description: EKS Hybrid Cluster private subnet VPC CIDR block
-  
+
   HybridNodeVPCCidr:
     Type: String
     Description: EC2 Hybrid Nodes VPC CIDR block
-  
+
   HybridNodePodCidr:
     Type: String
     Description: EKS Hybrid Nodes Pod CIDR block
@@ -58,7 +58,7 @@ Resources:
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
-  
+
   ClusterVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -71,7 +71,7 @@ Resources:
           Value: !Sub ${ClusterName}-cluster-vpc
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
-  
+
   ClusterVPCPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -84,7 +84,7 @@ Resources:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
       VpcId: !Ref ClusterVPC
-  
+
   ClusterVPCPrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -182,7 +182,7 @@ Resources:
           Value: !Sub ${ClusterName}-hybrid-node-vpc
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
-  
+
   HybridNodeVPCPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -275,7 +275,7 @@ Resources:
       RouteTableId: !Ref ClusterRouteTable
       DestinationCidrBlock: !Ref HybridNodeVPCCidr
       VpcPeeringConnectionId: !Ref VPCPeeringConnection
-  
+
   ClusterPrivateRouteToHybridNode:
     Type: AWS::EC2::Route
     Properties:
@@ -293,15 +293,15 @@ Resources:
   JumpboxInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      AssumeRolePolicyDocument: 
+      AssumeRolePolicyDocument:
         Version: '2012-10-17'
-        Statement: 
+        Statement:
           - Effect: Allow
-            Principal: 
+            Principal:
               Service: ssm.amazonaws.com
             Action: sts:AssumeRole
           - Effect: Allow
-            Principal: 
+            Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
@@ -313,17 +313,17 @@ Resources:
   JumpboxInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles: 
+      Roles:
         - !Ref JumpboxInstanceRole
 
   JumpboxKeyPair:
     Type: 'AWS::EC2::KeyPair'
-    Properties: 
+    Properties:
       KeyName: !Sub "${AWS::StackName}-jumpbox-key"
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
-  
+
   Jumpbox:
     Type: AWS::EC2::Instance
     DeletionPolicy: Delete
@@ -348,7 +348,7 @@ Resources:
                   Host *
                     StrictHostKeyChecking no
                     UserKnownHostsFile=/dev/null
-                path: /root/.ssh/config                
+                path: /root/.ssh/config
             runcmd:
               - aws ssm get-parameter --name /ec2/keypair/${JumpboxKeyPair.KeyPairId} --with-decryption --query Parameter.Value --output text > /root/.ssh/id_rsa
               - chmod 0600 /root/.ssh/id_rsa
@@ -369,7 +369,7 @@ Outputs:
   ClusterVPCPrivateSubnet:
     Description: The ID of the EKS Hybrid Cluster VPC Private Subnet.
     Value: !Ref ClusterVPCPrivateSubnet
-  
+
   ClusterSecurityGroup:
     Description: The ID of the EKS Hybrid Cluster Security Group.
     Value: !GetAtt ClusterVPC.DefaultSecurityGroup
@@ -397,7 +397,7 @@ Outputs:
   JumpboxInstanceId:
     Description: Instance ID of Jumpbox.
     Value: !Ref Jumpbox
-  
+
   JumpboxKeyPairSSMParameter:
     Description: SSM parameter storing key pair private key
     Value: !Sub /ec2/keypair/${JumpboxKeyPair.KeyPairId}

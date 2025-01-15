@@ -17,4 +17,4 @@ artifacts:
   - "_bin/**/*"
   - "buildspecs/*"
   - "hack/*"
-  - "test/e2e/cni/testdata/**/*"  
+  - "test/e2e/cni/testdata/**/*"

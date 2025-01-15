@@ -58,7 +58,7 @@ function older_than_one_day(){
 declare -A CLUSTER_DESCRIBE=()
 function should_cleanup_cluster(){
     cluster_name="$1"
-    
+
     # return
     # 0 = true
     # 1 = false
@@ -80,14 +80,14 @@ function should_cleanup_cluster(){
     # no cluster_name passed to script, check if cluster is older than a day
     # +1 means to return 1 if the key exists, otherwise return nothing
     if [ ! ${CLUSTER_DESCRIBE[$cluster_name]+1} ]; then
-        >&2 echo "($(pwd)) \$ command aws eks describe-cluster --name $cluster_name --query 'cluster.{tags:tags,createdAt:createdAt,status:status}'" 
+        >&2 echo "($(pwd)) \$ command aws eks describe-cluster --name $cluster_name --query 'cluster.{tags:tags,createdAt:createdAt,status:status}'"
         describe="$(command aws eks describe-cluster --name $cluster_name --query 'cluster.{tags:tags,createdAt:createdAt,status:status}' 2>&1)"
         if [ $? != 0 ]; then
             if [[ "${describe}" =~ "An error occurred (ResourceNotFoundException)" ]]; then
                 # already deleted
                 describe='{"status":"DELETING"}'
             else
-                echo "Unknown error running describe-cluster skipping deletion of ${cluster_name} : ${describe}"            
+                echo "Unknown error running describe-cluster skipping deletion of ${cluster_name} : ${describe}"
                 return $skip
             fi
         fi
@@ -107,8 +107,8 @@ function should_cleanup_cluster(){
 
     if older_than_one_day "$(echo $describe | jq -r ".createdAt")"; then
         return $clean
-    fi    
-    
+    fi
+
     return $skip
 }
 
@@ -123,9 +123,9 @@ function get_cluster_name_from_tags(){
     cluster_name=$(echo $json | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
     if [ -z "$cluster_name" ] || [ "$cluster_name" == "null" ]; then
         # the iam roles anywhere api returns tags where key/value are lower case, whereas the other apis all start with a upper...
-        cluster_name=$(echo $json | jq -r ".Tags | map(select(.key == \"$TEST_CLUSTER_TAG_KEY\"))[0].value")       
+        cluster_name=$(echo $json | jq -r ".Tags | map(select(.key == \"$TEST_CLUSTER_TAG_KEY\"))[0].value")
     fi
-    
+
     if [ -z "$cluster_name" ] || [ "$cluster_name" == "null" ]; then
         echo ""
         return
@@ -141,11 +141,11 @@ function get_cluster_name_from_tags(){
 # before we try to make the get tags call
 function role_cluster_name_tag(){
     role="$1"
-    >&2 echo "($(pwd)) \$ command aws iam list-role-tags --query "{Tags:Tags}" --role-name $role --output json" 
+    >&2 echo "($(pwd)) \$ command aws iam list-role-tags --query "{Tags:Tags}" --role-name $role --output json"
     role_tags="$(command aws iam list-role-tags --query "{Tags:Tags}" --role-name $role --output json 2>/dev/null)"
     if [ $? != 0 ]; then
         echo ""
-        return        
+        return
     fi
     cluster_name="$(get_cluster_name_from_tags "$role_tags")"
     echo "$cluster_name"
@@ -154,11 +154,11 @@ function role_cluster_name_tag(){
 # See above note about role tags
 function instance_profile_cluster_name_tag(){
     instance_profile="$1"
-    >&2 echo "($(pwd)) \$ command aws iam get-instance-profile --query "InstanceProfile.{Tags:Tags}" --instance-profile-name=$instance_profile --output json" 
+    >&2 echo "($(pwd)) \$ command aws iam get-instance-profile --query "InstanceProfile.{Tags:Tags}" --instance-profile-name=$instance_profile --output json"
     instance_profile_tags="$(command aws iam get-instance-profile --query "InstanceProfile.{Tags:Tags}" --instance-profile-name=$instance_profile --output json 2>/dev/null)"
     if [ $? != 0 ]; then
         echo ""
-        return        
+        return
     fi
     cluster_name="$(get_cluster_name_from_tags "$instance_profile_tags")"
     echo "$cluster_name"
@@ -167,11 +167,11 @@ function instance_profile_cluster_name_tag(){
 # See above note about role tags
 function iam_ra_cluster_name_tag_from_resource(){
     arn="$1"
-    >&2 echo "($(pwd)) \$ command aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json" 
+    >&2 echo "($(pwd)) \$ command aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json"
     tags="$(command aws rolesanywhere list-tags-for-resource --resource-arn $arn --query "{Tags:tags}" --output json 2>/dev/null)"
     if [ $? != 0 ]; then
         echo ""
-        return        
+        return
     fi
     cluster_name="$(get_cluster_name_from_tags "$tags")"
     echo "$cluster_name"
@@ -180,11 +180,11 @@ function iam_ra_cluster_name_tag_from_resource(){
 # See above note about role tags
 function ssm_parameter_cluster_name_tag(){
     id="$1"
-    >&2 echo "($(pwd)) \$ command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json" 
+    >&2 echo "($(pwd)) \$ command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json"
     tags="$(command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json 2>/dev/null)"
     if [ $? != 0 ]; then
         echo ""
-        return        
+        return
     fi
     cluster_name="$(get_cluster_name_from_tags "$tags")"
     echo "$cluster_name"
@@ -234,7 +234,7 @@ function delete_cluster_if_should_cleanup(){
         return
     fi
 
-    >&2 echo "($(pwd)) \$ command aws eks describe-cluster --name $cluster_name --query 'cluster.status' --output text" 
+    >&2 echo "($(pwd)) \$ command aws eks describe-cluster --name $cluster_name --query 'cluster.status' --output text"
     cluster_status="$(command aws eks describe-cluster --name $cluster_name --query 'cluster.status' --output text 2>&1)"
     if [ $? != 0 ]; then
         if [[ "${cluster_status}" =~ "An error occurred (ResourceNotFoundException)" ]]; then
@@ -246,16 +246,16 @@ function delete_cluster_if_should_cleanup(){
     fi
 
     if [ "DELETING" == "$cluster_status" ]; then
-        return       
+        return
     fi
-    
+
     aws eks delete-cluster --name $cluster_name
 }
 
 function wait_for_instance_terminated(){
     instance_id="$1"
 
-    >&2 echo "($(pwd)) \$ command aws ec2 wait instance-terminated --instance-ids $instance_id" 
+    >&2 echo "($(pwd)) \$ command aws ec2 wait instance-terminated --instance-ids $instance_id"
     # ignore error and do not retry in case instances is gone
     # by the time this call is made
     command aws ec2 wait instance-terminated --instance-ids $instance_id
@@ -274,7 +274,7 @@ function delete_peering_connection(){
     aws ec2 wait vpc-peering-connection-deleted --vpc-peering-connection-id $peering_connection_id
 }
 
-# Before deleting a role, it needs 
+# Before deleting a role, it needs
 # - to be removed from all instance profiles it is attached to
 # - attached polices need to be removed
 # - polices need to be removed from it
@@ -374,10 +374,10 @@ for role in $(aws iam list-roles --query 'Roles[*].RoleName' --output text); do
         cluster_name="$(role_cluster_name_tag $role)"
         if ! should_cleanup_cluster "$cluster_name"; then
             continue
-        fi      
+        fi
         for instance_profile in $(aws iam list-instance-profiles-for-role --role-name $role --query "InstanceProfiles[*].InstanceProfileName" --output text); do
             aws iam remove-role-from-instance-profile --instance-profile-name $instance_profile --role-name $role
-        done       
+        done
     fi
 done
 
@@ -393,7 +393,7 @@ for instance_profile in $(aws iam list-instance-profiles  --query 'InstanceProfi
         if ! should_cleanup_cluster "$cluster_name"; then
             continue
         fi
-        aws iam delete-instance-profile --instance-profile-name $instance_profile        
+        aws iam delete-instance-profile --instance-profile-name $instance_profile
     fi
 done
 
@@ -448,12 +448,12 @@ if [[ "${SKIP_IRA_TEST:-false}" == "false" ]]; then
         name=$(echo "$profile" | jq -r ".name")
         if [[ $name == EKSHybridCI-* ]]; then
             arn=$(echo "$profile" | jq -r ".profileArn")
-            cluster_name="$(iam_ra_cluster_name_tag_from_resource $arn)" 
+            cluster_name="$(iam_ra_cluster_name_tag_from_resource $arn)"
             if ! should_cleanup_cluster "$cluster_name"; then
                 continue
             fi
             id=$(echo "$profile" | jq -r ".profileId")
-            aws rolesanywhere delete-profile --profile-id $id     
+            aws rolesanywhere delete-profile --profile-id $id
         fi
     done
 
@@ -464,12 +464,12 @@ if [[ "${SKIP_IRA_TEST:-false}" == "false" ]]; then
         name=$(echo "$anchor" | jq -r ".name")
         if [[ $name == EKSHybridCI-* ]]; then
             arn=$(echo "$anchor" | jq -r ".trustAnchorArn")
-            cluster_name="$(iam_ra_cluster_name_tag_from_resource "$arn")"       
+            cluster_name="$(iam_ra_cluster_name_tag_from_resource "$arn")"
             if ! should_cleanup_cluster "$cluster_name"; then
                 continue
             fi
             id=$(echo "$anchor" | jq -r ".trustAnchorId")
-            aws rolesanywhere delete-trust-anchor --trust-anchor-id $id     
+            aws rolesanywhere delete-trust-anchor --trust-anchor-id $id
         fi
     done
 fi
@@ -485,8 +485,8 @@ for role in $(aws iam list-roles --query 'Roles[*].RoleName' --output text); do
         cluster_name="$(role_cluster_name_tag $role)"
         if ! should_cleanup_cluster "$cluster_name"; then
             continue
-        fi      
-        delete_role $role        
+        fi
+        delete_role $role
     fi
 done
 
@@ -556,7 +556,7 @@ for activation in $(aws ssm describe-activations --query "ActivationList[*].{Act
     for managed_instance_id in $(aws ssm describe-instance-information --filters "Key=ActivationIds,Values=$id" --query "InstanceInformationList[*].InstanceId" --output text); do
         aws ssm deregister-managed-instance --instance-id $managed_instance_id
     done
-  
+
     aws ssm delete-activation --activation-id $id
 done
 
@@ -569,7 +569,7 @@ fi
 
 for managed_instance in $(aws ssm describe-instance-information --max-items 100 --filters "$describe_instance_filters" --query "InstanceInformationList[*].{InstanceId:InstanceId,LastPingDateTime:LastPingDateTime,ResourceType:ResourceType}" --output json | jq -c '.[]'); do
     resource_type=$(echo $managed_instance | jq -r ".ResourceType")
-    if [ "$resource_type" != "ManagedInstance" ]; then  
+    if [ "$resource_type" != "ManagedInstance" ]; then
         continue
     fi
     last_ping=$(echo $managed_instance | jq -r ".LastPingDateTime")

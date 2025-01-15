@@ -17,11 +17,11 @@ Before using this template, ensure you have the following:
 ## Overview
 
 This template builds images for:
-- AWS: Creates Amazon Machine Images (AMI) for Ubuntu 22.04/24.04 and RHEL 8/9. You can provide your AWS CLI profile and the resulting AMI will appear in the users account. 
+- AWS: Creates Amazon Machine Images (AMI) for Ubuntu 22.04/24.04 and RHEL 8/9. You can provide your AWS CLI profile and the resulting AMI will appear in the users account.
 - vSphere: Creates VMware templates using an ISO for Ubuntu and RHEL and appear in the specified folder.
 - QEMU: Generates a Qcow2 or raw image for Ubuntu and RHEL.
 
-These images have `nodeadm` installed and configured to the specifiec credential provider. 
+These images have `nodeadm` installed and configured to the specifiec credential provider.
 
 
 ## Required Environment Variables
@@ -29,16 +29,16 @@ These images have `nodeadm` installed and configured to the specifiec credential
 Set the following environment variables before running the Packer build:
 
 ## Nodeadm Architecture Type
-- NODEADM_ARCH: String. Architecture of your system to install the proper nodeadm. Supports both x86_64 and ARM. Enter 'amd' or 'arm'. 
+- NODEADM_ARCH: String. Architecture of your system to install the proper nodeadm. Supports both x86_64 and ARM. Enter 'amd' or 'arm'.
 
 ## Packer SSH Password
-- PKR_SSH_PASSWORD: String. Packer uses the ssh_username and ssh_password variables to SSH into the created machine when provisioning. This needs to match the passwords used to create the initial user within the respective OS's `kickstart` or `user-data` files. The default is set as "builder" or "ubuntu" depending on the OS. When setting your password, make sure to change it within the corresponding `ks.cfg` or `user-data` file as well.  
+- PKR_SSH_PASSWORD: String. Packer uses the ssh_username and ssh_password variables to SSH into the created machine when provisioning. This needs to match the passwords used to create the initial user within the respective OS's `kickstart` or `user-data` files. The default is set as "builder" or "ubuntu" depending on the OS. When setting your password, make sure to change it within the corresponding `ks.cfg` or `user-data` file as well.
 
 ## ISO Image and Checksum
 Used primarily when building non-AMI images.
 
 - ISO_URL: String. URL of the ISO to use. Can be a web link to download from a server, or an absolute path to a local file
-- ISO_CHECKSUM: String. Associated checksum for the supplied ISO. 
+- ISO_CHECKSUM: String. Associated checksum for the supplied ISO.
 
 ## AWS Configuration
 - AWS_PROFILE: String. AWS profile for authentication.
@@ -49,7 +49,7 @@ Used primarily when building non-AMI images.
     - iam
 
 ## RHEL Subscription Manager
-- RH_USERNAME: String. RHEL subscription manager username. 
+- RH_USERNAME: String. RHEL subscription manager username.
 - RH_PASSWORD: String. RHEL subscription manager password.
 
 ## RHEL Version Number
@@ -60,13 +60,13 @@ Used primarily when building non-AMI images.
 
 ## vSphere Configuration
 - VSPHERE_SERVER: String. vSphere server address.
-- VSPHERE_USER: String. vSphere username. 
+- VSPHERE_USER: String. vSphere username.
 - VSPHERE_PASSWORD: String. Vsphere password.
-- VSPHERE_DATACENTER: String. vSphere datacenter name. 
-- VSPHERE_CLUSTER: String. Vsphere cluster name. 
+- VSPHERE_DATACENTER: String. vSphere datacenter name.
+- VSPHERE_CLUSTER: String. Vsphere cluster name.
 - VSPHERE_DATASTORE: String. vSphere datastore name.
 - VSPHERE_NETWORK: String. vSphere network name.
-- VSPHERE_OUTPUT_FOLDER: String. vSphere output folder for the templates. 
+- VSPHERE_OUTPUT_FOLDER: String. vSphere output folder for the templates.
 
 ## QEMU Configuration
 - PACKER_OUTPUT_FORMAT: String. Output format for the QEMU builder. Valid values are:
@@ -75,7 +75,7 @@ Used primarily when building non-AMI images.
 
 ## Setup Instructions
 
-1. Install Packer and the required plugins. 
+1. Install Packer and the required plugins.
 2. Set up your environment variables:
 
 ```
@@ -106,7 +106,7 @@ packer validate template.pkr.hcl
 
 ### Utilizing RHEL with Vsphere
 
-In order to serve the included kickstart files with RHEL 8 and 9 on Vsphere, we need to convert it into a OEMDRV image and supply it as an ISO to boot from. You will need to manually upload the resulting ISO into the Vsphere datastore folder you specify under `iso_paths`. This guide assumes `[ YOUR_DATASTORE ] packer_cache/YOUR_RHEL_KS.iso`, you can set the `VSPHERE_DATACENTER` environment variable to set this at any time. Name your kickstart ISO as `rhel8_ks.iso` or `rhel9_ks.iso` to keep it consistent with the path used in this template. If you want to name it something else, make sure to change the filename in the path for the corresponding version. 
+In order to serve the included kickstart files with RHEL 8 and 9 on Vsphere, we need to convert it into a OEMDRV image and supply it as an ISO to boot from. You will need to manually upload the resulting ISO into the Vsphere datastore folder you specify under `iso_paths`. This guide assumes `[ YOUR_DATASTORE ] packer_cache/YOUR_RHEL_KS.iso`, you can set the `VSPHERE_DATACENTER` environment variable to set this at any time. Name your kickstart ISO as `rhel8_ks.iso` or `rhel9_ks.iso` to keep it consistent with the path used in this template. If you want to name it something else, make sure to change the filename in the path for the corresponding version.
 
 To create a kick start ISO, you will need to download `genisoimage`:
 
@@ -116,7 +116,7 @@ sudo apt-get update
 sudo apt-get install genisoimage
 ```
 
-CentOS, RHEL, 
+CentOS, RHEL,
 ```
 sudo yum install genisoimage
 ```
@@ -136,7 +136,7 @@ genisoimage -o YOUR_RHEL_KS.iso -V "OEMDRV" /PATH/TO/YOUR/KICKSTART.cfg
 
 ### Build Images
 
-To build specific images, utilize the `-only` flag to leverage the general builder and specify the source needed. 
+To build specific images, utilize the `-only` flag to leverage the general builder and specify the source needed.
 
 
 ### AWS Images
@@ -203,8 +203,8 @@ packer build -only=general-build.qemu.rhel8 template.pkr.hcl
 packer build -only=general-build.qemu.rhel9 template.pkr.hcl
 ```
 
-## Pass nodeadm configuration through user-data 
-You can pass configuration for nodeadm in your user-data through cloud-init to configure and automatically connect hybrid nodes to your EKS cluster at host startup. Below is an example for how to accomplish this when using VMware vSphere as the infrastructure for your hybrid nodes. 
+## Pass nodeadm configuration through user-data
+You can pass configuration for nodeadm in your user-data through cloud-init to configure and automatically connect hybrid nodes to your EKS cluster at host startup. Below is an example for how to accomplish this when using VMware vSphere as the infrastructure for your hybrid nodes.
 
 1. Install the the `govc CLI` following the instructions in the govc [readme on GitHub](https://github.com/vmware/govmomi/blob/main/govc/README.md).
 2. After running the Packer build in the previous section and provisioning your template, you can clone your template to create multiple different nodes using the following. You must clone the template for each new VM you are creating that will be used for hybrid nodes. Replace the variables in the command below with the values for your environment. The VM_NAME in the command below is used as your NODE_NAME when you inject the names for your VMs via your metadata.yaml file.
@@ -214,7 +214,7 @@ govc vm.clone -vm "/PATH/TO/TEMPLATE" -ds="YOUR_DATASTORE" \
 -on=false -template=false -folder=/FOLDER/TO/SAVE/VM "VM_NAME"
 ```
 
-3. After cloning the template for each of your new VMs, create a `userdata.yaml` and `metadata.yaml`  for your VMs. Your VMs can share the same `userdata.yaml` and `metadata.yaml` and you will populate these on a per VM basis in the steps below. The nodeadm configuration is created and defined in the write_files section of your userdata.yaml. The example below uses AWS `SSM` hybrid activations as the on-premises credential provider for hybrid nodes. 
+3. After cloning the template for each of your new VMs, create a `userdata.yaml` and `metadata.yaml`  for your VMs. Your VMs can share the same `userdata.yaml` and `metadata.yaml` and you will populate these on a per VM basis in the steps below. The nodeadm configuration is created and defined in the write_files section of your userdata.yaml. The example below uses AWS `SSM` hybrid activations as the on-premises credential provider for hybrid nodes.
 
 **userdata.yaml**:
 
@@ -239,7 +239,7 @@ write_files:
               name: # Cluster Name
               region: # AWS region
           hybrid:
-              ssm: 
+              ssm:
                   activationCode: # Your ssm activation code
                   activationId: # Your ssm activation id
 

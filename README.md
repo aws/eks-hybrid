@@ -1,5 +1,5 @@
 # Amazon EKS Hybrid Nodes
-With [EKS Hybrid Nodes](https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-overview.html), you can use your on-premises and edge infrastructure as nodes in EKS clusters. The EKS Hybrid Nodes CLI (nodeadm) used for hybrid nodes lifecycle management differs from the nodeadm version used for bootstrapping EC2 instances as nodes in EKS clusters. You should not use the hybrid nodes nodeadm version for nodes running on EC2 instances. This repository is for the hybrid nodes nodeadm version. For the nodeadm version for EC2 instances, see the EKS AMI [GitHub repository](https://github.com/awslabs/amazon-eks-ami) and [documentation](https://awslabs.github.io/amazon-eks-ami/nodeadm/). 
+With [EKS Hybrid Nodes](https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-overview.html), you can use your on-premises and edge infrastructure as nodes in EKS clusters. The EKS Hybrid Nodes CLI (nodeadm) used for hybrid nodes lifecycle management differs from the nodeadm version used for bootstrapping EC2 instances as nodes in EKS clusters. You should not use the hybrid nodes nodeadm version for nodes running on EC2 instances. This repository is for the hybrid nodes nodeadm version. For the nodeadm version for EC2 instances, see the EKS AMI [GitHub repository](https://github.com/awslabs/amazon-eks-ami) and [documentation](https://awslabs.github.io/amazon-eks-ami/nodeadm/).
 
 ## nodeadm
 
@@ -39,7 +39,7 @@ The `install` command is used to install the artifacts and dependencies required
 
 Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential provider
 ```sh
-nodeadm install 1.31 --credential-provider ssm 
+nodeadm install 1.31 --credential-provider ssm
 ```
 Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential provider with a download timeout of 30 minutes.
 ```sh
@@ -72,7 +72,7 @@ nodeadm upgrade 1.31 --config-source file://nodeConfig.yaml --timeout 30m
 ```
 
 #### nodeadm uninstall
-The `nodeadm uninstall` command stops and removes the artifacts nodeadm installs during `nodeadm install`, including the kubelet and containerd. Note, the `nodeadm uninstall` command does not drain or delete your hybrid nodes from your cluster. You must run the drain and delete operations separately, see [Delete hybrid nodes](https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-delete.html) in the EKS User Guide for more information. 
+The `nodeadm uninstall` command stops and removes the artifacts nodeadm installs during `nodeadm install`, including the kubelet and containerd. Note, the `nodeadm uninstall` command does not drain or delete your hybrid nodes from your cluster. You must run the drain and delete operations separately, see [Delete hybrid nodes](https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-delete.html) in the EKS User Guide for more information.
 
 Uninstall nodeadm-installed components
 ```sh
@@ -141,7 +141,7 @@ spec:
       activationId:   # SSM hybrid activation id
 ```
 
-**Containerd configuration**: You can pass custom containerd configuration in your nodeadm configuration. The containerd configuration for nodeadm accepts in-line TOML. See the example below for how to configure containerd to disable deletion of unpacked image layers in the containerd content store. 
+**Containerd configuration**: You can pass custom containerd configuration in your nodeadm configuration. The containerd configuration for nodeadm accepts in-line TOML. See the example below for how to configure containerd to disable deletion of unpacked image layers in the containerd content store.
 
 ```yaml
 apiVersion: node.eks.aws/v1alpha1

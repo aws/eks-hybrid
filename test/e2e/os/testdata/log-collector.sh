@@ -13,6 +13,6 @@ for i in {1..5}; do curl --fail -s --retry 5 -L "$LOG_SCRIPT_URL" -o /tmp/eks-lo
 bash /tmp/eks-log-collector.sh --eks_hybrid=true
 
 if ls /var/log/eks_* > /dev/null 2>&1; then
-    curl --retry 5 --request PUT --upload-file /var/log/eks_* "${LOGS_UPLOAD_URL}"    
+    curl --retry 5 --request PUT --upload-file /var/log/eks_* "${LOGS_UPLOAD_URL}"
     rm /var/log/eks_*
 fi
