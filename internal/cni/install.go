@@ -53,5 +53,8 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 }
 
 func Uninstall() error {
+	if err := os.RemoveAll("/etc/cni/net.d"); err != nil {
+		return err
+	}
 	return os.RemoveAll(rootDir)
 }

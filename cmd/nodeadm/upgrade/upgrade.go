@@ -171,7 +171,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		PackageManager: packageManager,
 		SSMUninstall:   ssm.Uninstall,
 		Logger:         log,
-		CNIUninstall:   cni.NoOp,
+		CNIUninstall:   cni.Uninstall,
 	}
 
 	installer := &flows.Installer{

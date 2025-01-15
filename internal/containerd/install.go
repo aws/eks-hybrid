@@ -8,11 +8,16 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
+	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"
+
+	"github.com/containerd/containerd/integration/remote"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 type SourceName string
@@ -44,6 +49,38 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source, conta
 			return errors.Wrap(err, "failed to install containerd")
 		}
 		tracker.MarkContainerd(string(containerdSource))
+	}
+	return nil
+}
+
+func RemovePods() error {
+	client, err := remote.NewRuntimeService(ContainerRuntimeEndpoint, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	podSandboxes, err := client.ListPodSandbox(&v1.PodSandboxFilter{
+		State: &v1.PodSandboxStateValue{
+			State: v1.PodSandboxState_SANDBOX_READY,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, sandbox := range podSandboxes {
+		zap.L().Info("Stopping pod..", zap.String("pod", sandbox.Metadata.Name))
+		err := util.RetryExponentialBackoff(3, 2*time.Second, func() error {
+			if err := client.StopPodSandbox(sandbox.Id); err != nil {
+				return err
+			}
+			if err := client.RemovePodSandbox(sandbox.Id); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			zap.L().Info("ignored error stopping pod", zap.Error(err))
+		}
 	}
 	return nil
 }

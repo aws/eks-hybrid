@@ -369,6 +369,12 @@ var _ = Describe("Hybrid Nodes", func() {
 								logger:              test.logger,
 								remoteCommandRunner: test.remoteCommandRunner,
 							}
+
+							if test.skipCleanup {
+								test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
+								return
+							}
+
 							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
 						},
 						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")),
