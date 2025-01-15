@@ -21,8 +21,9 @@ func main() {
 	flaggy.SetName("nodeadm")
 	flaggy.SetDescription("From zero to Node faster than you can say Elastic Kubernetes Service")
 	flaggy.SetVersion(version.GitVersion)
-	flaggy.DefaultParser.AdditionalHelpPrepend = "\nhttp://github.com/aws/eks-hybrid"
+	flaggy.DefaultParser.AdditionalHelpPrepend = "http://github.com/aws/eks-hybrid"
 	flaggy.DefaultParser.ShowHelpOnUnexpected = true
+	flaggy.DefaultParser.SetHelpTemplate(cli.HelpTemplate)
 
 	opts := cli.NewGlobalOptions()
 
