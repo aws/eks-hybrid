@@ -38,11 +38,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
 )
 
-const (
-	ec2VolumeSize = int32(30)
-	podNamespace  = "default"
-)
-
 var (
 	filePath string
 	suite    *suiteConfiguration
