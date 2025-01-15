@@ -30,7 +30,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
-	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
@@ -255,15 +254,8 @@ var _ = Describe("Hybrid Nodes", func() {
 							)
 
 							test.logger.Info("Resetting hybrid node...")
-
-							uninstallNodeTest := uninstallNodeTest{
-								k8s:                 test.k8sClient,
-								ec2:                 instance,
-								provider:            provider,
-								logger:              test.logger,
-								remoteCommandRunner: test.remoteCommandRunner,
-							}
-							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
+							cleanNode := test.newCleanNode(provider, instance.IP)
+							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 							test.logger.Info("Rebooting EC2 Instance.")
 							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
@@ -276,7 +268,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								return
 							}
 
-							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
+							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 						},
 						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow")),
 					)
@@ -320,26 +312,16 @@ var _ = Describe("Hybrid Nodes", func() {
 								Succeed(), "node should have joined the cluster successfully",
 							)
 
-							upgradeNodeTest := upgradeNodeTest{
-								k8s:                 test.k8sClient,
-								cluster:             test.cluster,
-								ec2:                 instance,
-								logger:              test.logger,
-								remoteCommandRunner: test.remoteCommandRunner,
-							}
-							Expect(upgradeNodeTest.Run(ctx)).To(Succeed(), "node should have upgraded successfully")
-							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully after nodeadm upgrade")
+							Expect(test.newUpgradeNode(instance.IP).Run(ctx)).To(
+								Succeed(), "node should have upgraded successfully",
+							)
+
+							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
 
 							test.logger.Info("Resetting hybrid node...")
-
-							uninstallNodeTest := uninstallNodeTest{
-								k8s:                 test.k8sClient,
-								ec2:                 instance,
-								provider:            provider,
-								logger:              test.logger,
-								remoteCommandRunner: test.remoteCommandRunner,
-							}
-							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
+							Expect(test.newCleanNode(provider, instance.IP).Run(ctx)).To(
+								Succeed(), "node should have been reset successfully",
+							)
 						},
 						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")),
 					)
@@ -348,59 +330,6 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 	})
 })
-
-type uninstallNodeTest struct {
-	k8s                 *clientgo.Clientset
-	ec2                 ec2.Instance
-	provider            e2e.NodeadmCredentialsProvider
-	logger              logr.Logger
-	remoteCommandRunner commands.RemoteCommandRunner
-}
-
-func (u uninstallNodeTest) Run(ctx context.Context) error {
-	// get the hybrid node registered using nodeadm by the internal IP of an EC2 Instance
-	node, err := kubernetes.WaitForNode(ctx, u.k8s, u.ec2.IP, u.logger)
-	if err != nil {
-		return err
-	}
-	if node == nil {
-		return fmt.Errorf("returned node is nil")
-	}
-
-	u.logger.Info("Cordoning hybrid node...")
-	err = kubernetes.CordonNode(ctx, u.k8s, node, u.logger)
-	if err != nil {
-		return err
-	}
-
-	u.logger.Info("Draining hybrid node...")
-	err = kubernetes.DrainNode(ctx, u.k8s, node)
-	if err != nil {
-		return err
-	}
-
-	if err = nodeadm.RunNodeadmUninstall(ctx, u.remoteCommandRunner, u.ec2.IP); err != nil {
-		return err
-	}
-	u.logger.Info("Waiting for hybrid node to be not ready...")
-	if err = kubernetes.WaitForHybridNodeToBeNotReady(ctx, u.k8s, node.Name, u.logger); err != nil {
-		return err
-	}
-
-	u.logger.Info("Deleting hybrid node from the cluster", "hybrid node", node.Name)
-	if err = kubernetes.DeleteNode(ctx, u.k8s, node.Name); err != nil {
-		return err
-	}
-	u.logger.Info("Node deleted successfully", "node", node.Name)
-
-	u.logger.Info("Waiting for node to be unregistered", "node", node.Name)
-	if err = u.provider.VerifyUninstall(ctx, node.Name); err != nil {
-		return nil
-	}
-	u.logger.Info("Node unregistered successfully", "node", node.Name)
-
-	return nil
-}
 
 // readTestConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.
 func readTestConfig(configPath string) (*TestConfig, error) {
@@ -510,54 +439,22 @@ func (t *peeredVPCTest) newVerifyNode(nodeIP string) *kubernetes.VerifyNode {
 	}
 }
 
-type upgradeNodeTest struct {
-	cluster             *peered.HybridCluster
-	ec2                 ec2.Instance
-	k8s                 *clientgo.Clientset
-	logger              logr.Logger
-	remoteCommandRunner commands.RemoteCommandRunner
+func (t *peeredVPCTest) newCleanNode(provider e2e.NodeadmCredentialsProvider, nodeIP string) *nodeadm.CleanNode {
+	return &nodeadm.CleanNode{
+		K8s:                 t.k8sClient,
+		RemoteCommandRunner: t.remoteCommandRunner,
+		Verifier:            provider,
+		Logger:              t.logger,
+		NodeIP:              nodeIP,
+	}
 }
 
-func (u upgradeNodeTest) Run(ctx context.Context) error {
-	node, err := kubernetes.WaitForNode(ctx, u.k8s, u.ec2.IP, u.logger)
-	if err != nil {
-		return err
+func (t *peeredVPCTest) newUpgradeNode(nodeIP string) *nodeadm.UpgradeNode {
+	return &nodeadm.UpgradeNode{
+		K8s:                 t.k8sClient,
+		RemoteCommandRunner: t.remoteCommandRunner,
+		Logger:              t.logger,
+		NodeIP:              nodeIP,
+		TargetK8sVersion:    t.cluster.KubernetesVersion,
 	}
-	if node == nil {
-		return fmt.Errorf("returned node is nil")
-	}
-	nodeName := node.Name
-	u.logger.Info("Cordoning hybrid node...")
-	err = kubernetes.CordonNode(ctx, u.k8s, node, u.logger)
-	if err != nil {
-		return err
-	}
-
-	u.logger.Info("Draining hybrid node...")
-	err = kubernetes.DrainNode(ctx, u.k8s, node)
-	if err != nil {
-		return err
-	}
-
-	u.logger.Info("Upgrading hybrid node...")
-	if err = nodeadm.RunNodeadmUpgrade(ctx, u.remoteCommandRunner, u.ec2.IP, u.cluster.KubernetesVersion); err != nil {
-		return err
-	}
-
-	u.logger.Info("Uncordoning hybrid node...")
-	err = kubernetes.UncordonNode(ctx, u.k8s, node)
-	if err != nil {
-		return err
-	}
-
-	node, err = kubernetes.WaitForNodeToHaveVersion(ctx, u.k8s, node.Name, u.cluster.KubernetesVersion, u.logger)
-	if err != nil {
-		return err
-	}
-
-	if node.Name != nodeName {
-		return fmt.Errorf("node name should not have changed during upgrade %s : %s", nodeName, node.Name)
-	}
-
-	return nil
 }
