@@ -224,11 +224,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(os).NotTo(BeNil())
 							Expect(provider).NotTo(BeNil())
 
-							instanceName := fmt.Sprintf("EKSHybridCI-%s-%s-%s",
-								e2e.SanitizeForAWSName(test.cluster.Name),
-								e2e.SanitizeForAWSName(os.Name()),
-								e2e.SanitizeForAWSName(string(provider.Name())),
-							)
+							instanceName := test.instanceName("init", os, provider)
 
 							k8sVersion := test.cluster.KubernetesVersion
 							if test.overrideNodeK8sVersion != "" {
@@ -285,11 +281,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
 							}
 
-							instanceName := fmt.Sprintf("EKSHybridCI-upgrade-%s-%s-%s",
-								e2e.SanitizeForAWSName(test.cluster.Name),
-								e2e.SanitizeForAWSName(os.Name()),
-								e2e.SanitizeForAWSName(string(provider.Name())),
-							)
+							instanceName := test.instanceName("upgrade", os, provider)
 
 							nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
@@ -457,4 +449,13 @@ func (t *peeredVPCTest) newUpgradeNode(nodeIP string) *nodeadm.UpgradeNode {
 		NodeIP:              nodeIP,
 		TargetK8sVersion:    t.cluster.KubernetesVersion,
 	}
+}
+
+func (t *peeredVPCTest) instanceName(testName string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) string {
+	return fmt.Sprintf("EKSHybridCI-%s-%s-%s-%s",
+		testName,
+		e2e.SanitizeForAWSName(t.cluster.Name),
+		e2e.SanitizeForAWSName(os.Name()),
+		e2e.SanitizeForAWSName(string(provider.Name())),
+	)
 }
