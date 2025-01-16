@@ -4,8 +4,9 @@ import (
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
-	cleanup "github.com/aws/eks-hybrid/cmd/e2e-test/cleanup"
-	setup "github.com/aws/eks-hybrid/cmd/e2e-test/setup"
+	"github.com/aws/eks-hybrid/cmd/e2e-test/cleanup"
+	"github.com/aws/eks-hybrid/cmd/e2e-test/setup"
+	"github.com/aws/eks-hybrid/cmd/e2e-test/ssh"
 	"github.com/aws/eks-hybrid/internal/cli"
 )
 
@@ -16,6 +17,7 @@ func main() {
 	cmds := []cli.Command{
 		setup.NewCommand(),
 		cleanup.NewCommand(),
+		ssh.NewCommand(),
 	}
 
 	for _, cmd := range cmds {
