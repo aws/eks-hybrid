@@ -178,10 +178,11 @@ function iam_ra_cluster_name_tag_from_resource(){
 }
 
 # See above note about role tags
-function ssm_parameter_cluster_name_tag(){
+function ssm_resource_cluster_name_tag(){
     id="$1"
-    >&2 echo "($(pwd)) \$ command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json" 
-    tags="$(command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json 2>/dev/null)"
+    type="$2"
+    >&2 echo "($(pwd)) \$ command aws ssm list-tags-for-resource --resource-id $id --resource-type $type --query "{Tags:TagList}" --output json" 
+    tags="$(command aws ssm list-tags-for-resource --resource-id $id --resource-type $type --query "{Tags:TagList}" --output json 2>/dev/null)"
     if [ $? != 0 ]; then
         echo ""
         return        
@@ -536,7 +537,7 @@ done
 
 # see note about roles
 for ssm_parameter in $(aws ssm describe-parameters  --query "Parameters[*].Name" --output text); do
-    cluster_name="$(ssm_parameter_cluster_name_tag "$ssm_parameter")"
+    cluster_name="$(ssm_resource_cluster_name_tag "$ssm_parameter" "Parameter")"
     if ! should_cleanup_cluster "$cluster_name"; then
         continue
     fi
@@ -567,15 +568,15 @@ if [ -n "$CLUSTER_NAME" ]; then
     describe_instance_filters="Key=tag:$TEST_CLUSTER_TAG_KEY,Values=$CLUSTER_NAME"
 fi
 
-for managed_instance in $(aws ssm describe-instance-information --max-items 100 --filters "$describe_instance_filters" --query "InstanceInformationList[*].{InstanceId:InstanceId,LastPingDateTime:LastPingDateTime,ResourceType:ResourceType}" --output json | jq -c '.[]'); do
+for managed_instance in $(aws ssm describe-instance-information --max-items 100 --filters "$describe_instance_filters" --query "InstanceInformationList[*].{InstanceId:InstanceId,ResourceType:ResourceType}" --output json | jq -c '.[]'); do
     resource_type=$(echo $managed_instance | jq -r ".ResourceType")
     if [ "$resource_type" != "ManagedInstance" ]; then  
         continue
     fi
-    last_ping=$(echo $managed_instance | jq -r ".LastPingDateTime")
-    if ! older_than_one_day $last_ping; then
+    id=$(echo $managed_instance | jq -r ".InstanceId")
+    cluster_name="$(ssm_resource_cluster_name_tag "$id" "ManagedInstance")"
+    if ! should_cleanup_cluster "$cluster_name"; then
         continue
     fi
-    id=$(echo $managed_instance | jq -r ".InstanceId")
     aws ssm deregister-managed-instance --instance-id $id
 done
