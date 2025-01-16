@@ -21,7 +21,7 @@ const installHelpText = `Examples:
   nodeadm install 1.31 --credential-provider ssm
 
   # Install Kubernetes version 1.31 with AWS IAM Roles Anywhere as the credential provider and Docker as the containerd source
-  nodeadm install 1.31 --credential-provider ssm --containerd-source docker
+  nodeadm install 1.31 --credential-provider iam-ra --containerd-source docker
 
 Documentation:
   https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html`
