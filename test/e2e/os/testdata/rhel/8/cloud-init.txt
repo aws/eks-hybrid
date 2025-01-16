@@ -7,9 +7,11 @@ users:
 {{- if .RootPasswordHash }}
     hashed_passwd: {{ .RootPasswordHash }}
 {{- end }}
+{{- if .RhelUsername }}
 rh_subscription:
   username: {{ .RhelUsername }}
   password: {{ .RhelPassword }}
+{{- end }}
 package_update: true
 write_files:
   - content: |

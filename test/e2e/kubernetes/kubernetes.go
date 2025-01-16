@@ -31,7 +31,7 @@ import (
 const (
 	nodePodWaitTimeout       = 3 * time.Minute
 	nodePodDelayInterval     = 5 * time.Second
-	hybridNodeWaitTimeout    = 10 * time.Minute
+	hybridNodeWaitTimeout    = 12 * time.Minute
 	hybridNodeDelayInterval  = 5 * time.Second
 	hybridNodeUpgradeTimeout = 2 * time.Minute
 	nodeCordonDelayInterval  = 1 * time.Second

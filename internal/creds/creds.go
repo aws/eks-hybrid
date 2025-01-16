@@ -3,7 +3,10 @@ package creds
 import (
 	"fmt"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -41,4 +44,15 @@ func GetCredentialProviderFromInstalledArtifacts(artifacts *tracker.InstalledArt
 		return IamRolesAnywhereCredentialProvider, nil
 	}
 	return "", fmt.Errorf("no credential process found in installed artifacts")
+}
+
+func ValidateCredentialProvider(provider CredentialProvider) error {
+	osName, osVersion := system.GetOsNameWithVersion()
+	majorOsVersion := semver.Major("v" + osVersion)
+
+	if (osName == system.RhelOsName || osName == system.RockyOsName) && majorOsVersion == "v8" &&
+		provider == IamRolesAnywhereCredentialProvider {
+		return fmt.Errorf("iam-ra credential provider is not supported on %s %s based operating systems. Please use ssm credential provider", osName, osVersion)
+	}
+	return nil
 }

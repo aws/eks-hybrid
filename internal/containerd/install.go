@@ -71,8 +71,8 @@ func ValidateContainerdSource(source SourceName) error {
 			return fmt.Errorf("docker source for containerd is not supported on AL2023. Please provide `none` or `distro` to the --containerd-source flag")
 		}
 	} else if source == ContainerdSourceDistro {
-		if osName == system.RhelOsName {
-			return fmt.Errorf("distro source for containerd is not supported on RHEL. Please provide `none` or `docker` to the --containerd-source flag")
+		if osName == system.RhelOsName || osName == system.RockyOsName {
+			return fmt.Errorf("distro source for containerd is not supported on %s based operating systems. Please provide `none` or `docker` to the --containerd-source flag", osName)
 		}
 	}
 	return nil

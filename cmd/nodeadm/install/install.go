@@ -82,6 +82,9 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if err != nil {
 		return err
 	}
+	if err := creds.ValidateCredentialProvider(credentialProvider); err != nil {
+		return err
+	}
 
 	// Default containerd source to distro
 	if c.containerdSource == "" {

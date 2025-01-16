@@ -6,3 +6,5 @@ skipped_tests:
   - "ubuntu2004-amd64-docker.*"
   - "ubuntu2204-amd64-docker.*"
   - "ubuntu2404-amd64-docker.*"
+  - "rocky8-amd64.*iam-ra"
+  - "rocky8-arm64.*iam-ra"

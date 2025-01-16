@@ -3,11 +3,9 @@ package os
 import (
 	"context"
 	_ "embed"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 
 	"github.com/aws/eks-hybrid/test/e2e"
 )
@@ -70,7 +68,7 @@ func (r RedHat8) InstanceType(region string) string {
 func (r RedHat8) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
 	// there is no rhel ssm parameter
 	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-8*" "Name=architecture,Values=x86_64" --region us-west-2
-	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-8*", r.amiArchitecture)
+	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), rhelAWSAccount, "RHEL-8*", r.amiArchitecture)
 }
 
 func (r RedHat8) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
@@ -128,7 +126,7 @@ func (r RedHat9) InstanceType(region string) string {
 func (r RedHat9) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
 	// there is no rhel ssm parameter
 	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-9*" "Name=architecture,Values=x86_64" --region us-west-2
-	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-9*", r.amiArchitecture)
+	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), rhelAWSAccount, "RHEL-9*", r.amiArchitecture)
 }
 
 func (r RedHat9) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
@@ -150,57 +148,4 @@ func (r RedHat9) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) 
 	}
 
 	return executeTemplate(rhel9CloudInit, data)
-}
-
-// AMI represents an ec2 Image.
-type AMI struct {
-	ID        string
-	CreatedAt time.Time
-}
-
-// findLatestImage returns the most recent redhat image matching the amiPrefix and and arch
-func findLatestImage(ctx context.Context, client *ec2.Client, amiPrefix, arch string) (string, error) {
-	var latestAMI AMI
-
-	in := &ec2.DescribeImagesInput{
-		Owners:     []string{rhelAWSAccount},
-		Filters:    []types.Filter{{Name: aws.String("name"), Values: []string{amiPrefix}}, {Name: aws.String("architecture"), Values: []string{arch}}},
-		MaxResults: aws.Int32(100),
-	}
-
-	for {
-		l, err := client.DescribeImages(ctx, in)
-		if err != nil {
-			return "", err
-		}
-
-		if paginationDone(in, l) {
-			break
-		}
-
-		for _, i := range l.Images {
-			created, err := time.Parse(time.RFC3339Nano, *i.CreationDate)
-			if err != nil {
-				return "", err
-			}
-			if created.Compare(latestAMI.CreatedAt) > 0 {
-				latestAMI = AMI{
-					ID:        *i.ImageId,
-					CreatedAt: created,
-				}
-			}
-		}
-
-		in.NextToken = l.NextToken
-
-		if in.NextToken == nil {
-			break
-		}
-	}
-
-	return latestAMI.ID, nil
-}
-
-func paginationDone(in *ec2.DescribeImagesInput, out *ec2.DescribeImagesOutput) bool {
-	return (in.NextToken != nil && in.NextToken == out.NextToken) || len(out.Images) == 0
 }

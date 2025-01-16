@@ -182,12 +182,16 @@ var _ = Describe("Hybrid Nodes", func() {
 		osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		osystem.NewRocky8AMD(),
+		osystem.NewRocky8ARM(),
+		osystem.NewRocky9AMD(),
+		osystem.NewRocky9ARM(),
 	}
 
 	When("using peered VPC", func() {
 		var test *peeredVPCTest
 
-		// Here is where we setup everything we need for the test. This includes
+		// Here is where we set up everything we need for the test. This includes
 		// reading the setup output shared by the "before suite" code. This is the only place
 		// that should be reading that global state, anything needed in the test code should
 		// be passed down through "local" variable state. The global state should never be modified.

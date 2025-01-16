@@ -76,7 +76,7 @@ SKIP_FILE=$REPO_ROOT/hack/SKIPPED_TESTS.yaml
 # Extract skipped_tests field from SKIP_FILE file and join entries with ' || '
 skip=$(yq '.skipped_tests | join("|")' ${SKIP_FILE})
 
-# We expliclty specify procs instead of letting ginkgo decide (with -p) because in if not
+# We explicitly specify procs instead of letting ginkgo decide (with -p) because in if not
 # ginkgo will use all available CPUs, which could be a small number depending
 # on how the CI runner has been configured. However, even if only one CPU is avaialble,
 # there is still value in running the tests in multiple processes, since most of the work is
