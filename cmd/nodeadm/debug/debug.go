@@ -27,7 +27,7 @@ const debugHelpText = `Examples:
   nodeadm debug --config-source file://nodeConfig.yaml
 
 Documentation:
-  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html`
+  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_debug`
 
 func NewCommand() cli.Command {
 	debug := debug{}

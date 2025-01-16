@@ -31,7 +31,7 @@ const uninstallHelpText = `Examples:
   # Uninstall all components
   nodeadm uninstall
 
-  # Uninstall all components except pod-validation and node-validation
+  # Uninstall all components and skip pod-validation and node-validation pre-flight validation
   nodeadm uninstall --skip node-validation,pod-validation
 
 Documentation:

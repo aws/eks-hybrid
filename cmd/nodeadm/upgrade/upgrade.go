@@ -35,7 +35,7 @@ const upgradeHelpText = `Examples:
   # Upgrade all components
   nodeadm upgrade 1.31 --config-source file:///root/nodeConfig.yaml
 
-  # Upgrade all components with a maximum timeout
+  # Upgrade all components with a custom timeout
   nodeadm upgrade 1.31 --config-source file:///root/nodeConfig.yaml --timeout 1h23s
 
 Documentation:
