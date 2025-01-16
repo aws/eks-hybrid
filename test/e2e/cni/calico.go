@@ -69,5 +69,5 @@ func (c Calico) Deploy(ctx context.Context) error {
 
 	fmt.Println("Applying calico installation")
 
-	return upsertManifests(ctx, c.K8s, objs)
+	return upsertManifestsWithRetries(ctx, c.K8s, objs)
 }
