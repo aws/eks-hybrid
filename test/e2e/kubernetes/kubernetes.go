@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/kubectl/pkg/drain"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
@@ -441,7 +442,21 @@ func nodeCordon(node *corev1.Node) bool {
 	return false
 }
 
-func GetPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (string, error) {
+// Retries up to 5 times to avoid connection errors
+func GetPodLogsWithRetries(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (logs string, err error) {
+	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
+		// Retry any error type
+		return true
+	}, func() error {
+		var err error
+		logs, err = getPodLogs(ctx, k8s, name, namespace)
+		return err
+	})
+
+	return logs, err
+}
+
+func getPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (string, error) {
 	req := k8s.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
@@ -457,7 +472,21 @@ func GetPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace 
 	return buf.String(), nil
 }
 
-func ExecPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
+// Retries up to 5 times to avoid connection errors
+func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
+	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
+		// Retry any error type
+		return true
+	}, func() error {
+		var err error
+		stdout, stderr, err = execPod(ctx, config, k8s, name, namespace, cmd...)
+		return err
+	})
+
+	return stdout, stderr, err
+}
+
+func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
 	req := k8s.CoreV1().RESTClient().Post().Resource("pods").Name(name).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(
 		&v1.PodExecOptions{

@@ -49,7 +49,7 @@ func (t VerifyNode) Run(ctx context.Context) error {
 	t.Logger.Info(fmt.Sprintf("Pod %s created and running on node %s", podName, nodeName))
 
 	t.Logger.Info("Exec-ing nginx -version", "pod", podName)
-	stdout, stderr, err := ExecPod(ctx, t.ClientConfig, t.K8s, podName, testPodNamespace, "/sbin/nginx", "-version")
+	stdout, stderr, err := ExecPodWithRetries(ctx, t.ClientConfig, t.K8s, podName, testPodNamespace, "/sbin/nginx", "-version")
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (t VerifyNode) Run(ctx context.Context) error {
 	t.Logger.Info("Successfully exec'd nginx -version", "pod", podName)
 
 	t.Logger.Info("Checking logs for nginx output", "pod", podName)
-	logs, err := GetPodLogs(ctx, t.K8s, podName, testPodNamespace)
+	logs, err := GetPodLogsWithRetries(ctx, t.K8s, podName, testPodNamespace)
 	if err != nil {
 		return err
 	}
