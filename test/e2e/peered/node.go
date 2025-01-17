@@ -137,7 +137,9 @@ func (c Node) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) 
 
 // Cleanup collects logs and deletes the EC2 instance and Node object.
 func (c *Node) Cleanup(ctx context.Context, instance ec2.Instance) error {
-	err := c.collectLogs(ctx, "bundle", instance)
+	logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	err := c.collectLogs(logCtx, "bundle", instance)
 	if err != nil {
 		c.Logger.Error(err, "issue collecting logs")
 	}

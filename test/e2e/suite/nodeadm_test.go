@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -37,6 +38,8 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/s3"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
 )
+
+const deferCleanupTimeout = 5 * time.Minute
 
 var (
 	filePath string
@@ -131,7 +134,7 @@ var _ = SynchronizedBeforeSuite(
 				return
 			}
 			Expect(infra.Teardown(ctx)).To(Succeed(), "should teardown e2e resources")
-		})
+		}, NodeTimeout(deferCleanupTimeout))
 
 		suiteJson, err := yaml.Marshal(
 			&suiteConfiguration{
@@ -237,7 +240,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 							DeferCleanup(func(ctx context.Context) {
 								Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
-							})
+							}, NodeTimeout(deferCleanupTimeout))
 
 							verifyNode := test.newVerifyNode(instance.IP)
 							Expect(verifyNode.Run(ctx)).To(
@@ -261,7 +264,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 						},
-						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow", "init")),
+						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow", "init")),
 					)
 
 					DescribeTable("Upgrade nodeadm flow",
@@ -292,7 +295,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 							DeferCleanup(func(ctx context.Context) {
 								Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
-							})
+							}, NodeTimeout(deferCleanupTimeout))
 
 							verifyNode := test.newVerifyNode(instance.IP)
 							Expect(verifyNode.Run(ctx)).To(
@@ -310,7 +313,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								Succeed(), "node should have been reset successfully",
 							)
 						},
-						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")),
+						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")),
 					)
 				}
 			}
