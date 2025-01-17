@@ -55,7 +55,16 @@ type StackOutput struct {
 }
 
 func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
-	if err := s.deployStack(ctx, logger); err != nil {
+	// There is a race when creating the iam roles anywhere profile in cfn
+	// where the profile gets created, but cfn tries to get the tags before
+	// the resource has been fully created, attempt 1 retry
+	var err error
+	for range 2 {
+		if err = s.deployStack(ctx, logger); err == nil {
+			break
+		}
+	}
+	if err != nil {
 		return nil, err
 	}
 
@@ -118,9 +127,10 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 	if resp == nil || len(resp.Stacks) == 0 {
 		logger.Info("Creating hybrid nodes stack", "stackName", s.Name)
 		_, err = s.CFN.CreateStack(ctx, &cloudformation.CreateStackInput{
-			StackName:    aws.String(s.Name),
-			TemplateBody: aws.String(buf.String()),
-			Parameters:   params,
+			DisableRollback: aws.Bool(true),
+			StackName:       aws.String(s.Name),
+			TemplateBody:    aws.String(buf.String()),
+			Parameters:      params,
 			Capabilities: []cfnTypes.Capability{
 				"CAPABILITY_NAMED_IAM",
 			},
@@ -142,7 +152,8 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 	} else {
 		logger.Info("Updating hybrid nodes stack", "stackName", s.Name)
 		_, err = s.CFN.UpdateStack(ctx, &cloudformation.UpdateStackInput{
-			StackName: aws.String(s.Name),
+			DisableRollback: aws.Bool(true),
+			StackName:       aws.String(s.Name),
 			Capabilities: []cfnTypes.Capability{
 				"CAPABILITY_NAMED_IAM",
 			},
