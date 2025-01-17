@@ -21,10 +21,13 @@ func main() {
 	flaggy.SetName("nodeadm")
 	flaggy.SetDescription("From zero to Node faster than you can say Elastic Kubernetes Service")
 	flaggy.SetVersion(version.GitVersion)
-	flaggy.DefaultParser.AdditionalHelpPrepend = "\nhttp://github.com/aws/eks-hybrid"
+	flaggy.DefaultParser.AdditionalHelpPrepend = "http://github.com/aws/eks-hybrid"
 	flaggy.DefaultParser.ShowHelpOnUnexpected = true
-
 	opts := cli.NewGlobalOptions()
+	log := cli.NewLogger(opts)
+	if err := flaggy.DefaultParser.SetHelpTemplate(cli.HelpTemplate); err != nil {
+		log.Fatal("Failed to set help template:", zap.Error(err))
+	}
 
 	cmds := []cli.Command{
 		config.NewConfigCommand(),
@@ -39,8 +42,6 @@ func main() {
 		flaggy.AttachSubcommand(cmd.Flaggy(), 1)
 	}
 	flaggy.Parse()
-
-	log := cli.NewLogger(opts)
 
 	for _, cmd := range cmds {
 		if cmd.Flaggy().Used {
