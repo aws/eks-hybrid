@@ -1340,6 +1340,9 @@ spec:
                 wireguardRoutingRulePriority:
                   description: 'WireguardRoutingRulePriority controls the priority value to use for the Wireguard routing rule. [Default: 99]'
                   type: integer
+                wireguardThreadingEnabled:
+                  description: 'WireguardThreadingEnabled controls whether Wireguard has NAPI threading enabled. [Default: false]'
+                  type: boolean
                 workloadSourceSpoofing:
                   description: WorkloadSourceSpoofing controls whether pods can use the allowedSourcePrefixes annotation to send traffic with a source IP address that is not theirs. This is disabled by default. When set to "Any", pods can request any prefix.
                   pattern: ^(?i)(Disabled|Any)?$
@@ -19806,7 +19809,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: {{.ContainerRegistry}}/tigera/operator:v1.36.0
+          image: {{.ContainerRegistry}}/tigera/operator:v1.36.2
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -19824,7 +19827,7 @@ spec:
             - name: OPERATOR_NAME
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
-              value: v1.36.0
+              value: v1.36.2
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint
