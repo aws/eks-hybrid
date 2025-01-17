@@ -22,7 +22,7 @@ const initHelpText = `Examples:
   nodeadm init --config-source file://nodeConfig.yaml
 
 Documentation:
-  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html`
+  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_init`
 
 func NewInitCommand() cli.Command {
 	init := initCmd{}

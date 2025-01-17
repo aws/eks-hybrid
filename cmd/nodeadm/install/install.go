@@ -24,7 +24,7 @@ const installHelpText = `Examples:
   nodeadm install 1.31 --credential-provider iam-ra --containerd-source docker
 
 Documentation:
-  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html`
+  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_install`
 
 func NewCommand() cli.Command {
 	cmd := command{

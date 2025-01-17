@@ -39,7 +39,7 @@ const upgradeHelpText = `Examples:
   nodeadm upgrade 1.31 --config-source file:///root/nodeConfig.yaml --timeout 1h23s
 
 Documentation:
-  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html`
+  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_upgrade`
 
 func NewUpgradeCommand() cli.Command {
 	cmd := command{
