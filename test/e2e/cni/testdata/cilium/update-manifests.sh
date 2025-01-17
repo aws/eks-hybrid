@@ -68,6 +68,10 @@ preflight:
     digest: $CILIUM_DIGEST
 EOF
 
-helm template cilium cilium/cilium --version ${CILIUM_VERSION:1} --namespace kube-system --values ./cilium-values.yaml --set ipam.operator.clusterPoolIPv4PodCIDRList='\{\{.PodCIDR\}\}' >  ./cilium-template.yaml
+helm repo add cilium https://helm.cilium.io/
+helm repo update cilium
+# the cilium chart generates different apparmor configuration depending on if the kube version is 1.29 and less vs 1.30 and above
+helm template cilium cilium/cilium --version ${CILIUM_VERSION:1} --kube-version 1.29 --namespace kube-system --values ./cilium-values.yaml --set ipam.operator.clusterPoolIPv4PodCIDRList='\{\{.PodCIDR\}\}' >  ./cilium-template-129.yaml
+helm template cilium cilium/cilium --version ${CILIUM_VERSION:1} --kube-version 1.30 --namespace kube-system --values ./cilium-values.yaml --set ipam.operator.clusterPoolIPv4PodCIDRList='\{\{.PodCIDR\}\}' >  ./cilium-template-130.yaml
 
 echo "$CILIUM_VERSION" > VERSION

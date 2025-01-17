@@ -94,7 +94,7 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 
 	switch test.Cni {
 	case ciliumCni:
-		cilium := cni.NewCilium(dynamicK8s, test.HybridNetwork.PodCidr, test.ClusterRegion)
+		cilium := cni.NewCilium(dynamicK8s, test.HybridNetwork.PodCidr, test.ClusterRegion, test.KubernetesVersion)
 		c.logger.Info("Installing cilium on cluster...", "cluster", test.ClusterName)
 		if err = cilium.Deploy(ctx); err != nil {
 			return fmt.Errorf("installing cilium for %s EKS cluster: %w", test.KubernetesVersion, err)

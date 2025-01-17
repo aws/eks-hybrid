@@ -12,17 +12,28 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
-//go:embed testdata/cilium/cilium-template.yaml
-var ciliumTemplate []byte
+// For kubernetes versions less than 1.30, the cilium template uses
+// annonations to add AppArmor configuration
+//
+//go:embed testdata/cilium/cilium-template-129.yaml
+var ciliumTemplate129 []byte
+
+// For kubernetes versions 1.30 and above, the AppArmor configuration
+// is in spec.securityContext which is only available in 1.30+
+//
+//go:embed testdata/cilium/cilium-template-130.yaml
+var ciliumTemplate130 []byte
 
 type Cilium struct {
-	k8s dynamic.Interface
+	k8s               dynamic.Interface
+	kubernetesVersion string
 	// podCIDR is the cluster level CIDR to be use for Pods. It needs to be big enough for
 	// Hybrid Nodes.
 	//
@@ -31,16 +42,21 @@ type Cilium struct {
 	region  string
 }
 
-func NewCilium(k8s dynamic.Interface, podCIDR, region string) Cilium {
+func NewCilium(k8s dynamic.Interface, podCIDR, region, kubernetesVersion string) Cilium {
 	return Cilium{
-		k8s:     k8s,
-		podCIDR: podCIDR,
-		region:  region,
+		k8s:               k8s,
+		kubernetesVersion: kubernetesVersion,
+		podCIDR:           podCIDR,
+		region:            region,
 	}
 }
 
 // Deploy creates or updates the Cilium reosurces.
 func (c Cilium) Deploy(ctx context.Context) error {
+	ciliumTemplate, err := ciliumTemplate(c.kubernetesVersion)
+	if err != nil {
+		return err
+	}
 	tmpl, err := template.New("cilium").Parse(string(ciliumTemplate))
 	if err != nil {
 		return err
@@ -107,4 +123,15 @@ func upsertManifest(ctx context.Context, k8s dynamic.Interface, obj unstructured
 	}
 
 	return nil
+}
+
+func ciliumTemplate(kubernetesVersion string) ([]byte, error) {
+	kubeVersion, err := version.ParseSemantic(kubernetesVersion + ".0")
+	if err != nil {
+		return nil, fmt.Errorf("parsing version: %v", err)
+	}
+	if kubeVersion.LessThan(version.MustParseSemantic("1.30.0")) {
+		return ciliumTemplate129, nil
+	}
+	return ciliumTemplate130, nil
 }
