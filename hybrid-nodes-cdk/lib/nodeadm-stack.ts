@@ -457,6 +457,16 @@ export class NodeadmBuildStack extends cdk.Stack {
         }),
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
+          actions: ['eks:CreateAddon'],
+          resources: [`arn:aws:eks:${this.region}:${this.account}:cluster/*`]
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['eks:DeleteAddon', 'eks:DescribeAddon'],
+          resources: [`arn:aws:eks:${this.region}:${this.account}:addon/*`],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
           actions: [
             'cloudformation:DescribeStacks',
             'cloudformation:UpdateStack',
