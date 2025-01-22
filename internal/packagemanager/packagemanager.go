@@ -159,7 +159,7 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 
 // UninstallPackageManagerDockerRepo uninstalls docker repos installed by package managers when containerd source is docker
 func (pm *DistroPackageManager) UninstallPackageManagerDockerRepo() error {
-	removeRepoFile := func(path string, pkgType string) error {
+	removeRepoFile := func(path, pkgType string) error {
 		_, err := os.Stat(path)
 
 		if os.IsNotExist(err) {
