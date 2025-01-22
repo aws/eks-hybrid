@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
 	"time"
@@ -33,6 +34,7 @@ const (
 	ubuntuDockerGpgKeyPath      = "/etc/apt/keyrings/docker.asc"
 	ubuntuDockerGpgKeyFilePerms = 0o755
 	aptDockerRepoSourceFilePath = "/etc/apt/sources.list.d/docker.list"
+	yumDockerRepoSourceFilePath = "/etc/yum.repos.d/docker-ce.repo"
 
 	containerdDistroPkgName = "containerd"
 	containerdDockerPkgName = "containerd.io"
@@ -153,6 +155,37 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 		return errors.Wrapf(err, "failed running commands to configure package manager")
 	}
 	return nil
+}
+
+// UninstallPackageManagerDockerRepo uninstalls docker repos installed by package managers when containerd source is docker
+func (pm *DistroPackageManager) UninstallPackageManagerDockerRepo() error {
+	removeRepoFile := func(path string, pkgType string) error {
+		_, err := os.Stat(path)
+
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return errors.Wrapf(err, "encountered error while trying to reach %s docker repo file at %s",
+				pkgType, path)
+		}
+
+		if err := os.Remove(path); err != nil {
+			return errors.Wrapf(err, "failed to remove %s docker repo from %s",
+				pkgType, path)
+		}
+
+		return nil
+	}
+
+	switch pm.manager {
+	case yumPackageManager:
+		return removeRepoFile(yumDockerRepoSourceFilePath, yumPackageManager)
+	case aptPackageManager:
+		return removeRepoFile(aptDockerRepoSourceFilePath, aptPackageManager)
+	default:
+		return nil
+	}
 }
 
 // updateAllPackages updates all packages and repo metadata on the system

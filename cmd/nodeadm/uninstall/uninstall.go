@@ -116,6 +116,13 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	// Only removes containerd repos installed by nodeadm (tracked in tracker file)
+	if containerdSource == containerd.ContainerdSourceDocker {
+		if err := packageManager.UninstallPackageManagerDockerRepo(); err != nil {
+			return err
+		}
+	}
+
 	uninstaller := &flows.Uninstaller{
 		Artifacts:      installed.Artifacts,
 		DaemonManager:  daemonManager,
