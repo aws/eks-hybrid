@@ -158,7 +158,7 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 }
 
 // UninstallPackageManagerDockerRepo uninstalls docker repos installed by package managers when containerd source is docker
-func (pm *DistroPackageManager) UninstallPackageManagerDockerRepo() error {
+func (pm *DistroPackageManager) uninstallPackageManagerDockerRepo() error {
 	removeRepoFile := func(path, pkgType string) error {
 		_, err := os.Stat(path)
 
@@ -182,6 +182,12 @@ func (pm *DistroPackageManager) UninstallPackageManagerDockerRepo() error {
 	case yumPackageManager:
 		return removeRepoFile(yumDockerRepoSourceFilePath, yumPackageManager)
 	case aptPackageManager:
+		if err := os.Remove(ubuntuDockerGpgKeyPath); err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+		}
+
 		return removeRepoFile(aptDockerRepoSourceFilePath, aptPackageManager)
 	default:
 		return nil
@@ -253,6 +259,18 @@ func (pm *DistroPackageManager) runcPackage() artifact.Package {
 		artifact.NewCmd(pm.manager, pm.installVerb, runcPkgName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, runcPkgName, "-y"),
 	)
+}
+
+// CleanupPackageManagerInstallArtifacts cleans up any artifacts used by package manager during nodeadm install process
+func (pm *DistroPackageManager) CleanupPackageManagerInstallArtifacts() error {
+	// Removes docker repos if installed by nodeadm ("Containerd: docker" was set in tracker file)
+	if pm.dockerRepo != "" {
+		if err := pm.uninstallPackageManagerDockerRepo(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func getOsPackageManager() (string, error) {
