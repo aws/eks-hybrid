@@ -477,4 +477,3 @@ func (t *peeredVPCTest) newVerifyPodIdentityAddon() *addon.VerifyPodIdentityAddo
 		EKSClient: t.eksClient,
 	}
 }
-
