@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,6 +35,8 @@ const (
 	hybridNodeUpgradeTimeout = 2 * time.Minute
 	nodeCordonDelayInterval  = 1 * time.Second
 	nodeCordonTimeout        = 30 * time.Second
+	daemonSetWaitTimeout     = 3 * time.Minute
+	daemonSetDelayInternal   = 5 * time.Second
 	MinimumVersion           = "1.25"
 )
 
@@ -513,15 +516,31 @@ func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Cli
 	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
-func GetDaemonSet(ctx context.Context, k8s *kubernetes.Clientset, namespace, name string, logger logr.Logger) error {
-	daemonSet, err := k8s.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+func GetDaemonSet(ctx context.Context, k8s *kubernetes.Clientset, namespace, name string, logger logr.Logger) (*appsv1.DaemonSet, error) {
+	var foundDaemonSet *appsv1.DaemonSet
+	consecutiveErrors := 0
+	err := wait.PollUntilContextTimeout(ctx, daemonSetDelayInternal, daemonSetWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
+		daemonSet, err := k8s.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting daemonSet %s: %w", name, err)
+			}
+			logger.Info("Retryable error getting DaemonSet. Continuing to poll", "name", name, "error", err)
+			return false, nil // continue polling
+		}
+
+		consecutiveErrors = 0
+		if daemonSet != nil {
+			foundDaemonSet = daemonSet
+			return true, nil
+		}
+
+		return false, nil // continue polling
+	})
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("waiting for DaemonSet %s to be ready: %w", name, err)
 	}
 
-	if daemonSet == nil {
-		return fmt.Errorf("DaemonSet %s does not exist", name)
-	}
-
-	return nil
+	return foundDaemonSet, nil
 }
