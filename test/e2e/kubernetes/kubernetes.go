@@ -516,7 +516,7 @@ func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Cli
 	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
-func GetDaemonSet(ctx context.Context, k8s *kubernetes.Clientset, namespace, name string, logger logr.Logger) (*appsv1.DaemonSet, error) {
+func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) (*appsv1.DaemonSet, error) {
 	var foundDaemonSet *appsv1.DaemonSet
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, daemonSetDelayInternal, daemonSetWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
