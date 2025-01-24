@@ -47,14 +47,17 @@ func (a Addon) WaitUtilActive(ctx context.Context, client *eks.Client, logger lo
 		if err != nil {
 			logger.Info("Failed to describe cluster add-on", "Error", err)
 		} else {
-			if (describeAddonOutput.Addon.Status != types.AddonStatusCreating) && (describeAddonOutput.Addon.Status != types.AddonStatusActive) {
-				return fmt.Errorf("add-on %s is not in CREATING or ACTIVE status", a.Name)
-			}
-
-			if describeAddonOutput.Addon.Status == types.AddonStatusActive {
+			addon := describeAddonOutput.Addon
+			if addon.Status == types.AddonStatusActive {
 				return nil
 			}
-			logger.Info("Add-on is not in ACTIVE status yet", "ClusterAddon", a.Name)
+
+			if addon.Status == types.AddonStatusCreateFailed ||
+				addon.Status == types.AddonStatusDegraded ||
+				addon.Status == types.AddonStatusDeleteFailed ||
+				addon.Status == types.AddonStatusUpdateFailed {
+				return fmt.Errorf("add-on %s is in errored terminal status: %s", a.Name, addon.Status)
+			}
 		}
 
 		logger.Info("Wait for add-on to be ACTIVE", "ClusterAddon", a.Name)
