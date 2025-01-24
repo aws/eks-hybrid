@@ -262,7 +262,7 @@ func (pm *DistroPackageManager) runcPackage() artifact.Package {
 }
 
 // CleanupPackageManagerInstallArtifacts cleans up any artifacts used by package manager during nodeadm install process
-func (pm *DistroPackageManager) CleanupPackageManagerInstallArtifacts() error {
+func (pm *DistroPackageManager) Cleanup() error {
 	// Removes docker repos if installed by nodeadm ("Containerd: docker" was set in tracker file)
 	if pm.dockerRepo != "" {
 		if err := pm.uninstallPackageManagerDockerRepo(); err != nil {
