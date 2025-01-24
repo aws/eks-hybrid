@@ -92,7 +92,7 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 
 	err = podIdentityAddon.Create(ctx, c.eks, c.logger)
 	if err != nil {
-		return fmt.Errorf("error creating add-on %s for EKS cluster: %w", podIdentityAddon, err)
+		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon, err)
 	}
 
 	kubeconfig := KubeconfigPath(test.ClusterName)

@@ -34,7 +34,7 @@ func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logge
 	return err
 }
 
-func (a Addon) Get(ctx context.Context, client *eks.Client, logger logr.Logger) error {
+func (a Addon) WaitUtilActive(ctx context.Context, client *eks.Client, logger logr.Logger) error {
 	logger.Info("Describe cluster add-on", "ClusterAddon", a.Name)
 
 	params := &eks.DescribeAddonInput{
@@ -47,6 +47,10 @@ func (a Addon) Get(ctx context.Context, client *eks.Client, logger logr.Logger) 
 		if err != nil {
 			logger.Info("Failed to describe cluster add-on", "Error", err)
 		} else {
+			if (describeAddonOutput.Addon.Status != types.AddonStatusCreating) && (describeAddonOutput.Addon.Status != types.AddonStatusActive) {
+				return fmt.Errorf("add-on %s is not in CREATING or ACTIVE status", a.Name)
+			}
+
 			if describeAddonOutput.Addon.Status == types.AddonStatusActive {
 				return nil
 			}
