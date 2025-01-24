@@ -137,7 +137,7 @@ func (u *Uninstaller) uninstallBinaries(ctx context.Context) error {
 
 // cleanup removes directories or files that are not individually owned by single component
 func (u *Uninstaller) cleanup() error {
-	if err := u.PackageManager.CleanupPackageManagerInstallArtifacts(); err != nil {
+	if err := u.PackageManager.Cleanup(); err != nil {
 		return err
 	}
 

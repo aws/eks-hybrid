@@ -157,7 +157,7 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	return nil
 }
 
-// UninstallPackageManagerDockerRepo uninstalls docker repos installed by package managers when containerd source is docker
+// uninstallDockerRepo uninstalls docker repos installed by package managers when containerd source is docker
 func (pm *DistroPackageManager) uninstallDockerRepo() error {
 	removeRepoFile := func(path, pkgType string) error {
 		_, err := os.Stat(path)
@@ -261,11 +261,11 @@ func (pm *DistroPackageManager) runcPackage() artifact.Package {
 	)
 }
 
-// CleanupPackageManagerInstallArtifacts cleans up any artifacts used by package manager during nodeadm install process
+// Cleanup cleans up any artifacts used by package manager during nodeadm install process
 func (pm *DistroPackageManager) Cleanup() error {
 	// Removes docker repos if installed by nodeadm ("Containerd: docker" was set in tracker file)
 	if pm.dockerRepo != "" {
-		if err := pm.uninstallPackageManagerDockerRepo(); err != nil {
+		if err := pm.uninstallDockerRepo(); err != nil {
 			return err
 		}
 	}
