@@ -7,7 +7,7 @@ import s3 = require('aws-cdk-lib/aws-s3');
 import iam = require('aws-cdk-lib/aws-iam');
 import codepipeline_actions = require('aws-cdk-lib/aws-codepipeline-actions');
 import * as fs from 'fs';
-import { kubernetesVersions, cnis, eksHybridBetaBucketARN, eksReleaseManifestHost, builderBaseImage, githubRepo, githubBranch, requiredEnvVars } from './constants';
+import { kubernetesVersions, cnis, eksHybridBetaBucketARN, eksReleaseManifestHost, builderBaseImage, githubRepo, githubBranch, requiredEnvVars, betaEksEndpoint, betaKubeVersions } from './constants';
 
 export class NodeadmBuildStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
@@ -560,6 +560,13 @@ export class NodeadmBuildStack extends cdk.Stack {
             CNI: {
               value: cni,
             },
+            ...(betaKubeVersions.includes(kubeVersion)
+              ? {
+                  ENDPOINT: {
+                    value: betaEksEndpoint,
+                  },
+                }
+              : {}),
           },
         });
         e2eTestsActions.push(e2eTestsAction);

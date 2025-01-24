@@ -21,8 +21,8 @@ type Infrastructure struct {
 }
 
 // Setup creates the necessary infrastructure for credentials providers to be used by nodeadm.
-func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterName string) (*Infrastructure, error) {
-	credsInfra, err := credentials.Setup(ctx, logger, config, clusterName)
+func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterName, endpoint string) (*Infrastructure, error) {
+	credsInfra, err := credentials.Setup(ctx, logger, config, clusterName, endpoint)
 	if err != nil {
 		return nil, err
 	}

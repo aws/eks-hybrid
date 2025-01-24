@@ -22,9 +22,12 @@ type Infrastructure struct {
 	logger logr.Logger
 }
 
-// Setup creates the necessary infrastructure for credentials providers to be used by nodeadm.
-func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterName string) (*Infrastructure, error) {
-	eksClient := eks.NewFromConfig(config)
+// Setup creates the necessary infrastructure for credentials providers to be used by nodeadm. Endpoint is
+// used by EKS client and will use default endpoint if an empty string is passed.
+func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterName, endpoint string) (*Infrastructure, error) {
+	eksClient := eks.NewFromConfig(config, func(o *eks.Options) {
+		o.EndpointResolverV2 = &e2e.EksResolverV2{Endpoint: endpoint}
+	})
 	cfnClient := cloudformation.NewFromConfig(config)
 	iamClient := iam.NewFromConfig(config)
 
@@ -48,6 +51,7 @@ func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterNa
 		IAMRolesAnywhereCACert: rolesAnywhereCA.CertPEM,
 		CFN:                    cfnClient,
 		IAM:                    iamClient,
+		EKS:                    eksClient,
 	}
 	stackOut, err := stack.Deploy(ctx, logger)
 	if err != nil {

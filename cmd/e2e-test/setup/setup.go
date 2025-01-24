@@ -57,7 +57,7 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	logger := e2e.NewLogger()
-	create := cluster.NewCreate(aws, logger)
+	create := cluster.NewCreate(aws, logger, testResources.Endpoint)
 
 	logger.Info("Creating cluster infrastructure for E2E tests...")
 	if err := create.Run(ctx, testResources); err != nil {

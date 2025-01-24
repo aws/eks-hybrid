@@ -57,7 +57,7 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}
 
-	delete := cluster.NewDelete(aws, logger)
+	delete := cluster.NewDelete(aws, logger, deleteCluster.Endpoint)
 
 	logger.Info("Cleaning up E2E cluster resources...")
 	if err = delete.Run(ctx, deleteCluster); err != nil {

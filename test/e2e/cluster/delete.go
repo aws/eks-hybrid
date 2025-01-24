@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/go-logr/logr"
 
+	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
@@ -19,6 +20,7 @@ const deleteClusterTimeout = 5 * time.Minute
 type DeleteInput struct {
 	ClusterName   string `yaml:"clusterName"`
 	ClusterRegion string `yaml:"clusterRegion"`
+	Endpoint      string `yaml:"endpoint"`
 }
 
 type Delete struct {
@@ -27,10 +29,16 @@ type Delete struct {
 	stack  *stack
 }
 
-func NewDelete(aws aws.Config, logger logr.Logger) Delete {
+// NewDelete creates a new workflow to delete an EKS cluster. The EKS client will use
+// the specified endpoint or the default endpoint if empty string is passed.
+func NewDelete(aws aws.Config, logger logr.Logger, endpoint string) Delete {
 	return Delete{
 		logger: logger,
-		eks:    eks.NewFromConfig(aws),
+		eks: eks.NewFromConfig(aws, func(o *eks.Options) {
+			o.EndpointResolverV2 = &e2e.EksResolverV2{
+				Endpoint: endpoint,
+			}
+		}),
 		stack: &stack{
 			cfn:    cloudformation.NewFromConfig(aws),
 			logger: logger,

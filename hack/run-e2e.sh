@@ -28,6 +28,7 @@ CNI="${4?Please specify the cni}"
 NODEADM_AMD_URL="${5?Please specify the nodeadm amd url}"
 NODEADM_ARM_URL="${6?Please specify the nodeadm arm url}"
 LOGS_BUCKET="${7-}"
+ENDPOINT="${8-}"
 
 CONFIG_DIR="$REPO_ROOT/e2e-config"
 ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
@@ -39,6 +40,7 @@ RESOURCES_YAML=$CONFIG_DIR/e2e-setup-spec.yaml
 cat <<EOF > $RESOURCES_YAML
 clusterName: $CLUSTER_NAME
 clusterRegion: $REGION
+endpoint: "$ENDPOINT"
 kubernetesVersion: $KUBERNETES_VERSION
 cni: $CNI
 clusterNetwork:
@@ -69,6 +71,7 @@ clusterRegion: "$REGION"
 nodeadmUrlAMD: "$NODEADM_AMD_URL"
 nodeadmUrlARM: "$NODEADM_ARM_URL"
 logsBucket: "$LOGS_BUCKET"
+endpoint: "$ENDPOINT"
 EOF
 
 

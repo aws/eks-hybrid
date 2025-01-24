@@ -2,6 +2,7 @@ package init
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/integrii/flaggy"
@@ -9,6 +10,7 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
@@ -71,6 +73,10 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			return nil
 		} else if err != nil {
 			return err
+		}
+
+		if err := containerd.ValidateSystemdUnitFile(); err != nil {
+			return fmt.Errorf("a systemd unit file for containerd is required to init the node: %w", err)
 		}
 	}
 

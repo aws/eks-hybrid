@@ -142,6 +142,9 @@ func (c *Node) Cleanup(ctx context.Context, instance ec2.Instance) error {
 	err := c.collectLogs(logCtx, "bundle", instance)
 	if err != nil {
 		c.Logger.Error(err, "issue collecting logs")
+		if err := ec2.LogEC2InstanceDescribe(ctx, c.EC2, instance.ID, c.Logger); err != nil {
+			c.Logger.Error(err, "describing instance")
+		}
 	}
 	if c.SkipDelete {
 		c.Logger.Info("Skipping EC2 Instance deletion", "instanceID", instance.ID)

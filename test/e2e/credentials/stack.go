@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	cfnTypes "github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/smithy-go"
@@ -36,6 +37,7 @@ type Stack struct {
 	ClusterArn             string
 	CFN                    *cloudformation.Client
 	IAM                    *iam.Client
+	EKS                    *eks.Client
 	IAMRolesAnywhereCACert []byte
 }
 
@@ -69,6 +71,23 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 	}
 
 	output, err := s.readStackOutput(ctx, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.EKS.CreateAccessEntry(ctx, &eks.CreateAccessEntryInput{
+		ClusterName:  &s.ClusterName,
+		PrincipalArn: &output.SSMNodeRoleARN,
+		Type:         aws.String("HYBRID_LINUX"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.EKS.CreateAccessEntry(ctx, &eks.CreateAccessEntryInput{
+		ClusterName:  &s.ClusterName,
+		PrincipalArn: &output.IRANodeRoleARN,
+		Type:         aws.String("HYBRID_LINUX"),
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -8,16 +8,21 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/aws/smithy-go"
+	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
+
+const nodeRunningTimeout = 5 * time.Minute
 
 // instanceConfig holds the configuration for the EC2 instance.
 type InstanceConfig struct {
@@ -148,6 +153,28 @@ func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 	if _, err := client.TerminateInstances(ctx, terminateInstanceInput); err != nil {
 		return err
 	}
+	return nil
+}
+
+func WaitForEC2InstanceRunning(ctx context.Context, ec2Client *ec2.Client, instanceID string) error {
+	waiter := ec2.NewInstanceRunningWaiter(ec2Client, func(isowo *ec2.InstanceRunningWaiterOptions) {
+		isowo.LogWaitAttempts = true
+	})
+	return waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instanceID}}, nodeRunningTimeout)
+}
+
+func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instanceID string, logger logr.Logger) error {
+	instances, ec2Err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+		InstanceIds: []string{instanceID},
+	})
+	if ec2Err != nil {
+		return fmt.Errorf("describing instance %s: %w", instanceID, ec2Err)
+	}
+
+	if len(instances.Reservations) == 0 || len(instances.Reservations[0].Instances) == 0 {
+		return fmt.Errorf("no instance found with ID %s", instanceID)
+	}
+	logger.Info(awsutil.Prettify(instances.Reservations[0].Instances))
 	return nil
 }
 

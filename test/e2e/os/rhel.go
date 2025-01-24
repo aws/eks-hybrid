@@ -3,11 +3,14 @@ package os
 import (
 	"context"
 	_ "embed"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"golang.org/x/mod/semver"
 
 	"github.com/aws/eks-hybrid/test/e2e"
 )
@@ -156,9 +159,12 @@ func (r RedHat9) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) 
 type AMI struct {
 	ID        string
 	CreatedAt time.Time
+	Version   string
 }
 
 // findLatestImage returns the most recent redhat image matching the amiPrefix and and arch
+// this assumes that the return ami names follow the pattern `{amiPrefix}.<minor>.<patch?>_`
+// ex: amiPrefix: RHEL-8*, amiName: RHEL-8.8.0_HVM-20250116-x86_64-2339-Hourly2-GP3 or RHEL-8.8_HVM-20250116-x86_64-2339-Hourly2-GP3
 func findLatestImage(ctx context.Context, client *ec2.Client, amiPrefix, arch string) (string, error) {
 	var latestAMI AMI
 
@@ -183,10 +189,21 @@ func findLatestImage(ctx context.Context, client *ec2.Client, amiPrefix, arch st
 			if err != nil {
 				return "", err
 			}
-			if created.Compare(latestAMI.CreatedAt) > 0 {
+			name := string(*i.Name)
+			versionStr := "v" + name[strings.Index(name, "-")+1:strings.Index(name, "_")]
+
+			if !semver.IsValid(versionStr) {
+				return "", fmt.Errorf("parsing version from ami name %s", name)
+			}
+
+			compared := semver.Compare(versionStr, latestAMI.Version)
+			// newer version or same version with a newer createdAt
+			if compared > 0 ||
+				(compared == 0 && created.Compare(latestAMI.CreatedAt) > 0) {
 				latestAMI = AMI{
 					ID:        *i.ImageId,
 					CreatedAt: created,
+					Version:   versionStr,
 				}
 			}
 		}

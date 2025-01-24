@@ -69,12 +69,14 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 
 	logger.Info("Waiting for cluster to be active", "cluster", h.Name)
 	cluster, err := waitForActiveCluster(ctx, client, h.Name)
+	if cluster != nil {
+		logger.Info(awsutil.Prettify(cluster))
+	}
 	if err != nil {
 		return err
 	}
 
 	logger.Info("Successfully started EKS hybrid cluster")
-	logger.Info(awsutil.Prettify(cluster))
 
 	return nil
 }

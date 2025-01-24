@@ -59,10 +59,6 @@ func (i *Installer) installDistroPackages(ctx context.Context) error {
 		return err
 	}
 
-	if err := containerd.ValidateSystemdUnitFile(); err != nil {
-		return fmt.Errorf("please install systemd unit file for containerd: %v", err)
-	}
-
 	i.Logger.Info("Installing iptables...")
 	return iptables.Install(ctx, i.Tracker, i.PackageManager)
 }
