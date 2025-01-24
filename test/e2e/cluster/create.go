@@ -14,7 +14,6 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
-
 	"github.com/aws/eks-hybrid/test/e2e/cni"
 )
 
