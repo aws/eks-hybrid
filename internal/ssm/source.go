@@ -49,8 +49,8 @@ func (s ssmInstallerSource) GetSSMInstaller(ctx context.Context) (io.ReadCloser,
 
 	obj, err := util.GetHttpFileReader(ctx, endpoint)
 	if err != nil {
-		obj.Close()
-		return nil, err
+		return nil, fmt.Errorf("unable to download SSM installer from region %s: "+
+			"please check SSM is available on the requested region (valid example: us-west-2)", s.region)
 	}
 	return obj, nil
 }

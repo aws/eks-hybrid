@@ -153,6 +153,21 @@ function assert::file-permission-matches() {
   fi
 }
 
+function assert::install-fails-with-region() {
+    if [ "$#" -ne 2 ]; then
+        echo "Usage: assert::install_fails_with_region [version] [region]"
+        exit 1
+    fi
+
+    local VERSION=$1
+    local REGION=$2
+
+    if nodeadm install $VERSION --credential-provider ssm --region $REGION >/dev/null 2>&1; then
+        echo "Install unexpectedly succeeded with region '$REGION'"
+        exit 1
+    fi
+}
+
 # Check if a non-json file exists and verify its permission, if a 3rd argument is provided, also check file content
 function validate-file() {
   if [[ "$#" -ne 2 && "$#" -ne 3 ]]; then
