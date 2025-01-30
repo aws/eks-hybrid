@@ -9,8 +9,14 @@ import codepipeline_actions = require('aws-cdk-lib/aws-codepipeline-actions');
 import * as fs from 'fs';
 import { kubernetesVersions, cnis, eksHybridBetaBucketARN, eksReleaseManifestHost, builderBaseImage, githubRepo, githubBranch, requiredEnvVars, betaEksEndpoint, betaKubeVersions } from './constants';
 
+interface NodeadmBuildStackProps extends cdk.StackProps {
+  githubSecretName: string;
+  reuseGithubSecret: boolean;
+  githubToken?: string;
+}
+
 export class NodeadmBuildStack extends cdk.Stack {
-  constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
+  constructor(scope: cdk.App, id: string, props: NodeadmBuildStackProps) {
     super(scope, id, props);
 
     const devStackConfig = JSON.parse(
@@ -42,13 +48,19 @@ export class NodeadmBuildStack extends cdk.Stack {
       console.warn(`GOPROXY env var not set or is empty. Defaulting to '${goproxy}'`);
     }
 
-    const githubTokenSecret = new secretsmanager.Secret(this, 'NodeadmE2ETestsGitHubToken', {
-      secretName: 'nodeadm-e2e-tests-github-token',
-      description: 'Personal Access Token for authenticating to GitHub',
-      secretObjectValue: {
-        'github-token': cdk.SecretValue.unsafePlainText(process.env.HYBRID_GITHUB_TOKEN!),
+    const githubTokenSecret: cdk.aws_secretsmanager.ISecret = (() => {
+      if (props.reuseGithubSecret) {
+        return secretsmanager.Secret.fromSecretNameV2(this, 'NodeadmE2ETestsGitHubToken', props.githubSecretName);
+      } else {
+        return new secretsmanager.Secret(this, 'NodeadmE2ETestsGitHubToken', {
+          secretName: props.githubSecretName,
+          description: 'Personal Access Token for authenticating to GitHub',
+          secretObjectValue: {
+            'github-token': cdk.SecretValue.unsafePlainText(props.githubToken!),
+          }
+        });
       }
-    });
+    })();
 
     const goproxySecret = new secretsmanager.Secret(this, 'NodeadmE2ETestsGoproxy', {
       secretName: 'nodeadm-e2e-tests-goproxy',

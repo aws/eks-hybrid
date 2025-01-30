@@ -6,5 +6,5 @@ export const eksHybridBetaBucketARN = 'arn:aws:s3:::eks-hybrid-beta';
 export const eksReleaseManifestHost = 'hybrid-assets.eks.amazonaws.com';
 export const githubRepo = 'eks-hybrid';
 export const githubBranch = 'main';
-export const requiredEnvVars = ['HYBRID_GITHUB_TOKEN'];
+export const requiredEnvVars = [];
 export const betaEksEndpoint = 'https://api.beta.us-west-2.wesley.amazonaws.com';
