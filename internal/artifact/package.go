@@ -6,7 +6,7 @@ import (
 )
 
 // Package interface defines a package source
-// It defines the install and uninstall command to be executed
+// It defines the install, uninstall & upgrade commands to be executed
 type Package interface {
 	// InstallCmd returns the command to install the package.
 	// Every invocation guarantees a new command.
@@ -14,11 +14,15 @@ type Package interface {
 	// UninstallCmd returns the command to uninstall the package.
 	// Every invocation guarantees a new command.
 	UninstallCmd(context.Context) *exec.Cmd
+	// UpgradeCmd return the command to upgrade the package
+	// Every invocation guarantees a new command.
+	UpgradeCmd(ctx context.Context) *exec.Cmd
 }
 
 type packageSource struct {
 	installCmd   Cmd
 	uninstallCmd Cmd
+	upgradeCmd   Cmd
 }
 
 // Cmd represents a command to be executed.
@@ -40,10 +44,11 @@ func NewCmd(path string, args ...string) Cmd {
 	}
 }
 
-func NewPackageSource(installCmd, uninstallCmd Cmd) Package {
+func NewPackageSource(installCmd, uninstallCmd, upgradeCmd Cmd) Package {
 	return &packageSource{
 		installCmd:   installCmd,
 		uninstallCmd: uninstallCmd,
+		upgradeCmd:   upgradeCmd,
 	}
 }
 
@@ -53,4 +58,8 @@ func (ps *packageSource) InstallCmd(ctx context.Context) *exec.Cmd {
 
 func (ps *packageSource) UninstallCmd(ctx context.Context) *exec.Cmd {
 	return ps.uninstallCmd.Command(ctx)
+}
+
+func (ps *packageSource) UpgradeCmd(ctx context.Context) *exec.Cmd {
+	return ps.upgradeCmd.Command(ctx)
 }

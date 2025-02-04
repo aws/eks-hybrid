@@ -52,7 +52,7 @@ func (k *kubelet) Configure() error {
 	return nil
 }
 
-func (k *kubelet) EnsureRunning(_ context.Context) error {
+func (k *kubelet) EnsureRunning(ctx context.Context) error {
 	if err := k.daemonManager.DaemonReload(); err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (k *kubelet) EnsureRunning(_ context.Context) error {
 	if err != nil {
 		return err
 	}
-	return k.daemonManager.StartDaemon(KubeletDaemonName)
+	return k.daemonManager.RestartDaemon(ctx, KubeletDaemonName)
 }
 
 func (k *kubelet) PostLaunch() error {

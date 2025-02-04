@@ -67,7 +67,7 @@ func (s *ssm) EnsureRunning(ctx context.Context) error {
 
 	s.logger.Info("Restarting SSM agent...")
 	// When the restart operation fails, it's usually because there are many operations running
-	// running for the same service and we get rate limited. That's why we use a big backoff time.
+	// for the same service, and we get rate limited. That's why we use a big backoff time.
 	if err := daemon.RetryOperation(restartCancel, s.daemonManager.RestartDaemon, SsmDaemonName, 20*time.Second); err != nil {
 		return fmt.Errorf("restarting SSM agent: %w", err)
 	}

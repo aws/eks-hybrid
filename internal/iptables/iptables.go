@@ -44,6 +44,16 @@ func Uninstall(ctx context.Context, source Source) error {
 	return nil
 }
 
+func Upgrade(ctx context.Context, source Source) error {
+	if isIptablesInstalled() {
+		iptablesSrc := source.GetIptables()
+		if err := artifact.UpgradePackageWithRetries(ctx, iptablesSrc, 5*time.Second); err != nil {
+			return errors.Wrap(err, "failed to upgrade iptables")
+		}
+	}
+	return nil
+}
+
 func isIptablesInstalled() bool {
 	_, err := exec.LookPath(iptablesBinName)
 	return err == nil

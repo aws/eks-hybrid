@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -24,11 +25,18 @@ type Source interface {
 	GetCniPlugins(context.Context) (artifact.Source, error)
 }
 
-func NoOp() error {
+func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
+	if err := installFromSource(ctx, src); err != nil {
+		return err
+	}
+	if err := tracker.Add(artifact.CniPlugins); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
+func installFromSource(ctx context.Context, src Source) error {
 	cniPlugins, err := src.GetCniPlugins(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get cni-plugins source")
@@ -42,9 +50,6 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	if !cniPlugins.VerifyChecksum() {
 		return errors.Errorf("cni-plugins checksum mismatch: %v", artifact.NewChecksumError(cniPlugins))
 	}
-	if err = tracker.Add(artifact.CniPlugins); err != nil {
-		return err
-	}
 
 	if err := artifact.InstallTarGz(BinPath, TgzPath); err != nil {
 		return errors.Wrap(err, "failed to extract and install cni-plugins")
@@ -54,4 +59,15 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 
 func Uninstall() error {
 	return os.RemoveAll(rootDir)
+}
+
+// Upgrade re-installs the cni-plugins available from the source
+// Since cni-plugins is delivered as a tarball, its not possible to check if they are due for an upgrade
+// todo: (@vignesh-goutham) check if we can publish cni-plugins independently with their checksum on our manifest
+func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {
+	if err := installFromSource(ctx, src); err != nil {
+		return errors.Wrapf(err, "failed to upgrade cni-plugins")
+	}
+	log.Info("Upgraded cni-plugins...")
+	return nil
 }
