@@ -1,16 +1,12 @@
 package artifact
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path"
-	"time"
-
-	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
 // DefaultDirPerms are the permissions assigned to a directory when an Install* func is called
@@ -53,16 +49,4 @@ func InstallTarGz(dst, src string) error {
 		return err
 	}
 	return nil
-}
-
-// InstallPackageWithRetries installs a package and retries errors until the context is
-// cancelled. The backoff duration is the time to wait between retries.
-func InstallPackageWithRetries(ctx context.Context, pkgSource Package, backoff time.Duration) error {
-	return cmd.Retry(ctx, pkgSource.InstallCmd, backoff)
-}
-
-// UninstallPackageWithRetries uninstalls a package and retries errors until the context is
-// cancelled. The backoff duration is the time to wait between retries.
-func UninstallPackageWithRetries(ctx context.Context, pkgSource Package, backoff time.Duration) error {
-	return cmd.Retry(ctx, pkgSource.UninstallCmd, backoff)
 }

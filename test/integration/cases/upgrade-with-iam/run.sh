@@ -10,7 +10,7 @@ mock::aws
 wait::dbus-ready
 
 declare INITIAL_VERSION=1.26
-declare TARGET_VERSION=1.30
+declare TARGET_VERSION=1.32
 
 mkdir -p /etc/iam/pki
 touch /etc/iam/pki/server.pem
@@ -61,6 +61,19 @@ validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644
 
+# Since we are upgrading kubernetes version primarily also check if the stat output of files changed
+# that we expect to change
+generate::birth-file /usr/bin/kubelet
+generate::birth-file /usr/local/bin/kubectl
+
+# Generate birth stat files for artifacts that we dont expect to change
+generate::birth-file /usr/bin/containerd
+generate::birth-file /usr/sbin/iptables
+generate::birth-file /usr/local/bin/aws_signing_helper
+
+# Create dummy cilium-cni to ensure cilium isnt getting replaced
+touch /opt/cni/cilium-cni
+
 # In integration test environment, the aws_signing_helper_update will run
 # but stuck in a loop of failure which prevents the next nodeadm init call
 # from starting it, we manually stop and reset the service to work around it.
@@ -70,6 +83,16 @@ systemctl daemon-reload
 systemctl reset-failed
 
 nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation --config-source file://config.yaml
+
+# We expect these artifacts to have changed with upgrade, so their stat files would be different now
+assert::birth-not-match /usr/bin/kubelet
+assert::birth-not-match /usr/local/bin/kubectl
+
+# We expect these artifacts to not have changed with upgrade, so their stat files would not be different
+assert::birth-match /usr/bin/containerd
+assert::birth-match /usr/sbin/iptables
+assert::birth-match /usr/local/bin/aws_signing_helper
+assert::path-exists /opt/cni/cilium-cni
 
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables
@@ -100,3 +123,17 @@ validate-file /var/lib/kubelet/kubeconfig 644 expected-kubeconfig
 validate-json-file /etc/eks/image-credential-provider/config.json 644 expected-image-credential-provider-config-upgraded
 validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 validate-file /etc/eks/kubelet/environment 644
+
+# Perform another upgrade to same TARGET_VERSION which would result in all artifacts not getting upgraded
+# and exiting. Validate artifacts were not upgraded/changed
+generate::birth-file /usr/bin/kubelet
+generate::birth-file /usr/local/bin/kubectl
+generate::birth-file /etc/eks/image-credential-provider/ecr-credential-provider
+
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation --config-source file://config.yaml
+assert::birth-match /usr/bin/kubelet
+assert::birth-match /usr/local/bin/kubectl
+assert::birth-match /usr/bin/containerd
+assert::birth-match /usr/sbin/iptables
+assert::birth-match /usr/local/bin/aws_signing_helper
+assert::birth-match /etc/eks/image-credential-provider/ecr-credential-provider

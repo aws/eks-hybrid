@@ -6,13 +6,19 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
-// SigingHelperBinPath is the path that the signing helper is installed to.
-const SigningHelperBinPath = "/usr/local/bin/aws_signing_helper"
+const (
+	// SigingHelperBinPath is the path that the signing helper is installed to.
+	SigningHelperBinPath = "/usr/local/bin/aws_signing_helper"
+
+	artifactName      = "aws-signing-helper"
+	artifactFilePerms = 0o755
+)
 
 // SigningHelperSource retrieves the aws_signing_helper binary.
 type SigningHelperSource interface {
@@ -26,7 +32,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, signingHelperSrc Sig
 	}
 	defer signingHelper.Close()
 
-	if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, 0o755); err != nil {
+	if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, artifactFilePerms); err != nil {
 		return errors.Wrap(err, "failed to install aws_signer_helper")
 	}
 	if err = tracker.Add(artifact.IamRolesAnywhere); err != nil {
@@ -48,4 +54,14 @@ func Uninstall() error {
 		return err
 	}
 	return os.RemoveAll(SigningHelperBinPath)
+}
+
+func Upgrade(ctx context.Context, signingHelperSrc SigningHelperSource, log *zap.Logger) error {
+	signingHelper, err := signingHelperSrc.GetSigningHelper(ctx)
+	if err != nil {
+		return errors.Wrap(err, "getting aws_signing_helper source")
+	}
+	defer signingHelper.Close()
+
+	return artifact.Upgrade(artifactName, SigningHelperBinPath, signingHelper, artifactFilePerms, log)
 }

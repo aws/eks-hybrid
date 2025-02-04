@@ -2,16 +2,10 @@ package artifact_test
 
 import (
 	"bytes"
-	"context"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"sync"
 	"testing"
-	"time"
-
-	. "github.com/onsi/gomega"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 )
@@ -87,92 +81,4 @@ func TestInstallFile_DirNotExists(t *testing.T) {
 	if info.Mode() != artifact.DefaultDirPerms {
 		t.Fatalf("Expected dir with %v permissions; received %v", artifact.DefaultDirPerms, info.Mode())
 	}
-}
-
-func TestInstallPackageWithRetries(t *testing.T) {
-	testCases := []struct {
-		name    string
-		source  artifact.Package
-		wantErr string
-	}{
-		{
-			name: "happy path",
-			source: artifact.NewPackageSource(
-				artifact.NewCmd("echo", "hello"),
-				artifact.Cmd{},
-			),
-		},
-		{
-			name: "error",
-			source: artifact.NewPackageSource(
-				artifact.NewCmd("fake-command", "1"),
-				artifact.Cmd{},
-			),
-			wantErr: `running command [fake-command 1]:  [Err exec: "fake-command": executable file not found in $PATH]`,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			g := NewWithT(t)
-			ctx := context.Background()
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Millisecond)
-			defer cancel()
-
-			err := artifact.InstallPackageWithRetries(ctx, tc.source, 1*time.Millisecond)
-			if tc.wantErr != "" {
-				g.Expect(err).To(MatchError(ContainSubstring(tc.wantErr)))
-			} else {
-				g.Expect(err).NotTo(HaveOccurred())
-			}
-		})
-	}
-}
-
-func TestInstallPackageWithRetriesSuccessAfterFailure(t *testing.T) {
-	g := NewWithT(t)
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	defer cancel()
-
-	source := &dynamicSource{}
-	source.SetInstallCmd(artifact.NewCmd("fake-command"))
-
-	go func() {
-		time.Sleep(60 * time.Millisecond)
-		source.SetInstallCmd(artifact.NewCmd("echo", "hello"))
-	}()
-
-	g.Expect(artifact.InstallPackageWithRetries(ctx, source, 1*time.Millisecond)).To(Succeed())
-}
-
-type dynamicSource struct {
-	sync.RWMutex
-	installCmd   artifact.Cmd
-	uninstallCmd artifact.Cmd
-}
-
-var _ artifact.Package = &dynamicSource{}
-
-func (f *dynamicSource) InstallCmd(ctx context.Context) *exec.Cmd {
-	f.RLock()
-	defer f.RUnlock()
-	return f.installCmd.Command(ctx)
-}
-
-func (f *dynamicSource) UninstallCmd(ctx context.Context) *exec.Cmd {
-	f.RLock()
-	defer f.RUnlock()
-	return f.uninstallCmd.Command(ctx)
-}
-
-func (f *dynamicSource) SetInstallCmd(cmd artifact.Cmd) {
-	f.Lock()
-	defer f.Unlock()
-	f.installCmd = cmd
-}
-
-func (f *dynamicSource) SetUninstallCmd(cmd artifact.Cmd) {
-	f.Lock()
-	defer f.Unlock()
-	f.uninstallCmd = cmd
 }

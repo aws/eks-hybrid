@@ -17,6 +17,19 @@ function assert::files-equal() {
   fi
 }
 
+function assert::files-not-equal() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: assert::files-equal FILE1 FILE2"
+    exit 1
+  fi
+  local FILE1=$1
+  local FILE2=$2
+  if diff $FILE1 $FILE2; then
+    echo "Files $FILE1 and $FILE2 are equal"
+    exit 1
+  fi
+}
+
 function assert::json-files-equal() {
   if [ "$#" -ne 2 ]; then
     echo "Usage: assert::json-files-equal FILE1 FILE2"
@@ -84,6 +97,36 @@ function assert::file-not-contains() {
     echo ""
     exit 1
   fi
+}
+
+function generate::birth-file() {
+    if [ "$#" -ne 1 ]; then
+      echo "Usage: generate::stat-file INPUT_PATH"
+      exit 1
+    fi
+    local INPUT_PATH=$1
+    rm -rf INPUT_PATH.stat
+    echo $(stat -c %W $INPUT_PATH) > $INPUT_PATH.birth
+}
+
+function assert::birth-match() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: assert::stat-match INPUT_PATH"
+    exit 1
+  fi
+  local INPUT_PATH=$1
+  echo $(stat -c %W $INPUT_PATH) > $INPUT_PATH.current.birth
+  assert::files-equal $INPUT_PATH.birth $INPUT_PATH.current.birth
+}
+
+function assert::birth-not-match() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: assert::stat-match INPUT_PATH"
+    exit 1
+  fi
+  local INPUT_PATH=$1
+  echo $(stat $INPUT_PATH) > $INPUT_PATH.current.stat
+  assert::files-not-equal $INPUT_PATH.stat $INPUT_PATH.current.stat
 }
 
 function assert::is-substring() {

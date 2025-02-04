@@ -58,7 +58,27 @@ validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644
 
+# Since we are upgrading kubernetes version primarily also check if the checksums of artifacts changed
+generate::birth-file /usr/bin/kubelet
+generate::birth-file /usr/local/bin/kubectl
+
+# Generate birth stat files for artifacts that we dont expect to change
+generate::birth-file /usr/bin/containerd
+generate::birth-file /usr/sbin/iptables
+generate::birth-file /usr/bin/amazon-ssm-agent
+
+# Create dummy cilium-cni to ensure cilium isnt getting replaced
+touch /opt/cni/cilium-cni
+
 nodeadm upgrade $TARGET_VERSION --skip run,preprocess,pod-validation,node-validation,init-validation --config-source file://config.yaml
+
+assert::birth-not-match /usr/bin/kubelet
+assert::birth-not-match /usr/local/bin/kubectl
+assert::birth-match /usr/bin/containerd
+assert::birth-match /usr/sbin/iptables
+assert::birth-match /usr/bin/amazon-ssm-agent
+assert::path-exists /opt/cni/cilium-cni
+
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables
 assert::path-exists /usr/local/bin/kubectl
@@ -88,3 +108,17 @@ validate-json-file /etc/eks/image-credential-provider/config.json 644 expected-i
 validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644
+
+# Perform another upgrade to same TARGET_VERSION which would result in all artifacts not getting upgraded
+# and exiting. Validate artifacts were not upgraded/changed
+generate::birth-file /usr/bin/kubelet
+generate::birth-file /usr/local/bin/kubectl
+generate::birth-file /etc/eks/image-credential-provider/ecr-credential-provider
+
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation --config-source file://config.yaml
+assert::birth-match /usr/bin/kubelet
+assert::birth-match /usr/local/bin/kubectl
+assert::birth-match /usr/bin/containerd
+assert::birth-match /usr/sbin/iptables
+assert::birth-match /usr/bin/amazon-ssm-agent
+assert::birth-match /etc/eks/image-credential-provider/ecr-credential-provider
