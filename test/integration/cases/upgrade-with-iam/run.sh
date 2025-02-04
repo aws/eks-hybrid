@@ -10,7 +10,7 @@ mock::aws
 wait::dbus-ready
 
 declare INITIAL_VERSION=1.26
-declare TARGET_VERSION=1.30
+declare TARGET_VERSION=1.32
 
 mkdir -p /etc/iam/pki
 touch /etc/iam/pki/server.pem
@@ -61,6 +61,9 @@ validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644
 
+# Since we are upgrading kubernetes version primarily also check if the checksums of artifacts changed
+generate::checksum-file /usr/bin/kubelet
+generate::checksum-file /usr/local/bin/kubectl
 # In integration test environment, the aws_signing_helper_update will run
 # but stuck in a loop of failure which prevents the next nodeadm init call
 # from starting it, we manually stop and reset the service to work around it.
@@ -70,6 +73,9 @@ systemctl daemon-reload
 systemctl reset-failed
 
 nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation --config-source file://config.yaml
+
+assert::checksum-match /usr/bin/kubelet
+assert::checksum-match /usr/local/bin/kubectl
 
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables

@@ -5,13 +5,19 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
-// BinPath is the path to the kubectl binary.
-const BinPath = "/usr/local/bin/kubectl"
+const (
+	// BinPath is the path to the kubectl binary.
+	BinPath = "/usr/local/bin/kubectl"
+
+	artifactName      = "kubectl"
+	artifactFilePerms = 0o755
+)
 
 // Source represents a source that serves a kubectl binary.
 type Source interface {
@@ -26,7 +32,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	}
 	defer kubectl.Close()
 
-	if err := artifact.InstallFile(BinPath, kubectl, 0o755); err != nil {
+	if err := artifact.InstallFile(BinPath, kubectl, artifactFilePerms); err != nil {
 		return errors.Wrap(err, "failed to install kubectl")
 	}
 
@@ -38,4 +44,14 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 
 func Uninstall() error {
 	return os.RemoveAll(BinPath)
+}
+
+func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {
+	kubectl, err := src.GetKubectl(ctx)
+	if err != nil {
+		return errors.Wrap(err, "getting kubectl source")
+	}
+	defer kubectl.Close()
+
+	return artifact.Upgrade(artifactName, BinPath, kubectl, artifactFilePerms, log)
 }
