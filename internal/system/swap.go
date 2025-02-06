@@ -134,7 +134,7 @@ type swap struct {
 	swapType string
 }
 
-// Mount represets the filesystem info
+// Mount represents the filesystem info
 type mount struct {
 	// The block special device or remote filesystem to be mounted
 	spec string
