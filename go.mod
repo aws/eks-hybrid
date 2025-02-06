@@ -30,6 +30,7 @@ require (
 	golang.org/x/mod v0.22.0
 	k8s.io/apimachinery v0.32.1
 	k8s.io/client-go v0.32.1
+	k8s.io/component-helpers v0.32.1
 	k8s.io/cri-api v0.32.1
 	k8s.io/kubectl v0.32.1
 	k8s.io/kubelet v0.32.1
