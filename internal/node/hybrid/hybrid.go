@@ -2,6 +2,7 @@ package hybrid
 
 import (
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -10,11 +11,12 @@ import (
 )
 
 type HybridNodeProvider struct {
-	nodeConfig    *api.NodeConfig
-	validator     func(config *api.NodeConfig) error
-	awsConfig     *aws.Config
-	daemonManager daemon.DaemonManager
-	logger        *zap.Logger
+	nodeConfig          *api.NodeConfig
+	validator           func(config *api.NodeConfig) error
+	awsConfig           *aws.Config
+	daemonManager       daemon.DaemonManager
+	logger              *zap.Logger
+	remoteNetworkConfig *eks.RemoteNetworkConfig
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
@@ -48,6 +50,23 @@ func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 
 func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 	return hnp.logger
+}
+
+func (hnp *HybridNodeProvider) ValidateNodeIP() error {
+	// For hybrid nodes, we don't set the --node-ip flag anywhere else,
+	// so we can directly check if user has specified it in the config file
+	kubeletArgs := hnp.nodeConfig.Spec.Kubelet.Flags
+
+	nodeIp, err := getNodeIP(kubeletArgs)
+	if err != nil {
+		return err
+	}
+
+	if err := validateIP(nodeIp, hnp); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (hnp *HybridNodeProvider) Cleanup() error {

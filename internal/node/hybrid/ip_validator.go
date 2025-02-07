@@ -1,14 +1,11 @@
 package hybrid
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"strings"
-	"time"
 
 	"github.com/aws/eks-hybrid/internal/aws/eks"
-	"github.com/aws/eks-hybrid/internal/nodeprovider"
 	apimachinerynet "k8s.io/apimachinery/pkg/util/net"
 	nodeutil "k8s.io/component-helpers/node/util"
 	k8snet "k8s.io/utils/net"
@@ -28,8 +25,8 @@ func containsIP(cidr string, ip net.IP) (bool, error) {
 	return ipnet.Contains(ip), nil
 }
 
-func isIPInClusterNetworks(ip net.IP, cluster *eks.Cluster) (bool, error) {
-	for _, network := range cluster.RemoteNetworkConfig.RemoteNodeNetworks {
+func isIPInClusterNetworks(ip net.IP, remoteNetworkConfig *eks.RemoteNetworkConfig) (bool, error) {
+	for _, network := range remoteNetworkConfig.RemoteNodeNetworks {
 		for _, cidr := range network.CIDRs {
 			if cidr == nil {
 				continue
@@ -46,11 +43,11 @@ func isIPInClusterNetworks(ip net.IP, cluster *eks.Cluster) (bool, error) {
 	return false, nil
 }
 
-func validateIP(ipAddr net.IP, cluster *eks.Cluster) error {
-	if validIP, err := isIPInClusterNetworks(ipAddr, cluster); err != nil {
+func validateIP(ipAddr net.IP, hnp *HybridNodeProvider) error {
+	if validIP, err := isIPInClusterNetworks(ipAddr, hnp.remoteNetworkConfig); err != nil {
 		return err
 	} else if !validIP {
-		cidrs := getClusterCIDRs(cluster)
+		cidrs := getClusterCIDRs(hnp.remoteNetworkConfig)
 
 		return fmt.Errorf(
 			"node IP %s is not in any of the remote network CIDR blocks: %s; "+
@@ -63,9 +60,9 @@ func validateIP(ipAddr net.IP, cluster *eks.Cluster) error {
 	return nil
 }
 
-func getClusterCIDRs(cluster *eks.Cluster) []string {
+func getClusterCIDRs(remoteNetworkConfig *eks.RemoteNetworkConfig) []string {
 	var cidrs []string
-	for _, network := range cluster.RemoteNetworkConfig.RemoteNodeNetworks {
+	for _, network := range remoteNetworkConfig.RemoteNodeNetworks {
 		for _, cidr := range network.CIDRs {
 			if cidr != nil {
 				cidrs = append(cidrs, *cidr)
@@ -75,21 +72,21 @@ func getClusterCIDRs(cluster *eks.Cluster) []string {
 	return cidrs
 }
 
-func extractFlagValue(kubeletEnv, flag string) (string, error) {
-	if count := strings.Count(kubeletEnv, flag); count > 1 {
-		return "", fmt.Errorf("multiple %s flags found in kubelet args", flag)
-	}
+func extractFlagValue(kubeletArgs []string, flag string) (string, error) {
+	var flagValue string
 
-	for _, s := range strings.Fields(kubeletEnv) {
+	// pick last instance of the flag
+	for _, s := range kubeletArgs {
 		if strings.HasPrefix(s, flag) {
-			return strings.TrimPrefix(s, flag), nil
+			flagValue = strings.TrimPrefix(s, flag)
 		}
 	}
-	return "", nil
+
+	return flagValue, nil
 }
 
-func extractNodeIPFromFlag(kubeletEnv string) (net.IP, error) {
-	ipStr, err := extractFlagValue(kubeletEnv, nodeIPFlag)
+func extractNodeIPFromFlags(kubeletArgs []string) (net.IP, error) {
+	ipStr, err := extractFlagValue(kubeletArgs, nodeIPFlag)
 	if err != nil {
 		return nil, err
 	}
@@ -108,8 +105,8 @@ func extractNodeIPFromFlag(kubeletEnv string) (net.IP, error) {
 	return nil, nil
 }
 
-func extractHostName(kubeletEnv string) (string, error) {
-	hostnameOverride, err := extractFlagValue(kubeletEnv, hostnameOverrideFlag)
+func extractHostName(kubeletArgs []string) (string, error) {
+	hostnameOverride, err := extractFlagValue(kubeletArgs, hostnameOverrideFlag)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract hostname override: %w", err)
 	}
@@ -126,8 +123,8 @@ func extractHostName(kubeletEnv string) (string, error) {
 	return hostname, nil
 }
 
-func getNodeName(kubeletEnv string) (string, error) {
-	return extractHostName(kubeletEnv)
+func getNodeName(kubeletArgs []string) (string, error) {
+	return extractHostName(kubeletArgs)
 }
 
 // Validate given node IP belongs to the current host.
@@ -172,7 +169,7 @@ func validateNodeIP(nodeIP net.IP) error {
 }
 
 // getNodeIP determines the node's IP address based on kubelet configuration and system information.
-func getNodeIP(kubeletEnv string) (net.IP, error) {
+func getNodeIP(kubeletArgs []string) (net.IP, error) {
 	// Follows algorithm used by kubelet to assign nodeIP
 	// Implementation adapted for hybrid nodes
 	// 1) Use nodeIP if set (and not "0.0.0.0"/"::")
@@ -181,11 +178,11 @@ func getNodeIP(kubeletEnv string) (net.IP, error) {
 	// 4) Try to get the IP from the network interface used as default gateway
 	// Original source: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/nodestatus/setters.go#L206
 
-	nodeIP, err := extractNodeIPFromFlag(kubeletEnv)
+	nodeIP, err := extractNodeIPFromFlags(kubeletArgs)
 	if err != nil {
 		return nil, err
 	}
-	hostname, err := extractHostName(kubeletEnv)
+	hostname, err := extractHostName(kubeletArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +201,7 @@ func getNodeIP(kubeletEnv string) (net.IP, error) {
 		ipAddr = addr
 	} else {
 		var addrs []net.IP
-		nodeName, err := getNodeName(kubeletEnv)
+		nodeName, err := getNodeName(kubeletArgs)
 		if err != nil {
 			return nil, err
 		}
@@ -229,30 +226,4 @@ func getNodeIP(kubeletEnv string) (net.IP, error) {
 	}
 
 	return ipAddr, nil
-}
-
-// ValidateNodeIp checks if the node's IP is within one of the CIDR ranges in the RemoteNetworkConfig
-func ValidateNodeIp(ctx context.Context, provider nodeprovider.NodeProvider, kubeletEnv string) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	// only validate hybrid nodes
-	if !provider.GetNodeConfig().IsHybridNode() {
-		return nil
-	}
-
-	nodeIp, err := getNodeIP(kubeletEnv)
-	if err != nil {
-		return err
-	}
-	cluster, err := readCluster(ctx, *provider.GetConfig(), provider.GetNodeConfig())
-	if err != nil {
-		return err
-	}
-
-	if err := validateIP(nodeIp, cluster); err != nil {
-		return err
-	}
-
-	return nil
 }
