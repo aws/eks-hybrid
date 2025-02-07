@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/eks-hybrid/internal/daemon"
-
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
 const (
 	kubeletEnvironmentFilePath = "/etc/eks/kubelet/environment"
-	KubeletArgsEnvironmentName = "NODEADM_KUBELET_ARGS"
+	kubeletArgsEnvironmentName = "NODEADM_KUBELET_ARGS"
 )
 
 // Write environment variables needed for kubelet runtime. This should be the
@@ -27,7 +25,7 @@ func (k *kubelet) writeKubeletEnvironment() error {
 	// append user-provided flags at the end to give them precedence
 	kubeletFlags = append(kubeletFlags, k.nodeConfig.Spec.Kubelet.Flags...)
 	// expose these flags via an environment variable scoped to nodeadm
-	k.environment[KubeletArgsEnvironmentName] = strings.Join(kubeletFlags, " ")
+	k.environment[kubeletArgsEnvironmentName] = strings.Join(kubeletFlags, " ")
 	// write additional environment variables
 	var kubeletEnvironment []string
 	for eKey, eValue := range k.environment {
@@ -39,13 +37,4 @@ func (k *kubelet) writeKubeletEnvironment() error {
 // Add values to the environment variables map in a terse manner
 func (k *kubelet) setEnv(envName, envArg string) {
 	k.environment[envName] = envArg
-}
-
-func GetEnv(kubeletDaemon daemon.Daemon, envName string) (string, error) {
-	k, ok := kubeletDaemon.(*kubelet)
-	if !ok {
-		return "", fmt.Errorf("daemon is not a kubelet")
-	}
-
-	return k.environment[envName], nil
 }
