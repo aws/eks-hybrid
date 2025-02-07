@@ -2,14 +2,20 @@ package peered
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ec2sdk "github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
+	gssh "golang.org/x/crypto/ssh"
 	clientgo "k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
 
@@ -20,6 +26,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	"github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
+	"github.com/aws/eks-hybrid/test/e2e/ssh"
 )
 
 const (
@@ -130,9 +137,68 @@ func (c Node) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) 
 	if err != nil {
 		return ec2.Instance{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
-	c.Logger.Info(fmt.Sprintf("EC2 Instance Connect: https://%s.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=%s&region=%s&serialPort=0", c.Cluster.Region, instance.ID, c.Cluster.Region))
 
 	return instance, nil
+}
+
+// SerialConsole returns the serial console for the given instance.
+func (c *Node) SerialConsole(ctx context.Context, instanceId string) (*ssh.SerialConsole, error) {
+	privateKey, publicKey, err := generateKeyPair()
+	if err != nil {
+		return nil, fmt.Errorf("generating keypair: %w", err)
+	}
+
+	signer, err := gssh.ParsePrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("parsing private key: %w", err)
+	}
+
+	config := &ssh.ClientConfig{
+		User: instanceId + ".port0",
+		Auth: []gssh.AuthMethod{
+			gssh.PublicKeys(signer),
+		},
+		HostKeyCallback: gssh.InsecureIgnoreHostKey(),
+	}
+
+	// node needs to be passed pending state to send the serial public key
+	// the sooner this completes, the more of the initial boot log we will get
+	err = ec2.WaitForEC2InstanceRunning(ctx, c.EC2, instanceId)
+	if err != nil {
+		return nil, fmt.Errorf("waiting on instance running: %w", err)
+	}
+
+	client := ec2instanceconnect.NewFromConfig(c.AWS)
+	_, err = client.SendSerialConsoleSSHPublicKey(ctx, &ec2instanceconnect.SendSerialConsoleSSHPublicKeyInput{
+		InstanceId:   aws.String(instanceId),
+		SSHPublicKey: aws.String(string(publicKey)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("adding ssh key via instance connect: %w", err)
+	}
+
+	return ssh.NewSerialConsole("tcp", "serial-console.ec2-instance-connect."+c.AWS.Region+".aws:22", config), nil
+}
+
+func generateKeyPair() ([]byte, []byte, error) {
+	var empty []byte
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return empty, empty, fmt.Errorf("generating private key: %w", err)
+	}
+
+	privateKeyPEM := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+
+	// Generate the corresponding public key
+	publicKey, err := gssh.NewPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return empty, empty, fmt.Errorf("generating public key: %w", err)
+	}
+
+	return pem.EncodeToMemory(privateKeyPEM), gssh.MarshalAuthorizedKey(publicKey), nil
 }
 
 // Cleanup collects logs and deletes the EC2 instance and Node object.

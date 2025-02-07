@@ -344,6 +344,7 @@ export class NodeadmBuildStack extends cdk.Stack {
             'ec2:RebootInstances',
             'ec2:StopInstances',
             'ec2:TerminateInstances',
+            'ec2-instance-connect:SendSerialConsoleSSHPublicKey',
           ],
           resources: ['*'],
           effect: iam.Effect.ALLOW,

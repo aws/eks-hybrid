@@ -27,8 +27,9 @@ KUBERNETES_VERSION="${3?Please specify the Kubernetes version}"
 CNI="${4?Please specify the cni}"
 NODEADM_AMD_URL="${5?Please specify the nodeadm amd url}"
 NODEADM_ARM_URL="${6?Please specify the nodeadm arm url}"
-LOGS_BUCKET="${7-}"
-ENDPOINT="${8-}"
+LOGS_BUCKET="${7-?Please specify the bucket for logs}"
+ARTIFACTS_FOLDER="${8-?Please specify the folder for artifacts}"
+ENDPOINT="${9-}"
 
 CONFIG_DIR="$REPO_ROOT/e2e-config"
 ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
@@ -65,6 +66,10 @@ trap "cleanup" EXIT
 
 $BIN_DIR/e2e-test setup -s $RESOURCES_YAML
 
+mkdir -p e2e-reports
+mkdir -p "$ARTIFACTS_FOLDER"
+ARTIFACTS_FOLDER=$(realpath "$ARTIFACTS_FOLDER")
+
 cat <<EOF > $CONFIG_DIR/e2e-param.yaml
 clusterName: "$CLUSTER_NAME"
 clusterRegion: "$REGION"
@@ -72,14 +77,13 @@ nodeadmUrlAMD: "$NODEADM_AMD_URL"
 nodeadmUrlARM: "$NODEADM_ARM_URL"
 logsBucket: "$LOGS_BUCKET"
 endpoint: "$ENDPOINT"
+artifactsFolder: "$ARTIFACTS_FOLDER"
 EOF
 
 
 SKIP_FILE=$REPO_ROOT/hack/SKIPPED_TESTS.yaml
 # Extract skipped_tests field from SKIP_FILE file and join entries with ' || '
 skip=$(yq '.skipped_tests | join("|")' ${SKIP_FILE})
-
-mkdir -p e2e-reports
 
 # We explicitly specify procs instead of letting ginkgo decide (with -p) because in if not
 # ginkgo will use all available CPUs, which could be a small number depending

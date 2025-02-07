@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.27
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.56.10
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.202.2
+	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.27.12
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.40.1
 	github.com/aws/aws-sdk-go-v2/service/eks v1.57.2
 	github.com/aws/aws-sdk-go-v2/service/iam v1.38.10
@@ -27,6 +28,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tredoe/osutil v1.5.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/mod v0.22.0
 	k8s.io/apimachinery v0.32.1
 	k8s.io/client-go v0.32.1
@@ -120,8 +122,8 @@ require (
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect

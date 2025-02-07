@@ -157,7 +157,16 @@ func (as Source) GetCniPlugins(ctx context.Context) (artifact.Source, error) {
 }
 
 func (as Source) getEksSource(ctx context.Context, artifactName string) (artifact.Source, error) {
-	for _, releaseArtifact := range as.Eks.Artifacts {
+	return getSource(ctx, artifactName, as.Eks.Artifacts)
+}
+
+// GetSingingHelper satisfies iamrolesanywhere.SigningHelperSource
+func (as Source) GetSigningHelper(ctx context.Context) (artifact.Source, error) {
+	return getSource(ctx, "aws_signing_helper", as.Iam.Artifacts)
+}
+
+func getSource(ctx context.Context, artifactName string, availableArtifacts []Artifact) (artifact.Source, error) {
+	for _, releaseArtifact := range availableArtifacts {
 		if releaseArtifact.Name == artifactName && releaseArtifact.Arch == runtime.GOARCH && releaseArtifact.OS == runtime.GOOS {
 			obj, err := util.GetHttpFileReader(ctx, releaseArtifact.URI)
 			if err != nil {
@@ -175,25 +184,6 @@ func (as Source) getEksSource(ctx context.Context, artifactName string) (artifac
 				obj.Close()
 				return nil, err
 			}
-			return source, nil
-		}
-	}
-	return nil, fmt.Errorf("could not find artifact for %s arch and %s os", runtime.GOARCH, runtime.GOOS)
-}
-
-// GetSingingHelper satisfies iamrolesanywhere.SigningHelperSource
-func (as Source) GetSigningHelper(ctx context.Context) (artifact.Source, error) {
-	for _, releaseArtifact := range as.Iam.Artifacts {
-		if releaseArtifact.Name == "aws_signing_helper" && releaseArtifact.Arch == runtime.GOARCH && releaseArtifact.OS == runtime.GOOS {
-			obj, err := util.GetHttpFileReader(ctx, releaseArtifact.URI)
-			if err != nil {
-				obj.Close()
-				return nil, err
-			}
-			// TODO:@vgg this binary's checksum doest not follow GNU format
-			// The team is going to fix this with the next release early next week
-			// After which the source should be changed to use WithChecksum
-			source := artifact.WithNopChecksum(obj)
 			return source, nil
 		}
 	}
