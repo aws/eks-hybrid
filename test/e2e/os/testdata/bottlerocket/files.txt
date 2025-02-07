@@ -1,0 +1,10 @@
+iamra: {{ .IamRA }}
+write_files:
+{{ range $file := .Files }}
+  - content: |
+{{ $file.Content | indent 6 }}
+    path: {{ $file.Path }}
+{{if $file.Permissions}}
+    permissions: '{{ $file.Permissions }}'
+{{- end }}
+{{- end }}

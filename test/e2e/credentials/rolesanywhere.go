@@ -39,7 +39,7 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec e2e.N
 			},
 			Hybrid: &api.HybridOptions{
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
-					NodeName:        i.nodeName(spec),
+					NodeName:        i.NodeName(spec),
 					RoleARN:         i.RoleARN,
 					TrustAnchorARN:  i.TrustAnchorARN,
 					ProfileARN:      i.ProfileARN,
@@ -52,7 +52,7 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec e2e.N
 	}, nil
 }
 
-func (i *IamRolesAnywhereProvider) nodeName(node e2e.NodeSpec) string {
+func (i *IamRolesAnywhereProvider) NodeName(node e2e.NodeSpec) string {
 	return node.NamePrefix + "-node-" + string(i.Name()) + "-" + node.OS.Name()
 }
 
@@ -61,7 +61,7 @@ func (i *IamRolesAnywhereProvider) VerifyUninstall(ctx context.Context, instance
 }
 
 func (i *IamRolesAnywhereProvider) FilesForNode(spec e2e.NodeSpec) ([]e2e.File, error) {
-	nodeCertificate, err := CreateCertificateForNode(i.CA.Cert, i.CA.Key, i.nodeName(spec))
+	nodeCertificate, err := CreateCertificateForNode(i.CA.Cert, i.CA.Key, i.NodeName(spec))
 	if err != nil {
 		return nil, err
 	}
