@@ -56,13 +56,17 @@ func (hnp *HybridNodeProvider) ValidateNodeIP() error {
 	// For hybrid nodes, we don't set the --node-ip flag anywhere else,
 	// so we can directly check if user has specified it in the config file
 	kubeletArgs := hnp.nodeConfig.Spec.Kubelet.Flags
+	var IAMNodeName string
+	if hnp.nodeConfig.IsIAMRolesAnywhere() {
+		IAMNodeName = hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.NodeName
+	}
 
-	nodeIp, err := getNodeIP(kubeletArgs)
+	nodeIp, err := getNodeIP(kubeletArgs, IAMNodeName)
 	if err != nil {
 		return err
 	}
 
-	if err := validateIP(nodeIp, hnp); err != nil {
+	if err = validateIP(nodeIp, hnp); err != nil {
 		return err
 	}
 
