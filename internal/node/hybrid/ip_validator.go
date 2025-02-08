@@ -26,15 +26,19 @@ func containsIP(cidr string, ip net.IP) (bool, error) {
 }
 
 func isIPInClusterNetworks(ip net.IP, remoteNetworkConfig *eks.RemoteNetworkConfig) (bool, error) {
+	if ip.To4() == nil || remoteNetworkConfig == nil {
+		return false, fmt.Errorf("error: ip is invalid or remoteNetworkConfig is nil")
+	}
+
 	for _, network := range remoteNetworkConfig.RemoteNodeNetworks {
 		for _, cidr := range network.CIDRs {
 			if cidr == nil {
 				continue
 			}
 
-			if ipInCidr, err := containsIP(*cidr, ip); err != nil {
-				return false, err
-			} else if ipInCidr {
+			if inNetwork, err := containsIP(*cidr, ip); err != nil {
+				return false, fmt.Errorf("error checking IP in CIDR %s: %w", *cidr, err)
+			} else if inNetwork {
 				return true, nil
 			}
 		}
@@ -44,6 +48,9 @@ func isIPInClusterNetworks(ip net.IP, remoteNetworkConfig *eks.RemoteNetworkConf
 }
 
 func validateIP(ipAddr net.IP, hnp *HybridNodeProvider) error {
+	debugCidrs := getClusterCIDRs(hnp.remoteNetworkConfig)
+	fmt.Printf("DEBUG: cidrs:  %v\n", debugCidrs)
+
 	if validIP, err := isIPInClusterNetworks(ipAddr, hnp.remoteNetworkConfig); err != nil {
 		return err
 	} else if !validIP {
@@ -111,10 +118,6 @@ func extractHostName(kubeletArgs []string) (string, error) {
 		return "", fmt.Errorf("failed to extract hostname override: %w", err)
 	}
 
-	// tracks how kubelet finds hostname:
-	// https://github.com/kubernetes/kubernetes/blob/48f36acc7a13d37c357aa6abff55a01267eab8a9/cmd/kubelet/app/options/options.go#L293
-	// https://github.com/kubernetes/kubernetes/blob/28ad751946bca0376f7138cdcac1ad0ec094e9ff/cmd/kubelet/app/server.go#L259
-	// https://github.com/kubernetes/kubernetes/blob/28ad751946bca0376f7138cdcac1ad0ec094e9ff/cmd/kubelet/app/server.go#L1228
 	hostname, err := nodeutil.GetHostname(hostnameOverride) // returns error if it cannot resolve to a non-empty hostname
 	if err != nil {
 		return "", fmt.Errorf("failed to get hostname: %w", err)
@@ -123,13 +126,16 @@ func extractHostName(kubeletArgs []string) (string, error) {
 	return hostname, nil
 }
 
-func getNodeName(kubeletArgs []string) (string, error) {
+func getNodeName(nodeName string, kubeletArgs []string) (string, error) {
+	if nodeName != "" {
+		return nodeName, nil
+	}
 	return extractHostName(kubeletArgs)
 }
 
 // Validate given node IP belongs to the current host.
 //
-// validateNodeIP adapts the unexported 'validateNodeIP' function from Kubernetes.
+// validateNodeIP adapts the unexported 'validateNodeIP' function from kubelet.
 // Source: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_node_status.go#L796
 func validateNodeIP(nodeIP net.IP) error {
 	// Honor IP limitations set in setNodeStatus()
@@ -169,14 +175,14 @@ func validateNodeIP(nodeIP net.IP) error {
 }
 
 // getNodeIP determines the node's IP address based on kubelet configuration and system information.
-func getNodeIP(kubeletArgs []string) (net.IP, error) {
+func getNodeIP(kubeletArgs []string, IAMNodeName string) (net.IP, error) {
 	// Follows algorithm used by kubelet to assign nodeIP
 	// Implementation adapted for hybrid nodes
 	// 1) Use nodeIP if set (and not "0.0.0.0"/"::")
 	// 2) If the user has specified an IP to HostnameOverride, use it
 	// 3) Lookup the IP from node name by DNS
 	// 4) Try to get the IP from the network interface used as default gateway
-	// Original source: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/nodestatus/setters.go#L206
+	// Source: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/nodestatus/setters.go#L206
 
 	nodeIP, err := extractNodeIPFromFlags(kubeletArgs)
 	if err != nil {
@@ -193,29 +199,32 @@ func getNodeIP(kubeletArgs []string) (net.IP, error) {
 
 	if nodeIPSpecified {
 		ipAddr = nodeIP
-	} else if addr := k8snet.ParseIPSloppy(hostname); addr != nil {
-		// error out if hostname is an IPv6 address
-		if addr.To4() == nil {
-			return nil, fmt.Errorf("hostname address %s is not IPv4", addr)
+	} else if parsedAddr := k8snet.ParseIPSloppy(hostname); parsedAddr != nil {
+		if parsedAddr.To4() == nil {
+			return nil, fmt.Errorf("hostname address %s is not IPv4", parsedAddr)
 		}
-		ipAddr = addr
+		ipAddr = parsedAddr
 	} else {
 		var addrs []net.IP
-		nodeName, err := getNodeName(kubeletArgs)
+		var nodeName string
+		// If using SSM, the node name will be set at initialization to the SSM instance ID,
+		// so it won't resolve to anything via DNS, hence we're only checking in the case of IAM-RA
+		nodeName, err = getNodeName(IAMNodeName, kubeletArgs)
 		if err != nil {
 			return nil, err
 		}
 
 		addrs, _ = net.LookupIP(nodeName)
 		for _, addr := range addrs {
-			if err = validateNodeIP(addr); addr.To4() != nil && err == nil { // kubelet will also pick an IPv4 addr: https://github.com/kubernetes/kubernetes/blob/5d3c07e89db298e9b7f79718ccb8cf2116b7116e/pkg/kubelet/nodestatus/setters.go#L79
+			if err = validateNodeIP(addr); addr.To4() != nil && err == nil {
 				ipAddr = addr
 				break
 			}
 		}
 
 		if ipAddr == nil {
-			ipAddr, err = apimachinerynet.ResolveBindAddress(nodeIP) // current standard function for resolving bind address: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_node_status.go#L768
+			// current standard function for resolving bind address: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_node_status.go#L768
+			ipAddr, err = apimachinerynet.ResolveBindAddress(nodeIP)
 		}
 
 		if ipAddr == nil {
