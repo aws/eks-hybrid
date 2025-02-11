@@ -158,7 +158,7 @@ func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 
 func WaitForEC2InstanceRunning(ctx context.Context, ec2Client *ec2.Client, instanceID string) error {
 	waiter := ec2.NewInstanceRunningWaiter(ec2Client, func(isowo *ec2.InstanceRunningWaiterOptions) {
-		isowo.LogWaitAttempts = true
+		isowo.MinDelay = 1 * time.Second
 	})
 	return waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instanceID}}, nodeRunningTimeout)
 }

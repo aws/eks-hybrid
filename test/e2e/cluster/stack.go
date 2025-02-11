@@ -38,8 +38,9 @@ type vpcConfig struct {
 }
 
 type resourcesStackOutput struct {
-	clusterRole      string
-	clusterVpcConfig vpcConfig
+	clusterRole        string
+	clusterVpcConfig   vpcConfig
+	podIdentityRoleArn string
 }
 
 type stack struct {
@@ -179,6 +180,8 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			result.clusterVpcConfig.privateSubnet = *output.OutputValue
 		case "ClusterSecurityGroup":
 			result.clusterVpcConfig.securityGroup = *output.OutputValue
+		case "PodIdentityAssociationRoleARN":
+			result.podIdentityRoleArn = *output.OutputValue
 		}
 	}
 
@@ -248,7 +251,11 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 		case types.StackStatusCreateInProgress, types.StackStatusUpdateInProgress, types.StackStatusDeleteInProgress, types.StackStatusUpdateCompleteCleanupInProgress:
 			return false, nil
 		default:
-			return false, fmt.Errorf("stack %s failed with status: %s", stackName, stackStatus)
+			failureReason, err := getStackFailureReason(ctx, client, stackName)
+			if err != nil {
+				return false, fmt.Errorf("stack %s failed with status %s. Failed getting failure reason: %w", stackName, stackStatus, err)
+			}
+			return false, fmt.Errorf("stack %s failed with status: %s. Potential root cause: [%s]", stackName, stackStatus, failureReason)
 		}
 	})
 
@@ -272,4 +279,25 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 
 	s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
 	return nil
+}
+
+func getStackFailureReason(ctx context.Context, client *cloudformation.Client, stackName string) (string, error) {
+	resp, err := client.DescribeStackEvents(ctx, &cloudformation.DescribeStackEventsInput{
+		StackName: &stackName,
+	})
+	if err != nil {
+		return "", fmt.Errorf("describing events for stack %s: %w", stackName, err)
+	}
+
+	for _, event := range resp.StackEvents {
+		if event.ResourceStatus == types.ResourceStatusCreateFailed ||
+			event.ResourceStatus == types.ResourceStatusUpdateFailed ||
+			event.ResourceStatus == types.ResourceStatusDeleteFailed {
+			if event.ResourceStatusReason != nil {
+				return *event.ResourceStatusReason, nil
+			}
+		}
+	}
+
+	return "", nil
 }

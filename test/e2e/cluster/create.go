@@ -8,16 +8,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cni"
-	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 type TestResources struct {
@@ -47,6 +47,7 @@ type Create struct {
 	logger logr.Logger
 	eks    *eks.Client
 	stack  *stack
+	iam    *iam.Client
 }
 
 // NewCreate creates a new workflow to create an EKS cluster. The EKS client will use
@@ -63,6 +64,7 @@ func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 			logger:    logger,
 			ssmClient: ssm.NewFromConfig(aws),
 		},
+		iam: iam.NewFromConfig(aws),
 	}
 }
 
@@ -88,17 +90,6 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		return fmt.Errorf("creating %s EKS cluster: %w", test.KubernetesVersion, err)
 	}
 
-	podIdentityAddon := addon.Addon{
-		Cluster:       hybridCluster.Name,
-		Name:          podIdentityAddonName,
-		Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
-	}
-
-	err = podIdentityAddon.Create(ctx, c.eks, c.logger)
-	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
-		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon, err)
-	}
-
 	kubeconfig := KubeconfigPath(test.ClusterName)
 	err = hybridCluster.UpdateKubeconfig(kubeconfig)
 	if err != nil {
@@ -108,6 +99,18 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return fmt.Errorf("loading kubeconfig: %w", err)
+	}
+
+	k8sClient, err := kubernetes.NewForConfig(clientConfig)
+	if err != nil {
+		return fmt.Errorf("creating kubernetes client: %w", err)
+	}
+
+	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, podIdentityAddonName, stackOut.podIdentityRoleArn)
+
+	err = podIdentityAddon.Create(ctx, c.logger, c.eks, k8sClient)
+	if err != nil {
+		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon.Name, err)
 	}
 
 	dynamicK8s, err := dynamic.NewForConfig(clientConfig)

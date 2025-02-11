@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 
+	"go.uber.org/zap"
+
 	"github.com/aws/eks-hybrid/internal/api"
 )
 
@@ -49,6 +51,8 @@ func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
 	if err != nil {
 		return err
 	}
+
+	s.logger.Info("Machine registered with SSM, assigning instance ID as node name", zap.String("instanceID", registeredNodeName))
 	s.nodeConfig.Status.Hybrid.NodeName = registeredNodeName
 	return nil
 }

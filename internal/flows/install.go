@@ -80,7 +80,6 @@ func (i *Installer) installCredentialProcess(ctx context.Context) error {
 		}
 	case creds.SsmCredentialProvider:
 		ssmInstaller := ssm.NewSSMInstaller(i.SsmRegion, i.Logger)
-
 		if err := ssm.Install(ctx, i.Tracker, ssmInstaller); err != nil {
 			return err
 		}

@@ -81,7 +81,7 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 		PrincipalArn: &output.SSMNodeRoleARN,
 		Type:         aws.String("HYBRID_LINUX"),
 	})
-	if err != nil {
+	if err != nil && !isResourceAlreadyInUse(err) {
 		return nil, err
 	}
 	logger.Info("Creating access entry", "iamRoleArn", output.IRANodeRoleARN)
@@ -90,7 +90,7 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 		PrincipalArn: &output.IRANodeRoleARN,
 		Type:         aws.String("HYBRID_LINUX"),
 	})
-	if err != nil {
+	if err != nil && !isResourceAlreadyInUse(err) {
 		return nil, err
 	}
 
@@ -373,4 +373,10 @@ func (s *Stack) waitForStackCreation(ctx context.Context, logger logr.Logger) er
 		return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
 	}
 	return nil
+}
+
+func isResourceAlreadyInUse(err error) bool {
+	var awsErr smithy.APIError
+	ok := errors.As(err, &awsErr)
+	return err != nil && ok && awsErr.ErrorCode() == "ResourceInUseException"
 }

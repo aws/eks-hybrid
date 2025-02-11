@@ -94,7 +94,9 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if kubeletStatus == daemon.DaemonStatusRunning {
 			if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
 				log.Info("Validating if node has been drained...")
-				if err := node.IsDrained(ctx); err != nil {
+				if drained, err := node.IsDrained(ctx); err != nil {
+					return fmt.Errorf("validating if node has been drained: %w", err)
+				} else if !drained {
 					return fmt.Errorf("only static pods and pods controlled by daemon-sets can be running on the node. Please move pods " +
 						"to different node or use --skip pod-validation")
 				}
@@ -102,7 +104,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			if !slices.Contains(c.skipPhases, skipNodePreflightCheck) {
 				log.Info("Validating if node has been marked unschedulable...")
 				if err := node.IsUnscheduled(ctx); err != nil {
-					return fmt.Errorf("please drain or cordon node to mark it unschedulable or use --skip node-validation. %v", err)
+					return fmt.Errorf("please drain or cordon node to mark it unschedulable or use --skip node-validation: %w", err)
 				}
 			}
 		}

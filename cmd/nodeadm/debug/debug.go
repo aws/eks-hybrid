@@ -33,6 +33,7 @@ func NewCommand() cli.Command {
 	debug := debug{}
 	debug.cmd = flaggy.NewSubcommand("debug")
 	debug.cmd.String(&debug.nodeConfigSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
+	debug.cmd.Bool(&debug.noColor, "", "no-color", "If set, suppresses color output.")
 	debug.cmd.Description = "Debug the node registration process"
 	debug.cmd.AdditionalHelpPrepend = debugHelpText
 	return &debug
@@ -41,6 +42,7 @@ func NewCommand() cli.Command {
 type debug struct {
 	cmd              *flaggy.Subcommand
 	nodeConfigSource string
+	noColor          bool
 }
 
 func (c *debug) Flaggy() *flaggy.Subcommand {
@@ -70,7 +72,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	printer := validation.NewPrinterWithStdCapture("stderr")
+	printer := validation.NewPrinterWithStdCapture("stderr", c.noColor)
 	if err := printer.Init(); err != nil {
 		return err
 	}

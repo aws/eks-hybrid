@@ -245,3 +245,8 @@ func (u Ubuntu2404) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, erro
 
 	return executeTemplate(ubuntu2404CloudInit, data)
 }
+
+// IsUbuntu2004 returns true if the given name is an Ubuntu 2004 OS name.
+func IsUbuntu2004(name string) bool {
+	return strings.HasPrefix(name, "ubuntu2004")
+}

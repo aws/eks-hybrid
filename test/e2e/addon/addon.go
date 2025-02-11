@@ -8,6 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/go-logr/logr"
+
+	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 type Addon struct {
@@ -31,6 +33,10 @@ func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logge
 
 	_, err := client.CreateAddon(ctx, params)
 
+	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
+		// Ignore if add-on is already created
+		return nil
+	}
 	return err
 }
 

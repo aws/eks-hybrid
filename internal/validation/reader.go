@@ -116,11 +116,16 @@ type PrinterWithStdCapture struct {
 }
 
 // NewPrinterWithStdCapture returns a new PrinterWithStdCapture.
-func NewPrinterWithStdCapture(stdName string) *PrinterWithStdCapture {
+func NewPrinterWithStdCapture(stdName string, noColor bool) *PrinterWithStdCapture {
 	out := make(chan string, 100)
-	printer := NewPrinter(
+	opts := []PrinterOpt{
 		WithExternalLogs(NewChannelReader(out, stdName)),
-	)
+	}
+	if noColor {
+		opts = append(opts, WithNoColor())
+	}
+
+	printer := NewPrinter(opts...)
 	newStderr := NewFileCapture(out)
 
 	return &PrinterWithStdCapture{

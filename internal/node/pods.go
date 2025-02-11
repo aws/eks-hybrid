@@ -86,18 +86,12 @@ func getStaticPodsOnNode() ([]string, error) {
 	return staticPodNames, nil
 }
 
-func getPodsOnNode() ([]corev1.Pod, error) {
-	nodeName, err := kubelet.GetNodeName()
-	if err != nil {
-		return nil, err
-	}
-
+func getPodsOnNode(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
 	clientset, err := kubelet.GetKubeClientFromKubeConfig()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create kubernetes client")
 	}
 
-	ctx := context.Background()
 	pods, err := clientset.CoreV1().Pods("").List(ctx,
 		metav1.ListOptions{
 			FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),

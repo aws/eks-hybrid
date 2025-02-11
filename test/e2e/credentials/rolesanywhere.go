@@ -76,3 +76,8 @@ func (i *IamRolesAnywhereProvider) FilesForNode(spec e2e.NodeSpec) ([]e2e.File, 
 		},
 	}, nil
 }
+
+// IsIAMRolesAnywhere returns true if the given CredentialProvider is IAM Roles Anywhere.
+func IsIAMRolesAnywhere(name creds.CredentialProvider) bool {
+	return name == creds.IamRolesAnywhereCredentialProvider
+}

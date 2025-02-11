@@ -37,6 +37,7 @@ type ssmInstallerSource struct {
 
 func (s ssmInstallerSource) GetSSMRegion() string {
 	return s.region
+
 }
 
 func (s ssmInstallerSource) GetSSMInstaller(ctx context.Context) (io.ReadCloser, error) {
@@ -45,8 +46,8 @@ func (s ssmInstallerSource) GetSSMInstaller(ctx context.Context) (io.ReadCloser,
 		return nil, err
 	}
 
-	s.logger.Info("Downloading SSM installer...", zap.String("region", s.region), zap.String("url", endpoint))
-
+	s.logger.Info("Downloading SSM installer", zap.String("region", s.region), zap.String("url", endpoint))
+  
 	obj, err := util.GetHttpFileReader(ctx, endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("unable to download SSM installer from region %s: "+

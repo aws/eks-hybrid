@@ -14,6 +14,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
+	"github.com/aws/eks-hybrid/internal/system"
 )
 
 const installHelpText = `Examples:
@@ -74,6 +75,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	credentialProvider, err := creds.GetCredentialProvider(c.credentialProvider)
 	if err != nil {
+		return err
+	}
+	osName, osVersion := system.GetOsNameWithVersion()
+	if err = creds.ValidateCredentialProvider(credentialProvider, osName, osVersion); err != nil {
 		return err
 	}
 

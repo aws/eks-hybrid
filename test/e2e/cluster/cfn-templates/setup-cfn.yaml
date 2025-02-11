@@ -362,6 +362,30 @@ Resources:
                 path: /root/download-private-key.sh
                 permissions: "0755"
 
+  PodIdentityAssociationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'pods.eks.amazonaws.com'
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+      Policies:
+        - PolicyName: pod-identity-association-role-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: arn:aws:s3:::RANDOM_NON_EXISTENT_BUCKET
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
 Outputs:
   ClusterRole:
     Description: The name of the IAM Role for EKS Hybrid Cluster.
@@ -382,3 +406,7 @@ Outputs:
   ClusterSecurityGroup:
     Description: The ID of the EKS Hybrid Cluster Security Group.
     Value: !GetAtt ClusterVPC.DefaultSecurityGroup
+
+  PodIdentityAssociationRoleARN:
+    Description: The role ARN of PodIdentityAssociationRole
+    Value: !GetAtt PodIdentityAssociationRole.Arn

@@ -9,4 +9,14 @@ phases:
   build:
     commands:
     - SANITIZED_CODEBUILD_BUILD_ID=$(echo $CODEBUILD_BUILD_ID | tr ':' '-')
-    - ./hack/run-e2e.sh $SANITIZED_CODEBUILD_BUILD_ID $AWS_REGION $KUBERNETES_VERSION $CNI s3://$ARTIFACTS_BUCKET/latest-pre/linux/amd64/nodeadm s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/nodeadm $LOGS_BUCKET $ENDPOINT
+    - ./hack/run-e2e.sh $SANITIZED_CODEBUILD_BUILD_ID $AWS_REGION $KUBERNETES_VERSION $CNI s3://$ARTIFACTS_BUCKET/latest-pre/linux/amd64/nodeadm s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/nodeadm $LOGS_BUCKET e2e-artifacts $ENDPOINT
+
+reports:
+  e2e-reports:
+    files:
+      - e2e-reports/junit-nodeadm.xml
+    file-format: "JUNITXML"
+
+artifacts:
+  files:
+  - "e2e-artifacts/*"

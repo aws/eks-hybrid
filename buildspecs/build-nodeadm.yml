@@ -4,8 +4,8 @@ phases:
   build:
     commands:
     - make build-cross-platform build-cross-e2e-tests-binary build-cross-e2e-test install-cross-ginkgo
-    - aws s3 sync _bin/amd64/ s3://$ARTIFACTS_BUCKET/latest-pre/linux/amd64/
-    - aws s3 sync _bin/arm64/ s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/
+    - aws s3 sync --no-progress _bin/amd64/ s3://$ARTIFACTS_BUCKET/latest-pre/linux/amd64/
+    - aws s3 sync --no-progress _bin/arm64/ s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/
 
 cache:
   paths:

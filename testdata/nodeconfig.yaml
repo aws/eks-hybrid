@@ -1,6 +1,0 @@
-apiVersion: node.eks.aws/v1alpha1
-kind: NodeConfig
-spec:
-  cluster:
-    name: nodeadm-intern-proj
-    region: us-west-2

@@ -29,22 +29,30 @@ func IsUnscheduled(ctx context.Context) error {
 	return nil
 }
 
-func IsDrained(ctx context.Context) error {
-	podsOnNode, err := getPodsOnNode()
+func IsDrained(ctx context.Context) (bool, error) {
+	nodeName, err := kubelet.GetNodeName()
 	if err != nil {
-		return errors.Wrap(err, "failed to get pods on node")
+		return false, errors.Wrap(err, "getting node name from kubelet")
 	}
 
+	pods, err := getPodsOnNode(ctx, nodeName)
+	if err != nil {
+		return false, errors.Wrapf(err, "getting pods for node %s", nodeName)
+	}
+
+	return isDrained(pods)
+}
+
+func isDrained(pods []v1.Pod) (bool, error) {
 	for _, filter := range getDrainedPodFilters() {
-		podsOnNode, err = filter(podsOnNode)
+		var err error
+		pods, err = filter(pods)
 		if err != nil {
-			return errors.Wrap(err, "running filter on pods")
+			return false, errors.Wrap(err, "running filter on pods")
 		}
 	}
-	if len(podsOnNode) != 0 {
-		return fmt.Errorf("node not drained")
-	}
-	return nil
+
+	return len(pods) == 0, nil
 }
 
 func IsInitialized(ctx context.Context) error {
