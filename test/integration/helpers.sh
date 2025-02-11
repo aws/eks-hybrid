@@ -168,6 +168,31 @@ function assert::install-fails-with-region() {
     fi
 }
 
+function assert::output-contains-ssm-url() {
+    if [ "$#" -ne 2 ]; then
+        echo "Usage: assert::output-contains-ssm-url [output] [region]"
+        exit 1
+    fi
+
+    local output=$1
+    local region=$2
+    local arch=$(uname -m)
+
+    # Convert architecture names to match SSM's format
+    case "$arch" in
+        "x86_64")  arch="linux_amd64" ;;
+        "aarch64") arch="linux_arm64" ;;
+        *) echo "Unsupported architecture: $arch" >&2; return 1 ;;
+    esac
+
+    local expected_url="https://amazon-ssm-${region}.s3.${region}.amazonaws.com/latest/${arch}/ssm-setup-cli"
+
+    if ! echo "$output" | grep -q "$expected_url"; then
+        echo "Output does not contain expected SSM URL: $expected_url"
+        return 1
+    fi
+}
+
 # Check if a non-json file exists and verify its permission, if a 3rd argument is provided, also check file content
 function validate-file() {
   if [[ "$#" -ne 2 && "$#" -ne 3 ]]; then

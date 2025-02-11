@@ -26,7 +26,6 @@ const (
 // Source serves an SSM installer binary for the target platform.
 type Source interface {
 	GetSSMInstaller(ctx context.Context) (io.ReadCloser, error)
-	GetSSMRegion() string
 }
 
 // PkgSource serves and defines the package for target platform
@@ -34,7 +33,7 @@ type PkgSource interface {
 	GetSSMPackage() artifact.Package
 }
 
-func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error {
+func Install(ctx context.Context, tracker *tracker.Tracker, source Source, region string) error {
 	installer, err := source.GetSSMInstaller(ctx)
 	if err != nil {
 		return err
@@ -45,7 +44,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 		return errors.Wrap(err, "failed to install ssm installer")
 	}
 
-	if err = runInstallWithRetries(ctx, source.GetSSMRegion()); err != nil {
+	if err = runInstallWithRetries(ctx, region); err != nil {
 		return errors.Wrapf(err, "failed to install ssm agent")
 	}
 

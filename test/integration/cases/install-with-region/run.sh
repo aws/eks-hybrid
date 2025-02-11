@@ -17,7 +17,8 @@ declare SUPPORTED_VERSIONS=(1.26 1.27 1.28 1.29 1.30)
 for VERSION in ${SUPPORTED_VERSIONS}
 do
 
-    nodeadm install $VERSION --credential-provider ssm --region us-east-1
+    output=$(nodeadm install $VERSION --credential-provider ssm --region us-east-1 2>&1)
+    assert::output-contains-ssm-url "$output" "us-east-1"
 
     assert::path-exists /usr/bin/containerd
     assert::path-exists /usr/sbin/iptables
