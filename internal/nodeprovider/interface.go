@@ -38,7 +38,7 @@ type NodeProvider interface {
 	Logger() *zap.Logger
 
 	// ValidateNodeIP validates the node ip is within the allowed range
-	ValidateNodeIP() error
+	ValidateNodeIP(ctx context.Context) error
 
 	// Cleanup runs post init cleanup if any are required by node provider.
 	Cleanup() error

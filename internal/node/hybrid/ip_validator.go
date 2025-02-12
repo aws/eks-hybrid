@@ -5,10 +5,11 @@ import (
 	"net"
 	"strings"
 
-	"github.com/aws/eks-hybrid/internal/aws/eks"
 	apimachinerynet "k8s.io/apimachinery/pkg/util/net"
 	nodeutil "k8s.io/component-helpers/node/util"
 	k8snet "k8s.io/utils/net"
+
+	"github.com/aws/eks-hybrid/internal/aws/eks"
 )
 
 const (
@@ -82,7 +83,7 @@ func getClusterCIDRs(remoteNetworkConfig *eks.RemoteNetworkConfig) []string {
 func extractFlagValue(kubeletArgs []string, flag string) (string, error) {
 	var flagValue string
 
-	// pick last instance of the flag
+	// pick last instance of the flag if it exists
 	for _, s := range kubeletArgs {
 		if strings.HasPrefix(s, flag) {
 			flagValue = strings.TrimPrefix(s, flag)
@@ -124,13 +125,6 @@ func extractHostName(kubeletArgs []string) (string, error) {
 	}
 
 	return hostname, nil
-}
-
-func getNodeName(nodeName string, kubeletArgs []string) (string, error) {
-	if nodeName != "" {
-		return nodeName, nil
-	}
-	return extractHostName(kubeletArgs)
 }
 
 // Validate given node IP belongs to the current host.
@@ -205,20 +199,17 @@ func getNodeIP(kubeletArgs []string, IAMNodeName string) (net.IP, error) {
 		}
 		ipAddr = parsedAddr
 	} else {
-		var addrs []net.IP
-		var nodeName string
 		// If using SSM, the node name will be set at initialization to the SSM instance ID,
 		// so it won't resolve to anything via DNS, hence we're only checking in the case of IAM-RA
-		nodeName, err = getNodeName(IAMNodeName, kubeletArgs)
-		if err != nil {
-			return nil, err
-		}
+		if IAMNodeName != "" {
+			var addrs []net.IP
 
-		addrs, _ = net.LookupIP(nodeName)
-		for _, addr := range addrs {
-			if err = validateNodeIP(addr); addr.To4() != nil && err == nil {
-				ipAddr = addr
-				break
+			addrs, _ = net.LookupIP(IAMNodeName)
+			for _, addr := range addrs {
+				if err = validateNodeIP(addr); addr.To4() != nil && err == nil {
+					ipAddr = addr
+					break
+				}
 			}
 		}
 
@@ -229,7 +220,7 @@ func getNodeIP(kubeletArgs []string, IAMNodeName string) (net.IP, error) {
 
 		if ipAddr == nil {
 			// We tried everything we could, but the IP address wasn't fetchable; error out
-			return nil, fmt.Errorf("can't get ip address of node %s. error: %v", nodeName, err)
+			return nil, fmt.Errorf("couldn't get ip address of node: %w", err)
 		}
 
 	}
