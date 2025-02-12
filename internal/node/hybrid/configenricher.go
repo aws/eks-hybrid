@@ -35,21 +35,26 @@ func (p *HybridNodeProvider) Enrich(ctx context.Context) error {
 	return nil
 }
 
-func needsClusterDetails(nodeConfig *api.NodeConfig) bool {
-	return nodeConfig.Spec.Cluster.APIServerEndpoint == "" || nodeConfig.Spec.Cluster.CertificateAuthority == nil || nodeConfig.Spec.Cluster.CIDR == ""
-}
-
-func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*eks.Cluster, error) {
+// ReadCluster calls eks.DescribeCluster and returns the cluster after ensuring it has a RemoteNetworkConfig
+func ReadCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*eks.Cluster, error) {
 	cluster, err := eks.DescribeCluster(ctx, eks.NewClient(awsConfig), nodeConfig.Spec.Cluster.Name)
 	if err != nil {
 		return nil, err
 	}
 
+	if cluster.Cluster.RemoteNetworkConfig == nil {
+		return nil, errors.New("eks cluster does not have remoteNetworkConfig enabled, which is required for Hybrid Nodes")
+	}
+
 	return cluster.Cluster, nil
 }
 
+func needsClusterDetails(nodeConfig *api.NodeConfig) bool {
+	return nodeConfig.Spec.Cluster.APIServerEndpoint == "" || nodeConfig.Spec.Cluster.CertificateAuthority == nil || nodeConfig.Spec.Cluster.CIDR == ""
+}
+
 func ensureClusterDetails(ctx context.Context, p *HybridNodeProvider) error {
-	cluster, err := readCluster(ctx, *p.awsConfig, p.nodeConfig)
+	cluster, err := ReadCluster(ctx, *p.awsConfig, p.nodeConfig)
 	if err != nil {
 		return err
 	}
@@ -58,9 +63,6 @@ func ensureClusterDetails(ctx context.Context, p *HybridNodeProvider) error {
 		return errors.New("eks cluster is not active")
 	}
 
-	if cluster.RemoteNetworkConfig == nil {
-		return errors.New("eks cluster does not have remoteNetworkConfig enabled, which is required for Hybrid Nodes")
-	}
 	p.remoteNetworkConfig = cluster.RemoteNetworkConfig
 
 	if p.nodeConfig.Spec.Cluster.APIServerEndpoint == "" {

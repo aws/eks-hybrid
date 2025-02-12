@@ -41,7 +41,7 @@ func (i *Initer) Run(ctx context.Context) error {
 	if !slices.Contains(i.SkipPhases, ipValidation) {
 		i.Logger.Info("Validating Node IP...")
 
-		if err := i.NodeProvider.ValidateNodeIP(); err != nil {
+		if err := i.NodeProvider.ValidateNodeIP(ctx); err != nil {
 			return err
 		}
 	}
