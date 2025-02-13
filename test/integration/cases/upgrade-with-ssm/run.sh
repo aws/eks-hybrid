@@ -45,7 +45,7 @@ assert::file-permission-matches /usr/local/bin/aws-iam-authenticator 755
 assert::file-permission-matches /opt/ssm/ssm-setup-cli 755
 
 mock::ssm
-nodeadm init --skip run,preprocess --config-source file://config.yaml
+nodeadm init --skip run,preprocess,ip-validation --config-source file://config.yaml
 
 # The memory reserved by kubelet is dynamic depending on the host that builts the docker image
 # Remove kubeReserved field before checking its content

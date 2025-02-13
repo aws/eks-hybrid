@@ -19,7 +19,7 @@ dnf install -y firewalld
 systemctl enable firewalld
 systemctl start firewalld
 
-nodeadm init --skip run,install-validation --config-source file://config.yaml
+nodeadm init --skip run,install-validation,ip-validation --config-source file://config.yaml
 
 # Check if aws config file has been created as specifed in NodeConfig
 assert::files-equal /.aws/config expected-aws-config
