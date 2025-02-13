@@ -33,7 +33,7 @@ func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logge
 
 	_, err := client.CreateAddon(ctx, params)
 
-	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
+	if err != nil && errors.IsType(err, &types.ResourceInUseException{}) {
 		// Ignore if add-on is already created
 		return nil
 	}

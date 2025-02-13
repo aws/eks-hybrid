@@ -48,7 +48,8 @@ Resources:
     Properties:
       RoleName: !Ref RoleName
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly'
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodeMinimalPolicy
       Policies:
         - PolicyName: EKSDescribeCluster
           PolicyDocument:

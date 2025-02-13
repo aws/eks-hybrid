@@ -362,6 +362,14 @@ Resources:
                 path: /root/download-private-key.sh
                 permissions: "0755"
 
+  PodIdentityS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
   PodIdentityAssociationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -380,8 +388,12 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: s3:GetObject
-                Resource: arn:aws:s3:::RANDOM_NON_EXISTENT_BUCKET
+                Action:
+                  - s3:Get*
+                  - s3:List*
+                Resource:
+                  - !Sub arn:aws:s3:::${PodIdentityS3Bucket}
+                  - !Sub arn:aws:s3:::${PodIdentityS3Bucket}/*
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName

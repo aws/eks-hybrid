@@ -279,7 +279,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
 							test.logger.Info("Testing Pod Identity add-on functionality")
-							verifyPodIdentityAddon := test.newVerifyPodIdentityAddon()
+							verifyPodIdentityAddon := test.newVerifyPodIdentityAddon(instance.IP)
 							Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
 
 							test.logger.Info("Resetting hybrid node...")
@@ -507,12 +507,16 @@ func (t *peeredVPCTest) instanceName(testName string, os e2e.NodeadmOS, provider
 	)
 }
 
-func (t *peeredVPCTest) newVerifyPodIdentityAddon() *addon.VerifyPodIdentityAddon {
+func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeIP string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
 		Cluster:   t.cluster.Name,
+		NodeIP:    nodeIP,
 		K8S:       t.k8sClient,
-		Logger:    t.logger,
 		EKSClient: t.eksClient,
+		IAMClient: t.iamClient,
+		S3Client:  t.s3Client,
+		Logger:    t.logger,
+		K8SConfig: t.k8sClientConfig,
 	}
 }
 

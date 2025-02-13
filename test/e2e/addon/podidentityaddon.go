@@ -21,13 +21,14 @@ type PodIdentityAddon struct {
 const (
 	podIdentityServiceAccount = "pod-identity-sa"
 	namespace                 = "default"
+	podIdentityAgent          = "eks-pod-identity-agent"
 )
 
-func NewPodIdentityAddon(cluster, name, roleArn string) PodIdentityAddon {
+func NewPodIdentityAddon(cluster, roleArn string) PodIdentityAddon {
 	return PodIdentityAddon{
 		Addon: Addon{
 			Cluster:       cluster,
-			Name:          name,
+			Name:          podIdentityAgent,
 			Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
 		},
 		roleArn: roleArn,

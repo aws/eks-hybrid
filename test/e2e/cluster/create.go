@@ -38,9 +38,8 @@ type NetworkConfig struct {
 }
 
 const (
-	ciliumCni            = "cilium"
-	calicoCni            = "calico"
-	podIdentityAddonName = "eks-pod-identity-agent"
+	ciliumCni = "cilium"
+	calicoCni = "calico"
 )
 
 type Create struct {
@@ -106,7 +105,7 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		return fmt.Errorf("creating kubernetes client: %w", err)
 	}
 
-	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, podIdentityAddonName, stackOut.podIdentityRoleArn)
+	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, stackOut.podIdentityRoleArn)
 
 	err = podIdentityAddon.Create(ctx, c.logger, c.eks, k8sClient)
 	if err != nil {
