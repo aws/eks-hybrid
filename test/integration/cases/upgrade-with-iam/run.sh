@@ -69,7 +69,7 @@ systemctl disable aws_signing_helper_update.service
 systemctl daemon-reload
 systemctl reset-failed
 
-nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,ip-validation --config-source file://config.yaml
 
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables

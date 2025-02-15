@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cni"
@@ -36,6 +37,21 @@ type Upgrader struct {
 }
 
 func (u *Upgrader) Run(ctx context.Context) error {
+	if err := u.NodeProvider.ConfigureAws(ctx); err != nil {
+		return err
+	}
+	if err := u.NodeProvider.Enrich(ctx); err != nil {
+		return err
+	}
+
+	if !slices.Contains(u.SkipPhases, ipValidation) {
+		u.Logger.Info("Validating Node IP...")
+
+		if err := u.NodeProvider.ValidateNodeIP(ctx); err != nil {
+			return err
+		}
+	}
+
 	if err := u.upgradeDistroPackages(ctx); err != nil {
 		return err
 	}
@@ -48,12 +64,6 @@ func (u *Upgrader) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := u.NodeProvider.ConfigureAws(ctx); err != nil {
-		return err
-	}
-	if err := u.NodeProvider.Enrich(ctx); err != nil {
-		return err
-	}
 	if err := initDaemons(ctx, u.NodeProvider, u.SkipPhases, u.Logger); err != nil {
 		return err
 	}
