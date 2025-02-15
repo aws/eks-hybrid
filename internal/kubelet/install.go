@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -38,15 +39,23 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	}
 	defer kubelet.Close()
 
-	if err := artifact.InstallFile(BinPath, kubelet, 0o755); err != nil {
-		return errors.Wrap(err, "failed to install kubelet")
-	}
-
-	if !kubelet.VerifyChecksum() {
-		return errors.Errorf("kubelet checksum mismatch: %v", artifact.NewChecksumError(kubelet))
+	if err = installFromSource(kubelet); err != nil {
+		return err
 	}
 	if err = tracker.Add(artifact.Kubelet); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func installFromSource(source artifact.Source) error {
+	if err := artifact.InstallFile(BinPath, source, 0o755); err != nil {
+		return errors.Wrap(err, "failed to install kubelet")
+	}
+
+	if !source.VerifyChecksum() {
+		return errors.Errorf("kubelet checksum mismatch: %v", artifact.NewChecksumError(source))
 	}
 
 	buf := bytes.NewBuffer(kubeletUnitFile)
@@ -54,7 +63,6 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	if err := artifact.InstallFile(UnitPath, buf, 0o644); err != nil {
 		return errors.Errorf("failed to install kubelet systemd unit: %v", err)
 	}
-
 	return nil
 }
 
@@ -71,5 +79,29 @@ func Uninstall() error {
 			return err
 		}
 	}
+	return nil
+}
+
+func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {
+	kubelet, err := src.GetKubelet(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get kubelet source")
+	}
+	defer kubelet.Close()
+
+	upgradable, err := artifact.UpgradeAvailable(BinPath, kubelet)
+	if err != nil {
+		return err
+	}
+
+	if upgradable {
+		if err := installFromSource(kubelet); err != nil {
+			return err
+		}
+		log.Info("Upgraded kubelet...")
+	} else {
+		log.Info("No new version of kubelet found. Skipping upgrade...")
+	}
+
 	return nil
 }

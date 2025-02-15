@@ -62,6 +62,14 @@ func Uninstall(ctx context.Context, source Source) error {
 	return nil
 }
 
+func Upgrade(ctx context.Context, source Source) error {
+	containerd := source.GetContainerd()
+	if err := artifact.UpgradePackageWithRetries(ctx, containerd, 5*time.Second); err != nil {
+		return errors.Wrap(err, "failed to upgrade containerd")
+	}
+	return nil
+}
+
 func ValidateContainerdSource(source SourceName) error {
 	osName := system.GetOsName()
 	if source == ContainerdSourceNone {
