@@ -49,9 +49,6 @@ func isIPInClusterNetworks(ip net.IP, remoteNetworkConfig *eks.RemoteNetworkConf
 }
 
 func validateIP(ipAddr net.IP, hnp *HybridNodeProvider) error {
-	debugCidrs := getClusterCIDRs(hnp.remoteNetworkConfig)
-	fmt.Printf("DEBUG: cidrs:  %v\n", debugCidrs)
-
 	if validIP, err := isIPInClusterNetworks(ipAddr, hnp.remoteNetworkConfig); err != nil {
 		return err
 	} else if !validIP {

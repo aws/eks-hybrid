@@ -58,7 +58,7 @@ validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644
 
-nodeadm upgrade $TARGET_VERSION --skip run,preprocess,pod-validation,node-validation,init-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,preprocess,pod-validation,node-validation,init-validation,ip-validation --config-source file://config.yaml
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables
 assert::path-exists /usr/local/bin/kubectl
