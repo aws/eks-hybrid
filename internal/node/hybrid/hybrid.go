@@ -47,6 +47,12 @@ func WithAWSConfig(config *aws.Config) NodeProviderOpt {
 	}
 }
 
+func WithRemoteNetworkConfig(remoteNetworkConfig *eks.RemoteNetworkConfig) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.remoteNetworkConfig = remoteNetworkConfig
+	}
+}
+
 func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
