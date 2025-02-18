@@ -11,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
@@ -37,10 +39,15 @@ type vpcConfig struct {
 	securityGroup string
 }
 
+type podIdentity struct {
+	roleArn  string
+	s3Bucket string
+}
+
 type resourcesStackOutput struct {
-	clusterRole        string
-	clusterVpcConfig   vpcConfig
-	podIdentityRoleArn string
+	clusterRole      string
+	clusterVpcConfig vpcConfig
+	podIdentity      podIdentity
 }
 
 type stack struct {
@@ -48,6 +55,7 @@ type stack struct {
 	cfn       *cloudformation.Client
 	ssmClient *ssm.Client
 	ec2Client *ec2.Client
+	s3Client  *s3.Client
 }
 
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
@@ -181,7 +189,9 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		case "ClusterSecurityGroup":
 			result.clusterVpcConfig.securityGroup = *output.OutputValue
 		case "PodIdentityAssociationRoleARN":
-			result.podIdentityRoleArn = *output.OutputValue
+			result.podIdentity.roleArn = *output.OutputValue
+		case "PodIdentityS3BucketName":
+			result.podIdentity.s3Bucket = *output.OutputValue
 		}
 	}
 
@@ -265,7 +275,22 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 func (s *stack) delete(ctx context.Context, clusterName string) error {
 	stackName := stackName(clusterName)
 	s.logger.Info("Deleting E2E test cluster stack", "stackName", stackName)
-	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+
+	var output *cloudformation.DescribeStackResourceOutput
+	output, err := s.cfn.DescribeStackResource(ctx, &cloudformation.DescribeStackResourceInput{
+		LogicalResourceId: aws.String("PodIdentityS3Bucket"),
+		StackName:         aws.String(stackName),
+	})
+	if err != nil {
+		return err
+	}
+
+	s.logger.Info("Empty pod identity s3 bucket", "bucket", output.StackResourceDetail.PhysicalResourceId)
+	if err = emptyS3Bucket(ctx, s.s3Client, output.StackResourceDetail.PhysicalResourceId); err != nil {
+		return err
+	}
+
+	_, err = s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String(stackName),
 	})
 	if err != nil {
@@ -278,6 +303,40 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 	}
 
 	s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
+	return nil
+}
+
+func emptyS3Bucket(ctx context.Context, client *s3.Client, bucket *string) error {
+	var err error
+
+	output, err := client.ListObjects(ctx, &s3.ListObjectsInput{
+		Bucket: bucket,
+	})
+	if err != nil {
+		return err
+	}
+
+	if output.Contents == nil || len(output.Contents) == 0 {
+		// no S3 objects to delete
+		return nil
+	}
+
+	var s3Objects []s3types.ObjectIdentifier
+	for _, content := range output.Contents {
+		s3Objects = append(s3Objects, s3types.ObjectIdentifier{
+			Key: content.Key,
+		})
+	}
+
+	if _, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+		Bucket: bucket,
+		Delete: &s3types.Delete{
+			Objects: s3Objects,
+		},
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 

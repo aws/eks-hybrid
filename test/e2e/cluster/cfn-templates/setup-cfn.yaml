@@ -422,3 +422,7 @@ Outputs:
   PodIdentityAssociationRoleARN:
     Description: The role ARN of PodIdentityAssociationRole
     Value: !GetAtt PodIdentityAssociationRole.Arn
+
+  PodIdentityS3BucketName:
+    Description: The bucket name for pod identity S3 bucket
+    Value: !Ref PodIdentityS3Bucket

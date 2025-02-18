@@ -77,17 +77,6 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	}
 	v.Logger.Info("Get S3 Bucket for pod identity add-on test", "S3 bucket", bucket)
 
-	bucketObjectKey := "test"
-	bucketObjectContent := "RANDOM-WORD"
-	if _, err := v.S3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(bucketObjectKey),
-		Body:   strings.NewReader(bucketObjectContent),
-	}); err != nil {
-		return err
-	}
-	v.Logger.Info("Upload text file to S3 bucket", "key", bucketObjectKey, "content", bucketObjectContent)
-
 	// Deploy a pod with service account then run aws cli to access aws resources
 	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeIP, v.Logger)
 	if err != nil {
@@ -109,7 +98,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 					Command: []string{
 						"/bin/bash",
 						"-c",
-						"sleep 1h",
+						"sleep infinity",
 					},
 				},
 			},

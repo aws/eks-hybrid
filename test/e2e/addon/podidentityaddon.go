@@ -2,10 +2,12 @@ package addon
 
 import (
 	"context"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-logr/logr"
 	clientgo "k8s.io/client-go/kubernetes"
 
@@ -22,6 +24,8 @@ const (
 	podIdentityServiceAccount = "pod-identity-sa"
 	namespace                 = "default"
 	podIdentityAgent          = "eks-pod-identity-agent"
+	bucketObjectKey           = "test"
+	bucketObjectContent       = "RANDOM-WORD"
 )
 
 func NewPodIdentityAddon(cluster, roleArn string) PodIdentityAddon {
@@ -55,6 +59,18 @@ func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksCli
 
 	_, err := eksClient.CreatePodIdentityAssociation(ctx, createPodIdentityAssociationInput)
 	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
+		return err
+	}
+
+	return nil
+}
+
+func (p PodIdentityAddon) Upload(ctx context.Context, logger logr.Logger, client *s3.Client, bucket string) error {
+	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(bucketObjectKey),
+		Body:   strings.NewReader(bucketObjectContent),
+	}); err != nil {
 		return err
 	}
 

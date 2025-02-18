@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/dynamic"
@@ -47,6 +48,7 @@ type Create struct {
 	eks    *eks.Client
 	stack  *stack
 	iam    *iam.Client
+	s3     *s3.Client
 }
 
 // NewCreate creates a new workflow to create an EKS cluster. The EKS client will use
@@ -64,6 +66,7 @@ func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 			ssmClient: ssm.NewFromConfig(aws),
 		},
 		iam: iam.NewFromConfig(aws),
+		s3:  s3.NewFromConfig(aws),
 	}
 }
 
@@ -105,11 +108,17 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		return fmt.Errorf("creating kubernetes client: %w", err)
 	}
 
-	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, stackOut.podIdentityRoleArn)
+	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, stackOut.podIdentity.roleArn)
 
 	err = podIdentityAddon.Create(ctx, c.logger, c.eks, k8sClient)
 	if err != nil {
 		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon.Name, err)
+	}
+
+	// upload test file to pod identity S3 bucket
+	err = podIdentityAddon.Upload(ctx, c.logger, c.s3, stackOut.podIdentity.s3Bucket)
+	if err != nil {
+		return fmt.Errorf("uploading test file to s3 bucket: %s", stackOut.podIdentity.s3Bucket)
 	}
 
 	dynamicK8s, err := dynamic.NewForConfig(clientConfig)
