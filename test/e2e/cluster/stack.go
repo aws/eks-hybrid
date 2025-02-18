@@ -316,7 +316,7 @@ func emptyS3Bucket(ctx context.Context, client *s3.Client, bucket *string) error
 		return err
 	}
 
-	if output.Contents == nil || len(output.Contents) == 0 {
+	if len(output.Contents) == 0 {
 		// no S3 objects to delete
 		return nil
 	}
