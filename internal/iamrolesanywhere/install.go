@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -48,4 +49,31 @@ func Uninstall() error {
 		return err
 	}
 	return os.RemoveAll(SigningHelperBinPath)
+}
+
+func Upgrade(ctx context.Context, signingHelperSrc SigningHelperSource, log *zap.Logger) error {
+	signingHelper, err := signingHelperSrc.GetSigningHelper(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get source for aws_signing_helper")
+	}
+	defer signingHelper.Close()
+
+	upgradable, err := artifact.UpgradeAvailable(SigningHelperBinPath, signingHelper)
+	if err != nil {
+		return err
+	}
+
+	if upgradable {
+		if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, 0o755); err != nil {
+			return errors.Wrap(err, "failed to install aws_signer_helper")
+		}
+
+		if !signingHelper.VerifyChecksum() {
+			return errors.Errorf("aws_signer_helper checksum mismatch: %v", artifact.NewChecksumError(signingHelper))
+		}
+		log.Info("Upgraded iam-roles-anywhere...")
+	} else {
+		log.Info("No new version of iam-roles-anywhere found. Skipping upgrade...")
+	}
+	return nil
 }

@@ -13,6 +13,6 @@ mock::kubelet 1.27.0
 wait::dbus-ready
 
 for config in config.*; do
-  nodeadm init --skip run,install-validation --config-source file://${config}
+  nodeadm init --skip run,install-validation,ip-validation --config-source file://${config}
   assert::json-files-equal /etc/kubernetes/kubelet/config.json expected-kubelet-config.json
 done

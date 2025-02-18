@@ -66,3 +66,9 @@ func InstallPackageWithRetries(ctx context.Context, pkgSource Package, backoff t
 func UninstallPackageWithRetries(ctx context.Context, pkgSource Package, backoff time.Duration) error {
 	return cmd.Retry(ctx, pkgSource.UninstallCmd, backoff)
 }
+
+// UpgradePackageWithRetries upgrades a package (if available) and retries errors until the context
+// is cancelled. The backoff duration is the time to wait between retries.
+func UpgradePackageWithRetries(ctx context.Context, pkgSource Package, backoff time.Duration) error {
+	return cmd.Retry(ctx, pkgSource.UpgradeCmd, backoff)
+}

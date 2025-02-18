@@ -100,12 +100,14 @@ func TestInstallPackageWithRetries(t *testing.T) {
 			source: artifact.NewPackageSource(
 				artifact.NewCmd("echo", "hello"),
 				artifact.Cmd{},
+				artifact.Cmd{},
 			),
 		},
 		{
 			name: "error",
 			source: artifact.NewPackageSource(
 				artifact.NewCmd("fake-command", "1"),
+				artifact.Cmd{},
 				artifact.Cmd{},
 			),
 			wantErr: `running command [fake-command 1]:  [Err exec: "fake-command": executable file not found in $PATH]`,
@@ -145,10 +147,28 @@ func TestInstallPackageWithRetriesSuccessAfterFailure(t *testing.T) {
 	g.Expect(artifact.InstallPackageWithRetries(ctx, source, 1*time.Millisecond)).To(Succeed())
 }
 
+func TestUpgradePackageWithRetriesSuccessAfterFailure(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	source := &dynamicSource{}
+	source.SetUpgradeCmd(artifact.NewCmd("fake-command"))
+
+	go func() {
+		time.Sleep(60 * time.Millisecond)
+		source.SetUpgradeCmd(artifact.NewCmd("echo", "hello"))
+	}()
+
+	g.Expect(artifact.UpgradePackageWithRetries(ctx, source, 1*time.Millisecond)).To(Succeed())
+}
+
 type dynamicSource struct {
 	sync.RWMutex
 	installCmd   artifact.Cmd
 	uninstallCmd artifact.Cmd
+	upgradeCmd   artifact.Cmd
 }
 
 var _ artifact.Package = &dynamicSource{}
@@ -165,6 +185,12 @@ func (f *dynamicSource) UninstallCmd(ctx context.Context) *exec.Cmd {
 	return f.uninstallCmd.Command(ctx)
 }
 
+func (f *dynamicSource) UpgradeCmd(ctx context.Context) *exec.Cmd {
+	f.RLock()
+	defer f.RUnlock()
+	return f.upgradeCmd.Command(ctx)
+}
+
 func (f *dynamicSource) SetInstallCmd(cmd artifact.Cmd) {
 	f.Lock()
 	defer f.Unlock()
@@ -175,4 +201,10 @@ func (f *dynamicSource) SetUninstallCmd(cmd artifact.Cmd) {
 	f.Lock()
 	defer f.Unlock()
 	f.uninstallCmd = cmd
+}
+
+func (f *dynamicSource) SetUpgradeCmd(cmd artifact.Cmd) {
+	f.Lock()
+	defer f.Unlock()
+	f.upgradeCmd = cmd
 }

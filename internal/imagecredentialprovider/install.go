@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -43,4 +44,32 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 
 func Uninstall() error {
 	return os.RemoveAll(path.Dir(BinPath))
+}
+
+func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {
+	imageCredentialProvider, err := src.GetImageCredentialProvider(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get image-credential-provider source")
+	}
+	defer imageCredentialProvider.Close()
+
+	upgradable, err := artifact.UpgradeAvailable(BinPath, imageCredentialProvider)
+	if err != nil {
+		return err
+	}
+
+	if upgradable {
+		if err := artifact.InstallFile(BinPath, imageCredentialProvider, 0o755); err != nil {
+			return errors.Wrap(err, "failed to upgrade image-credential-provider")
+		}
+
+		if !imageCredentialProvider.VerifyChecksum() {
+			return errors.Errorf("image-credential-provider checksum mismatch: %v", artifact.NewChecksumError(imageCredentialProvider))
+		}
+
+		log.Info("Upgraded image credential provider...")
+	} else {
+		log.Info("No new version of image credential provider found. Skipping upgrade...")
+	}
+	return nil
 }

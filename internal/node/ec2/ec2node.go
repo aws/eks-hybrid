@@ -1,6 +1,8 @@
 package ec2
 
 import (
+	"context"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"go.uber.org/zap"
 
@@ -36,6 +38,8 @@ func (enp *ec2NodeProvider) GetNodeConfig() *api.NodeConfig {
 func (enp *ec2NodeProvider) Logger() *zap.Logger {
 	return enp.logger
 }
+
+func (enp *ec2NodeProvider) ValidateNodeIP(ctx context.Context) error { return nil }
 
 func (enp *ec2NodeProvider) Cleanup() error {
 	enp.daemonManager.Close()

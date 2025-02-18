@@ -34,6 +34,13 @@ type PkgSource interface {
 }
 
 func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error {
+	if err := installFromSource(ctx, source, DefaultSsmInstallerRegion); err != nil {
+		return err
+	}
+	return tracker.Add(artifact.Ssm)
+}
+
+func installFromSource(ctx context.Context, source Source, region string) error {
 	installer, err := source.GetSSMInstaller(ctx)
 	if err != nil {
 		return err
@@ -44,11 +51,25 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 		return errors.Wrap(err, "failed to install ssm installer")
 	}
 
-	if err = runInstallWithRetries(ctx); err != nil {
+	if err = runInstallWithRetries(ctx, region); err != nil {
 		return errors.Wrapf(err, "failed to install ssm agent")
 	}
+	return nil
+}
 
-	return tracker.Add(artifact.Ssm)
+// Upgrade will re-download the ssm-setup-cli always. After re-downloading the installer
+// executing the installer will only re-download the agent if there is an update available
+func Upgrade(ctx context.Context, source Source, log *zap.Logger) error {
+	_, region, err := GetManagedHybridInstanceIdAndRegion()
+	if err != nil {
+		return err
+	}
+	if err := installFromSource(ctx, source, region); err != nil {
+		return errors.Wrapf(err, "failed to upgrade ssm")
+	}
+	log.Info("Upgraded SSM agent...")
+
+	return nil
 }
 
 // DeregisterAndUninstall de-registers the managed instance and removes all files and components that
@@ -100,14 +121,6 @@ func DeregisterAndUninstall(ctx context.Context, logger *zap.Logger, pkgSource P
 	return os.RemoveAll(symlinkedAWSConfigPath)
 }
 
-// Uninstall uninstall the ssm agent package and removes the setup-cli binary.
-// It does not de-register the managed instance and it leaves the registration and
-// credentials file.
-func Uninstall(ctx context.Context, logger *zap.Logger, pkgSource PkgSource) error {
-	logger.Info("Uninstalling SSM agent...")
-	return uninstallPreRegisterComponents(ctx, pkgSource)
-}
-
 func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) error {
 	ssmPkg := pkgSource.GetSSMPackage()
 	if err := artifact.UninstallPackageWithRetries(ctx, ssmPkg, 5*time.Second); err != nil {
@@ -116,12 +129,12 @@ func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) er
 	return os.RemoveAll(installerPath)
 }
 
-func runInstallWithRetries(ctx context.Context) error {
+func runInstallWithRetries(ctx context.Context, region string) error {
 	// Sometimes install fails due to conflicts with other processes
 	// updating packages, specially when automating at machine startup.
 	// We assume errors are transient and just retry for a bit.
 	installCmdBuilder := func(ctx context.Context) *exec.Cmd {
-		return exec.CommandContext(ctx, installerPath, "-install", "-region", DefaultSsmInstallerRegion)
+		return exec.CommandContext(ctx, installerPath, "-install", "-region", region, "-version", "latest")
 	}
 	return cmd.Retry(ctx, installCmdBuilder, 5*time.Second)
 }
