@@ -116,7 +116,7 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 	}
 
 	// upload test file to pod identity S3 bucket
-	err = podIdentityAddon.Upload(ctx, c.logger, c.s3, stackOut.podIdentity.s3Bucket)
+	err = podIdentityAddon.UploadFileForVerification(ctx, c.logger, c.s3, stackOut.podIdentity.s3Bucket)
 	if err != nil {
 		return fmt.Errorf("uploading test file to s3 bucket: %s", stackOut.podIdentity.s3Bucket)
 	}

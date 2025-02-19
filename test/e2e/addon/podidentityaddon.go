@@ -2,6 +2,7 @@ package addon
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -11,7 +12,6 @@ import (
 	"github.com/go-logr/logr"
 	clientgo "k8s.io/client-go/kubernetes"
 
-	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -58,14 +58,14 @@ func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksCli
 	}
 
 	_, err := eksClient.CreatePodIdentityAssociation(ctx, createPodIdentityAssociationInput)
-	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
-		return err
+	if err == nil || errors.Is(err, &types.ResourceInUseException{}) {
+		return nil
 	}
 
-	return nil
+	return err
 }
 
-func (p PodIdentityAddon) Upload(ctx context.Context, logger logr.Logger, client *s3.Client, bucket string) error {
+func (p PodIdentityAddon) UploadFileForVerification(ctx context.Context, logger logr.Logger, client *s3.Client, bucket string) error {
 	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(bucketObjectKey),

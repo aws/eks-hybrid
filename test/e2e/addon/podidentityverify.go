@@ -3,10 +3,7 @@ package addon
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"fmt"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -27,6 +24,7 @@ const (
 	podIdentityDaemonSet = "eks-pod-identity-agent-hybrid"
 	podIdentityToken     = "eks-pod-identity-token"
 	policyName           = "pod-identity-association-role-policy"
+	PodIdentityS3Bucket  = "PodIdentityS3Bucket"
 )
 
 type VerifyPodIdentityAddon struct {
@@ -71,7 +69,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return err
 	}
 
-	bucket, err := getBucketNameFromPodIdentityAssociation(ctx, v.Cluster, v.EKSClient, v.IAMClient)
+	bucket, err := getPodIdentityS3Bucket(ctx, v.Cluster, v.S3Client)
 	if err != nil {
 		return err
 	}
@@ -83,7 +81,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return err
 	}
 
-	podName := "awscli"
+	podName := fmt.Sprintf("awscli-%s", node.Name)
 	v.Logger.Info("Creating a test pod on the hybrid node for pod identity add-on to access aws resources")
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -129,101 +127,37 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	return nil
 }
 
-func getBucketNameFromPodIdentityAssociation(ctx context.Context, cluster string, eksClient *eks.Client, iamClient *iam.Client) (string, error) {
-	// The idea behind this function is
-	// 1. it gets role ARN from pod identity association for a given service account,
-	// 2. it retrieves policy document given role ARN and inline policy name,
-	// 3. it parses policy document to get S3 bucket name
-
-	var err error
-	roleName, err := getAssociatedRoleName(ctx, cluster, eksClient)
-	if err != nil {
-		return "", err
-	}
-
-	getRolePolicyOutput, err := iamClient.GetRolePolicy(ctx, &iam.GetRolePolicyInput{
-		RoleName:   aws.String(roleName),
-		PolicyName: aws.String(policyName),
+func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3.Client) (string, error) {
+	listBucketsOutput, err := client.ListBuckets(ctx, &s3.ListBucketsInput{
+		Prefix: aws.String("ekshybridci-arch-"),
 	})
 	if err != nil {
 		return "", err
 	}
 
-	policyDocument, err := unmarshallPolicyDocument(*getRolePolicyOutput.PolicyDocument)
-	if err != nil {
-		return "", err
-	}
-
-	// see policyDocument defined in setup-cfn.yaml::PodIdentityAssociationRole
-	for _, resource := range policyDocument.Statement[0].Resource {
-		if !strings.HasPrefix(resource, "arn:aws:s3::") {
+	for _, bucket := range listBucketsOutput.Buckets {
+		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
+			Bucket: bucket.Name,
+		})
+		if err != nil {
+			// Ignore if there is an error while retrieving tags
 			continue
 		}
 
-		// Sample S3 bucket ARN
-		// "arn:aws:s3:::ekshybridci-arch-nodeadm-e2e-t-podidentitys3bucket-coydlns2q8if",
-		// "arn:aws:s3:::ekshybridci-arch-nodeadm-e2e-t-podidentitys3bucket-coydlns2q8if/*"
-		bucket := lastSegment(strings.Split(resource, "/")[0], ":")
-		return bucket, nil
-	}
+		var foundClusterTag, foundPodIdentityTag bool
+		for _, tag := range getBucketTaggingOutput.TagSet {
+			if *tag.Key == "Nodeadm-E2E-Tests-Cluster" && *tag.Value == cluster {
+				foundClusterTag = true
+			}
 
-	return "", fmt.Errorf("failed to find S3 bucket")
-}
+			if *tag.Key == "aws:cloudformation:logical-id" && *tag.Value == PodIdentityS3Bucket {
+				foundPodIdentityTag = true
+			}
 
-func getAssociatedRoleName(ctx context.Context, cluster string, eksClient *eks.Client) (string, error) {
-	var err error
-	out, err := eksClient.ListPodIdentityAssociations(ctx, &eks.ListPodIdentityAssociationsInput{
-		ClusterName: &cluster,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	var associationId *string
-	for _, association := range out.Associations {
-		if association.Namespace == nil || *association.Namespace != namespace {
-			continue
+			if foundClusterTag && foundPodIdentityTag {
+				return *bucket.Name, nil
+			}
 		}
-
-		if association.ServiceAccount == nil || *association.ServiceAccount != podIdentityServiceAccount {
-			continue
-		}
-
-		// there is at most one association for a service account
-		associationId = association.AssociationId
-		break
 	}
-
-	if associationId == nil {
-		return "", fmt.Errorf("failed to find pod identity association for service account %s in namespace %s", podIdentityServiceAccount, namespace)
-	}
-
-	describePodIdentityAssociationInput := &eks.DescribePodIdentityAssociationInput{
-		AssociationId: associationId,
-		ClusterName:   &cluster,
-	}
-	if out, err := eksClient.DescribePodIdentityAssociation(ctx, describePodIdentityAssociationInput); err != nil {
-		return "", err
-	} else {
-		// sample role ARN
-		// arn:aws:iam::1234567890:role/EKSHybridCI-Arch-nodeadm-e2e-tests-ClusterRole-E0hZO1KMNC3v
-		return lastSegment(*out.Association.RoleArn, "/"), nil
-	}
-}
-
-func lastSegment(str, sep string) string {
-	return str[strings.LastIndex(str, sep)+1:]
-}
-
-func unmarshallPolicyDocument(document string) (*PolicyDocument, error) {
-	var policyDocument PolicyDocument
-	documentUnencoded, err := url.QueryUnescape(document)
-	if err != nil {
-		return &PolicyDocument{}, err
-	}
-	err = json.Unmarshal([]byte(documentUnencoded), &policyDocument)
-	if err != nil {
-		return &PolicyDocument{}, err
-	}
-	return &policyDocument, nil
+	return "", fmt.Errorf("S3 bucket for pod identity not found")
 }

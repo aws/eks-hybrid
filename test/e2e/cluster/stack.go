@@ -18,6 +18,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
@@ -276,9 +277,8 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 	stackName := stackName(clusterName)
 	s.logger.Info("Deleting E2E test cluster stack", "stackName", stackName)
 
-	var output *cloudformation.DescribeStackResourceOutput
 	output, err := s.cfn.DescribeStackResource(ctx, &cloudformation.DescribeStackResourceInput{
-		LogicalResourceId: aws.String("PodIdentityS3Bucket"),
+		LogicalResourceId: aws.String(addon.PodIdentityS3Bucket),
 		StackName:         aws.String(stackName),
 	})
 	if err != nil {
@@ -307,7 +307,9 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 }
 
 func emptyS3Bucket(ctx context.Context, client *s3.Client, bucket *string) error {
-	var err error
+	if bucket == nil {
+		return nil
+	}
 
 	output, err := client.ListObjects(ctx, &s3.ListObjectsInput{
 		Bucket: bucket,
