@@ -20,7 +20,7 @@ const (
 
 type VerifyPodIdentityAddon struct {
 	Cluster   string
-	K8S       *clientgo.Clientset
+	K8S       clientgo.Interface
 	Logger    logr.Logger
 	EKSClient *eks.Client
 }

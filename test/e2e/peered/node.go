@@ -134,6 +134,16 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, e
 		return ec2.Instance{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
 
+	c.Logger.Info("Waiting for EC2 Instance to be running...", "instanceID", instance.ID)
+	if err := ec2.WaitForEC2InstanceRunning(ctx, c.EC2, instance.ID); err != nil {
+		return ec2.Instance{}, fmt.Errorf("waiting for EC2 instance for node to be running: %w", err)
+	}
+
+	c.Logger.Info("Disabling source/destination check...", "instanceID", instance.ID)
+	if err := ec2.DisableSourceDestCheck(ctx, c.EC2, instance.ID); err != nil {
+		return ec2.Instance{}, err
+	}
+
 	return instance, nil
 }
 
@@ -200,13 +210,13 @@ func generateKeyPair() ([]byte, []byte, error) {
 type NodeCleanup struct {
 	S3                  *s3sdk.Client
 	EC2                 *ec2sdk.Client
-	K8s                 *clientgo.Clientset
+	K8s                 clientgo.Interface
 	Logger              logr.Logger
 	RemoteCommandRunner commands.RemoteCommandRunner
 
-	LogsBucket  string
-	ClusterName string
-	SkipDelete  bool
+	LogsBucket string
+	Cluster    *HybridCluster
+	SkipDelete bool
 }
 
 // Cleanup collects logs and deletes the EC2 instance and Node object.
@@ -224,6 +234,12 @@ func (c *NodeCleanup) Cleanup(ctx context.Context, instance ec2.Instance) error 
 		c.Logger.Info("Skipping EC2 Instance deletion", "instanceID", instance.ID)
 		return nil
 	}
+
+	c.Logger.Info("Deleting routes for EC2 Instance", "instanceID", instance.ID, "subnetID", c.Cluster.SubnetID)
+	if err := ec2.DeleteRoutesForInstance(ctx, c.EC2, c.Cluster.SubnetID, instance.ID); err != nil {
+		return fmt.Errorf("deleting routes for EC2 Instance: %w", err)
+	}
+
 	c.Logger.Info("Deleting EC2 Instance", "instanceID", instance.ID)
 	if err := ec2.DeleteEC2Instance(ctx, c.EC2, instance.ID); err != nil {
 		return fmt.Errorf("deleting EC2 Instance: %w", err)
@@ -237,11 +253,11 @@ func (c *NodeCleanup) Cleanup(ctx context.Context, instance ec2.Instance) error 
 }
 
 func (c Node) S3LogsURL(instanceName string) string {
-	return fmt.Sprintf("https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.Cluster.Region, c.LogsBucket, c.logsPrefix(instanceName))
+	return fmt.Sprintf("https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.NodeCreate.Cluster.Region, c.LogsBucket, c.logsPrefix(instanceName))
 }
 
 func (c NodeCleanup) logsPrefix(instanceName string) string {
-	return fmt.Sprintf("logs/%s/%s", c.ClusterName, instanceName)
+	return fmt.Sprintf("logs/%s/%s", c.Cluster.Name, instanceName)
 }
 
 func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instance ec2.Instance) error {

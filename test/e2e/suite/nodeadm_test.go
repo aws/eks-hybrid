@@ -22,6 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/client-go/dynamic"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -74,7 +75,7 @@ type peeredVPCTest struct {
 	ec2Client       *ec2v2.Client
 	ssmClient       *ssmv2.Client
 	cfnClient       *cloudformation.Client
-	k8sClient       *clientgo.Clientset
+	k8sClient       peered.K8s
 	k8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client
@@ -276,6 +277,10 @@ var _ = Describe("Hybrid Nodes", func() {
 								)
 							})
 
+							Expect(test.newPeeredNetwork().CreateRoutesForNode(ctx, instance)).To(Succeed(),
+								"routes to node's pod CIDRs should have been created successfully",
+							)
+
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
 							test.logger.Info("Testing Pod Identity add-on functionality")
@@ -361,6 +366,10 @@ var _ = Describe("Hybrid Nodes", func() {
 								)
 							})
 
+							Expect(test.newPeeredNetwork().CreateRoutesForNode(ctx, instance)).To(Succeed(),
+								"routes to node's pod CIDRs should have been created successfully",
+							)
+
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
 							Expect(test.newUpgradeNode(instance.IP).Run(ctx)).To(
@@ -424,9 +433,19 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		return nil, err
 	}
 	test.k8sClientConfig = clientConfig
-	test.k8sClient, err = clientgo.NewForConfig(clientConfig)
+	k8s, err := clientgo.NewForConfig(clientConfig)
 	if err != nil {
 		return nil, err
+	}
+
+	dynamicK8s, err := dynamic.NewForConfig(clientConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	test.k8sClient = peered.K8s{
+		Interface: k8s,
+		Dynamic:   dynamicK8s,
 	}
 
 	test.cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName)
@@ -462,9 +481,18 @@ func (t *peeredVPCTest) newPeeredNode() *peered.Node {
 			K8s:                 t.k8sClient,
 			Logger:              t.logger,
 			SkipDelete:          t.skipCleanup,
-			ClusterName:         t.cluster.Name,
+			Cluster:             t.cluster,
 			LogsBucket:          t.logsBucket,
 		},
+	}
+}
+
+func (t *peeredVPCTest) newPeeredNetwork() *peered.Network {
+	return &peered.Network{
+		EC2:     t.ec2Client,
+		Logger:  t.logger,
+		K8s:     t.k8sClient,
+		Cluster: t.cluster,
 	}
 }
 
