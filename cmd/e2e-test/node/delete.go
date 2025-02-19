@@ -8,6 +8,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	ec2sdk "github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmsdk "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/integrii/flaggy"
@@ -60,6 +61,7 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	ec2Client := ec2sdk.NewFromConfig(aws)
+	eksClient := eks.NewFromConfig(aws)
 	ssmClient := ssmsdk.NewFromConfig(aws)
 	s3Client := s3sdk.NewFromConfig(aws)
 
@@ -100,13 +102,18 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	commandRunner := ssm.NewSSHOnSSMCommandRunner(ssmClient, *jumpbox.InstanceId, logger)
 
+	cluster, err := peered.GetHybridCluster(ctx, eksClient, ec2Client, config.ClusterName)
+	if err != nil {
+		return err
+	}
+
 	node := peered.NodeCleanup{
 		EC2:                 ec2Client,
 		S3:                  s3Client,
 		K8s:                 k8s,
 		RemoteCommandRunner: commandRunner,
 		Logger:              logger,
-		ClusterName:         config.ClusterName,
+		Cluster:             cluster,
 		LogsBucket:          config.LogsBucket,
 	}
 
