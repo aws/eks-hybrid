@@ -187,6 +187,7 @@ var _ = Describe("Hybrid Nodes", func() {
 		osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		osystem.NewBottleRocket(),
 	}
 	credentialProviders := []e2e.NodeadmCredentialsProvider{
 		&credentials.SsmProvider{},
@@ -490,6 +491,7 @@ func (t *peeredVPCTest) newPeeredNode() *peered.Node {
 		Cluster:             t.cluster,
 		EC2:                 t.ec2Client,
 		K8s:                 t.k8sClient,
+		K8sClientConfig:     t.k8sClientConfig,
 		Logger:              t.logger,
 		LogsBucket:          t.logsBucket,
 		NodeadmURLs:         t.nodeadmURLs,

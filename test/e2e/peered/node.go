@@ -17,6 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	gssh "golang.org/x/crypto/ssh"
 	clientgo "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -41,6 +42,7 @@ type Node struct {
 	SSM                 *ssm.Client
 	S3                  *s3sdk.Client
 	K8s                 *clientgo.Clientset
+	K8sClientConfig     *rest.Config
 	RemoteCommandRunner commands.RemoteCommandRunner
 	Logger              logr.Logger
 	SkipDelete          bool
@@ -105,11 +107,18 @@ func (c Node) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) 
 	userdata, err := spec.OS.BuildUserData(e2e.UserDataInput{
 		KubernetesVersion: spec.NodeK8sVersion,
 		NodeadmUrls:       c.NodeadmURLs,
+		NodeadmConfig:     nodeadmConfig,
 		NodeadmConfigYaml: string(nodeadmConfigYaml),
 		Provider:          string(spec.Provider.Name()),
 		RootPasswordHash:  rootPasswordHash,
 		Files:             files,
 		PublicKey:         c.PublicKey,
+
+		KubernetesAPIServer: c.K8sClientConfig.Host,
+		HostName:            string(spec.Provider.NodeName(nodeSpec)),
+		Region:              c.Cluster.Region,
+		ClusterName:         c.Cluster.Name,
+		ClusterCert:         c.K8sClientConfig.CAData,
 	})
 	if err != nil {
 		return ec2.Instance{}, fmt.Errorf("expected to successfully build user data: %w", err)
@@ -137,7 +146,7 @@ func (c Node) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) 
 	if err != nil {
 		return ec2.Instance{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
-
+	c.Logger.Info("EC2 Instance created successfully.", "instanceId", instance.ID)
 	return instance, nil
 }
 
