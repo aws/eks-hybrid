@@ -47,7 +47,9 @@ func (s *portsAspect) Name() string {
 func (s *portsAspect) Setup() error {
 	firewallEnabled, err := s.firewallManager.IsEnabled()
 	if err != nil {
-		return err
+		s.logger.Warn("Failed to get firewall status", zap.Error(err))
+		s.logger.Info("Skip setting firewall rules")
+		return nil
 	}
 	if firewallEnabled {
 		s.logger.Info("Allowing port on firewall", zap.Reflect("kubelet-server-port", kubeletServePort))
