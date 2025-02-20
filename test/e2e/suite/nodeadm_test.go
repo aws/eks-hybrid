@@ -31,6 +31,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
@@ -96,6 +97,8 @@ type peeredVPCTest struct {
 	publicKey string
 
 	remoteCommandRunner commands.RemoteCommandRunner
+
+	podIdentityS3Bucket string
 }
 
 var _ = SynchronizedBeforeSuite(
@@ -440,6 +443,14 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 	}
 	test.nodeadmURLs = *urls
 
+	test.podIdentityS3Bucket, err = getPodIdentityS3Bucket(ctx, test.cluster.Name, test.s3Client)
+	if err != nil {
+		return nil, err
+	}
+
+	if test.podIdentityS3Bucket == "" {
+		return nil, fmt.Errorf("s3 bucket for pod identity not found")
+	}
 	return test, nil
 }
 
@@ -509,14 +520,15 @@ func (t *peeredVPCTest) instanceName(testName string, os e2e.NodeadmOS, provider
 
 func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeIP string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
-		Cluster:   t.cluster.Name,
-		NodeIP:    nodeIP,
-		K8S:       t.k8sClient,
-		EKSClient: t.eksClient,
-		IAMClient: t.iamClient,
-		S3Client:  t.s3Client,
-		Logger:    t.logger,
-		K8SConfig: t.k8sClientConfig,
+		Cluster:             t.cluster.Name,
+		NodeIP:              nodeIP,
+		PodIdentityS3Bucket: t.podIdentityS3Bucket,
+		K8S:                 t.k8sClient,
+		EKSClient:           t.eksClient,
+		IAMClient:           t.iamClient,
+		S3Client:            t.s3Client,
+		Logger:              t.logger,
+		K8SConfig:           t.k8sClientConfig,
 	}
 }
 
@@ -527,4 +539,38 @@ func newLoggerForTests() e2e.PausableLogger {
 		cfg.NoColor = true
 	}
 	return e2e.NewPausableLogger(cfg)
+}
+
+func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3v2.Client) (string, error) {
+	listBucketsOutput, err := client.ListBuckets(ctx, &s3v2.ListBucketsInput{
+		Prefix: aws.String("ekshybridci-arch-"),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	for _, bucket := range listBucketsOutput.Buckets {
+		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3v2.GetBucketTaggingInput{
+			Bucket: bucket.Name,
+		})
+		if err != nil {
+			return "", err
+		}
+
+		var foundClusterTag, foundPodIdentityTag bool
+		for _, tag := range getBucketTaggingOutput.TagSet {
+			if *tag.Key == constants.TestClusterTagKey && *tag.Value == cluster {
+				foundClusterTag = true
+			}
+
+			if *tag.Key == "aws:cloudformation:logical-id" && *tag.Value == addon.PodIdentityS3Bucket {
+				foundPodIdentityTag = true
+			}
+
+			if foundClusterTag && foundPodIdentityTag {
+				return *bucket.Name, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("S3 bucket for pod identity not found")
 }

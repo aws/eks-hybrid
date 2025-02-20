@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -28,14 +27,15 @@ const (
 )
 
 type VerifyPodIdentityAddon struct {
-	Cluster   string
-	NodeIP    string
-	K8S       *clientgo.Clientset
-	EKSClient *eks.Client
-	IAMClient *iam.Client
-	S3Client  *s3.Client
-	Logger    logr.Logger
-	K8SConfig *rest.Config
+	Cluster             string
+	NodeIP              string
+	PodIdentityS3Bucket string
+	K8S                 *clientgo.Clientset
+	EKSClient           *eks.Client
+	IAMClient           *iam.Client
+	S3Client            *s3.Client
+	Logger              logr.Logger
+	K8SConfig           *rest.Config
 }
 
 type PolicyDocument struct {
@@ -69,13 +69,6 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return err
 	}
 
-	bucket, err := getPodIdentityS3Bucket(ctx, v.Cluster, v.S3Client)
-	if err != nil {
-		return err
-	}
-	v.Logger.Info("Get S3 Bucket for pod identity add-on test", "S3 bucket", bucket)
-
-	// Deploy a pod with service account then run aws cli to access aws resources
 	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeIP, v.Logger)
 	if err != nil {
 		return err
@@ -107,57 +100,23 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 			ServiceAccountName: podIdentityServiceAccount,
 		},
 	}
+
+	// Deploy a pod with service account then run aws cli to access aws resources
 	if err = kubernetes.CreatePod(ctx, v.K8S, pod, v.Logger); err != nil {
 		return err
 	}
 
 	execCommand := []string{
-		"bash", "-c", fmt.Sprintf("aws s3 cp s3://%s/%s . > /dev/null && cat ./%s", bucket, bucketObjectKey, bucketObjectKey),
+		"bash", "-c", fmt.Sprintf("aws s3 cp s3://%s/%s . > /dev/null && cat ./%s", v.PodIdentityS3Bucket, bucketObjectKey, bucketObjectKey),
 	}
 	stdout, _, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, podName, namespace, execCommand...)
 	if err != nil {
 		return err
 	}
-	v.Logger.Info("Check output from exec pod with command", "output", stdout)
 
 	if stdout != bucketObjectContent {
-		return fmt.Errorf("failed to get object %s from S3 bucket %s", bucketObjectKey, bucket)
+		return fmt.Errorf("failed to get object %s from S3 bucket %s", bucketObjectKey, v.PodIdentityS3Bucket)
 	}
 
 	return nil
-}
-
-func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3.Client) (string, error) {
-	listBucketsOutput, err := client.ListBuckets(ctx, &s3.ListBucketsInput{
-		Prefix: aws.String("ekshybridci-arch-"),
-	})
-	if err != nil {
-		return "", err
-	}
-
-	for _, bucket := range listBucketsOutput.Buckets {
-		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
-			Bucket: bucket.Name,
-		})
-		if err != nil {
-			// Ignore if there is an error while retrieving tags
-			continue
-		}
-
-		var foundClusterTag, foundPodIdentityTag bool
-		for _, tag := range getBucketTaggingOutput.TagSet {
-			if *tag.Key == "Nodeadm-E2E-Tests-Cluster" && *tag.Value == cluster {
-				foundClusterTag = true
-			}
-
-			if *tag.Key == "aws:cloudformation:logical-id" && *tag.Value == PodIdentityS3Bucket {
-				foundPodIdentityTag = true
-			}
-
-			if foundClusterTag && foundPodIdentityTag {
-				return *bucket.Name, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("S3 bucket for pod identity not found")
 }
