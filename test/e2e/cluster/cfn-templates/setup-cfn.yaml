@@ -42,6 +42,10 @@ Parameters:
     Type: String
     Description: Tag key of all the resources
 
+  PodIdentityS3BucketPrefix:
+    Type: String
+    Description: Prefix for pod identity S3 bucket
+
 Resources:
   ClusterRole:
     Type: AWS::IAM::Role
@@ -366,9 +370,26 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
+      BucketName:
+        Fn::Join:
+        - '-'
+        - - !Ref PodIdentityS3BucketPrefix
+          - !Ref AWS::AccountId
+          - !Ref AWS::Region
+          - Fn::Select:
+            - 0
+            - Fn::Split:
+              - '-'
+              - Fn::Select:
+                - 2
+                - Fn::Split:
+                  - /
+                  - !Ref AWS::StackId
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref PodIdentityS3BucketPrefix
+          Value: true
 
   PodIdentityAssociationRole:
     Type: AWS::IAM::Role

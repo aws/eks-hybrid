@@ -19,6 +19,7 @@ export class NodeadmBuildStack extends cdk.Stack {
 
     const testClusterTagKey = "Nodeadm-E2E-Tests-Cluster"
     const testClusterPrefix = "nodeadm-e2e-tests"
+    const podIdentityS3BucketPrefix = "podidentitys3bucket"
     const requestTagCondition = {
       StringLike: {
         [`aws:RequestTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`
@@ -427,7 +428,7 @@ export class NodeadmBuildStack extends cdk.Stack {
             's3:GetBucketTagging',
             's3:ListBucket',
             's3:PutObject*'],
-          resources: ['arn:aws:s3:::ekshybridci-arch-*']
+          resources: [`arn:aws:s3:::${podIdentityS3BucketPrefix}-${this.account}-${this.region}-*`]
         }),
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,

@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -448,9 +449,6 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		return nil, err
 	}
 
-	if test.podIdentityS3Bucket == "" {
-		return nil, fmt.Errorf("s3 bucket for pod identity not found")
-	}
 	return test, nil
 }
 
@@ -543,7 +541,7 @@ func newLoggerForTests() e2e.PausableLogger {
 
 func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3v2.Client) (string, error) {
 	listBucketsOutput, err := client.ListBuckets(ctx, &s3v2.ListBucketsInput{
-		Prefix: aws.String("ekshybridci-arch-"),
+		Prefix: aws.String(strings.ToLower(addon.PodIdentityS3Bucket)),
 	})
 	if err != nil {
 		return "", err
@@ -563,7 +561,7 @@ func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3v2.Cl
 				foundClusterTag = true
 			}
 
-			if *tag.Key == "aws:cloudformation:logical-id" && *tag.Value == addon.PodIdentityS3Bucket {
+			if *tag.Key == strings.ToLower(addon.PodIdentityS3Bucket) && *tag.Value == "true" {
 				foundPodIdentityTag = true
 			}
 

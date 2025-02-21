@@ -109,6 +109,10 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			ParameterKey:   aws.String("TestClusterTagKey"),
 			ParameterValue: aws.String(constants.TestClusterTagKey),
 		},
+		{
+			ParameterKey:   aws.String("PodIdentityS3BucketPrefix"),
+			ParameterValue: aws.String(strings.ToLower(addon.PodIdentityS3Bucket)),
+		},
 	}
 
 	if resp == nil || resp.Stacks == nil {
