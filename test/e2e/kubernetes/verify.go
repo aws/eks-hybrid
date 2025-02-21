@@ -18,7 +18,7 @@ const (
 // VerifyNode checks that a node is healthy, can run pods, extract logs and run commands on them.
 type VerifyNode struct {
 	ClientConfig *rest.Config
-	K8s          *clientgo.Clientset
+	K8s          clientgo.Interface
 	Logger       logr.Logger
 	Region       string
 
