@@ -218,6 +218,12 @@ var _ = Describe("Hybrid Nodes", func() {
 					p.TrustAnchorARN = test.stackOut.IRATrustAnchorARN
 					p.CA = test.rolesAnywhereCA
 				}
+
+				Expect(provider.Setup(ctx, test.cluster.Name)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(provider.Cleanup(ctx, test.logger)).To(Succeed())
+				}, NodeTimeout(deferCleanupTimeout))
 			}
 		})
 

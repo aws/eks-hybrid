@@ -229,7 +229,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 }
 
 func stackName(clusterName string) string {
-	return fmt.Sprintf("EKSHybridCI-Arch-%s", clusterName)
+	return fmt.Sprintf("%s-%s", constants.TestArchitectureStackNamePrefix, clusterName)
 }
 
 func waitForStackOperation(ctx context.Context, client *cloudformation.Client, stackName string) error {
@@ -262,9 +262,13 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 	return err
 }
 
-func (s *stack) delete(ctx context.Context, clusterName string) error {
+func (s *stack) delete(ctx context.Context, clusterName string, dryRun bool) error {
 	stackName := stackName(clusterName)
 	s.logger.Info("Deleting E2E test cluster stack", "stackName", stackName)
+	if dryRun {
+		s.logger.Info("Dry run, skipping stack deletion")
+		return nil
+	}
 	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String(stackName),
 	})
