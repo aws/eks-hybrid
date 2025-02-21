@@ -229,7 +229,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 }
 
 func stackName(clusterName string) string {
-	return fmt.Sprintf("EKSHybridCI-Arch-%s", clusterName)
+	return fmt.Sprintf("%s-%s", constants.TestArchitectureStackNamePrefix, clusterName)
 }
 
 func waitForStackOperation(ctx context.Context, client *cloudformation.Client, stackName string) error {
@@ -265,20 +265,45 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 func (s *stack) delete(ctx context.Context, clusterName string) error {
 	stackName := stackName(clusterName)
 	s.logger.Info("Deleting E2E test cluster stack", "stackName", stackName)
-	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
-		StackName: aws.String(stackName),
-	})
-	if err != nil {
-		return fmt.Errorf("deleting hybrid nodes setup cfn stack: %w", err)
+
+	// we retry to handle the case where the stack is in a failed state
+	// and we need to force delete it
+	var stackErr error
+	for range 3 {
+		stackOutput, err := s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
+			StackName: aws.String(stackName),
+		})
+		if err != nil && errors.IsType(err, &types.StackInstanceNotFoundException{}) {
+			s.logger.Info("Stack already deleted", "stackName", stackName)
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("describing hybrid nodes setup cfn stack: %w", err)
+		}
+
+		input := &cloudformation.DeleteStackInput{
+			StackName:    aws.String(stackName),
+			DeletionMode: types.DeletionModeStandard,
+		}
+
+		if stackOutput.Stacks[0].StackStatus == types.StackStatusDeleteFailed {
+			input.DeletionMode = types.DeletionModeForceDeleteStack
+		}
+		_, err = s.cfn.DeleteStack(ctx, input)
+		if err != nil {
+			stackErr = fmt.Errorf("deleting hybrid nodes setup cfn stack: %w", err)
+			continue
+		}
+
+		s.logger.Info("Waiting for stack to be deleted", "stackName", stackName)
+		if err := waitForStackOperation(ctx, s.cfn, stackName); err != nil {
+			stackErr = fmt.Errorf("waiting for hybrid nodes setup cfn stack to be deleted: %w", err)
+			continue
+		}
+		s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
 	}
 
-	s.logger.Info("Waiting for stack to be deleted", "stackName", stackName)
-	if err := waitForStackOperation(ctx, s.cfn, stackName); err != nil {
-		return fmt.Errorf("waiting for hybrid nodes setup cfn stack to be deleted: %w", err)
-	}
-
-	s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
-	return nil
+	return stackErr
 }
 
 func getStackFailureReason(ctx context.Context, client *cloudformation.Client, stackName string) (string, error) {

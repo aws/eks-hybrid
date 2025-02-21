@@ -5,6 +5,7 @@ import (
 	_ "embed"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -49,9 +50,11 @@ type File struct {
 
 type NodeadmCredentialsProvider interface {
 	Name() creds.CredentialProvider
+	Setup(ctx context.Context, clusterName string) error
 	NodeadmConfig(ctx context.Context, node NodeSpec) (*api.NodeConfig, error)
 	VerifyUninstall(ctx context.Context, instanceId string) error
 	FilesForNode(spec NodeSpec) ([]File, error)
+	Cleanup(ctx context.Context, logger logr.Logger) error
 }
 
 // HybridEC2Node represents a Hybrid Node backed by an EC2 instance.
