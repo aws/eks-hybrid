@@ -5,6 +5,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/go-logr/logr"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -60,6 +62,10 @@ func (i *IamRolesAnywhereProvider) VerifyUninstall(ctx context.Context, instance
 	return nil
 }
 
+func (i *IamRolesAnywhereProvider) Cleanup(ctx context.Context, logger logr.Logger) error {
+	return nil // No cleanup needed for IAM Roles Anywhere
+}
+
 func (i *IamRolesAnywhereProvider) FilesForNode(spec e2e.NodeSpec) ([]e2e.File, error) {
 	nodeCertificate, err := CreateCertificateForNode(i.CA.Cert, i.CA.Key, i.nodeName(spec))
 	if err != nil {
@@ -75,6 +81,10 @@ func (i *IamRolesAnywhereProvider) FilesForNode(spec e2e.NodeSpec) ([]e2e.File, 
 			Path:    rolesAnywhereKeyPath,
 		},
 	}, nil
+}
+
+func (i *IamRolesAnywhereProvider) Setup(ctx context.Context, clusterName string) error {
+	return nil // No setup needed
 }
 
 // IsIAMRolesAnywhere returns true if the given CredentialProvider is IAM Roles Anywhere.

@@ -10,27 +10,42 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/go-logr/logr"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/test/e2e"
+
+	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 const ssmActivationName = "eks-hybrid-ssm-provider"
 
 type SsmProvider struct {
-	SSM  *ssm.Client
-	Role string
+	SSM            *ssm.Client
+	Role           string
+	activationID   string
+	activationCode string
 }
 
 func (s *SsmProvider) Name() creds.CredentialProvider {
 	return creds.SsmCredentialProvider
 }
 
-func (s *SsmProvider) NodeadmConfig(ctx context.Context, node e2e.NodeSpec) (*api.NodeConfig, error) {
-	ssmActivationDetails, err := createSSMActivation(ctx, s.SSM, s.Role, ssmActivationName, node.Cluster.Name)
+func (s *SsmProvider) Setup(ctx context.Context, clusterName string) error {
+	ssmActivationDetails, err := createSSMActivation(ctx, s.SSM, s.Role, ssmActivationName, clusterName)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	s.activationID = *ssmActivationDetails.ActivationId
+	s.activationCode = *ssmActivationDetails.ActivationCode
+	return nil
+}
+
+func (s *SsmProvider) NodeadmConfig(ctx context.Context, node e2e.NodeSpec) (*api.NodeConfig, error) {
+	if s.activationID == "" || s.activationCode == "" {
+		return nil, fmt.Errorf("SSM activation not setup")
 	}
 	return &api.NodeConfig{
 		TypeMeta: metav1.TypeMeta{
@@ -44,8 +59,8 @@ func (s *SsmProvider) NodeadmConfig(ctx context.Context, node e2e.NodeSpec) (*ap
 			},
 			Hybrid: &api.HybridOptions{
 				SSM: &api.SSM{
-					ActivationID:   *ssmActivationDetails.ActivationId,
-					ActivationCode: *ssmActivationDetails.ActivationCode,
+					ActivationID:   s.activationID,
+					ActivationCode: s.activationCode,
 				},
 				EnableCredentialsFile: true,
 			},
@@ -59,6 +74,28 @@ func (s *SsmProvider) VerifyUninstall(ctx context.Context, instanceId string) er
 
 func (s *SsmProvider) FilesForNode(_ e2e.NodeSpec) ([]e2e.File, error) {
 	return nil, nil
+}
+
+func (s *SsmProvider) Cleanup(ctx context.Context, logger logr.Logger) error {
+	if s.activationID == "" {
+		logger.Info("No activation ID created, skipping cleanup")
+		return nil
+	}
+
+	cleaner := &cleanup.SSMCleaner{
+		SSM:          s.SSM,
+		ActivationID: s.activationID,
+	}
+
+	if err := cleaner.DeleteManagedInstances(ctx, logger); err != nil {
+		return fmt.Errorf("deleting managed instances: %w", err)
+	}
+
+	if err := cleaner.DeleteActivations(ctx, logger); err != nil {
+		return fmt.Errorf("cleaning up SSM activations: %w", err)
+	}
+
+	return nil
 }
 
 func createSSMActivation(ctx context.Context, client *ssm.Client, iamRole, ssmActivationName, clusterName string) (*ssm.CreateActivationOutput, error) {
