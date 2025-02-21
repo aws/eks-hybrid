@@ -427,7 +427,9 @@ export class NodeadmBuildStack extends cdk.Stack {
             's3:PutBucketTagging',
             's3:GetBucketTagging',
             's3:ListBucket',
-            's3:PutObject*'],
+            's3:PutObject*',
+            's3:DeleteObject',
+          ],
           resources: [`arn:aws:s3:::${podIdentityS3BucketPrefix}-${this.account}-${this.region}-*`]
         }),
         new iam.PolicyStatement({
