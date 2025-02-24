@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -541,7 +540,7 @@ func newLoggerForTests() e2e.PausableLogger {
 
 func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3v2.Client) (string, error) {
 	listBucketsOutput, err := client.ListBuckets(ctx, &s3v2.ListBucketsInput{
-		Prefix: aws.String(strings.ToLower(addon.PodIdentityS3Bucket)),
+		Prefix: aws.String(addon.PodIdentityS3BucketPrefix),
 	})
 	if err != nil {
 		return "", err
@@ -561,7 +560,7 @@ func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3v2.Cl
 				foundClusterTag = true
 			}
 
-			if *tag.Key == strings.ToLower(addon.PodIdentityS3Bucket) && *tag.Value == "true" {
+			if *tag.Key == addon.PodIdentityS3BucketPrefix && *tag.Value == "true" {
 				foundPodIdentityTag = true
 			}
 

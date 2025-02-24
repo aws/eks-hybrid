@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -25,6 +26,8 @@ const (
 	policyName           = "pod-identity-association-role-policy"
 	PodIdentityS3Bucket  = "PodIdentityS3Bucket"
 )
+
+var PodIdentityS3BucketPrefix = strings.ToLower(PodIdentityS3Bucket)
 
 type VerifyPodIdentityAddon struct {
 	Cluster             string
