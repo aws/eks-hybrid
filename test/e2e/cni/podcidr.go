@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -43,7 +42,7 @@ func ciliumNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *corev1.
 		Resource: "ciliumnodes",
 	}
 
-	obj, err := k8s.Resource(ciliumNodeGVR).Get(ctx, node.Name, metav1.GetOptions{})
+	obj, err := kubernetes.RetryGet(ctx, k8s.Resource(ciliumNodeGVR), node.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +63,7 @@ func calicoNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *corev1.
 		Resource: "ipamblocks",
 	}
 
-	ipamBlocks, err := k8s.Resource(ipamBlockGVR).List(ctx, metav1.ListOptions{})
+	ipamBlocks, err := kubernetes.RetryList(ctx, k8s.Resource(ipamBlockGVR))
 	if err != nil {
 		return nil, err
 	}
