@@ -70,7 +70,7 @@ func calicoNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *corev1.
 	}
 	var podCIDRs []string
 	for _, b := range ipamBlocks.Items {
-		block := &ipamBlock{obj: &b}
+		block := &calicoIPAMBlock{obj: &b}
 
 		nodeName, err := block.nodeName()
 		if err != nil {
@@ -94,11 +94,11 @@ func calicoNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *corev1.
 	return podCIDRs, nil
 }
 
-type ipamBlock struct {
+type calicoIPAMBlock struct {
 	obj *unstructured.Unstructured
 }
 
-func (i *ipamBlock) nodeName() (string, error) {
+func (i *calicoIPAMBlock) nodeName() (string, error) {
 	affinity, found, err := unstructured.NestedString(i.obj.Object, "spec", "affinity")
 	if err != nil {
 		return "", fmt.Errorf("reading affinity from Calico IPAMBlock %s: %w", i.obj.GetName(), err)
@@ -117,7 +117,7 @@ func (i *ipamBlock) nodeName() (string, error) {
 	return affinityParts[1], nil
 }
 
-func (i *ipamBlock) podCIDRs() ([]string, error) {
+func (i *calicoIPAMBlock) podCIDRs() ([]string, error) {
 	cidr, found, err := unstructured.NestedString(i.obj.Object, "spec", "cidr")
 	if err != nil {
 		return nil, fmt.Errorf("reading cidr from Calico IPAMBlock %s: %w", i.obj.GetName(), err)
