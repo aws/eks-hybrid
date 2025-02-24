@@ -34,10 +34,9 @@ func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logge
 	_, err := client.CreateAddon(ctx, params)
 
 	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
-		// Ignore if add-on is already created
-		return nil
+		return err
 	}
-	return err
+	return nil
 }
 
 func (a Addon) describe(ctx context.Context, client *eks.Client) (*types.Addon, error) {

@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -22,146 +20,17 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/kubectl/pkg/drain"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 const (
-	nodePodWaitTimeout       = 3 * time.Minute
-	nodePodDelayInterval     = 5 * time.Second
-	hybridNodeWaitTimeout    = 10 * time.Minute
-	hybridNodeDelayInterval  = 5 * time.Second
-	hybridNodeUpgradeTimeout = 2 * time.Minute
-	nodeCordonDelayInterval  = 1 * time.Second
-	nodeCordonTimeout        = 30 * time.Second
-	daemonSetWaitTimeout     = 3 * time.Minute
-	daemonSetDelayInternal   = 5 * time.Second
-	MinimumVersion           = "1.25"
+	nodePodWaitTimeout     = 3 * time.Minute
+	nodePodDelayInterval   = 5 * time.Second
+	daemonSetWaitTimeout   = 3 * time.Minute
+	daemonSetDelayInternal = 5 * time.Second
+	MinimumVersion         = "1.25"
 )
-
-// WaitForNode wait for the node to join the cluster and fetches the node info from an internal IP address of the node
-func WaitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP string, logger logr.Logger) (*corev1.Node, error) {
-	foundNode := &corev1.Node{}
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, hybridNodeDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := getNodeByInternalIP(ctx, k8s, internalIP)
-		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
-				return false, err
-			}
-			logger.Info("Retryable error listing nodes when looking for node with IP. Continuing to poll", "internalIP", internalIP, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-		if node != nil {
-			foundNode = node
-			return true, nil // node found, stop polling
-		}
-
-		logger.Info("Node with internal IP doesn't exist yet", "internalIP", internalIP)
-		return false, nil // continue polling
-	})
-	if err != nil {
-		return nil, err
-	}
-	return foundNode, nil
-}
-
-func getNodeByInternalIP(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) (*corev1.Node, error) {
-	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("listing nodes when looking for node with IP %s: %w", internalIP, err)
-	}
-	return nodeByInternalIP(nodes, internalIP), nil
-}
-
-func nodeByInternalIP(nodes *corev1.NodeList, nodeIP string) *corev1.Node {
-	for _, node := range nodes.Items {
-		for _, address := range node.Status.Addresses {
-			if address.Type == "InternalIP" && address.Address == nodeIP {
-				return &node
-			}
-		}
-	}
-	return nil
-}
-
-func WaitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			logger.Info("Node does not exist yet", "node", nodeName)
-			return false, nil
-		}
-		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
-			}
-			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
-		if !nodeReady(node) {
-			logger.Info("Node is not ready yet", "node", nodeName)
-		} else if !nodeCiliumAgentReady(node) {
-			logger.Info("Node's cilium-agent is not ready yet. Verify the cilium-operator is running.", "node", nodeName)
-		} else {
-			logger.Info("Node is ready", "node", nodeName)
-			return true, nil // node is ready, stop polling
-		}
-
-		return false, nil // continue polling
-	})
-	if err != nil {
-		return fmt.Errorf("waiting for node %s to be ready: %w", nodeName, err)
-	}
-
-	return nil
-}
-
-func WaitForHybridNodeToBeNotReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
-			}
-			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
-		if !nodeReady(node) {
-			logger.Info("Node is not ready", "node", nodeName)
-			return true, nil // node is not ready, stop polling
-		} else {
-			logger.Info("Node is still ready", "node", nodeName)
-		}
-
-		return false, nil // continue polling
-	})
-	if err != nil {
-		return fmt.Errorf("waiting for node %s to be not ready: %w", nodeName, err)
-	}
-
-	return nil
-}
-
-func nodeReady(node *corev1.Node) bool {
-	for _, cond := range node.Status.Conditions {
-		if cond.Type == corev1.NodeReady {
-			return cond.Status == corev1.ConditionTrue
-		}
-	}
-	return false
-}
 
 func nodeCiliumAgentReady(node *corev1.Node) bool {
 	for _, taint := range node.Spec.Taints {
@@ -176,7 +45,7 @@ func GetNginxPodName(name string) string {
 	return "nginx-" + name
 }
 
-func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName, namespace, region string, logger logr.Logger) error {
+func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeName, namespace, region string, logger logr.Logger) error {
 	podName := GetNginxPodName(nodeName)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -226,7 +95,7 @@ func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeNa
 	return nil
 }
 
-func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name, namespace, nodeName string, logger logr.Logger) error {
+func waitForPodToBeRunning(ctx context.Context, k8s kubernetes.Interface, name, namespace, nodeName string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		pod, err := k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -257,7 +126,7 @@ func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name,
 	})
 }
 
-func waitForPodToBeDeleted(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
+func waitForPodToBeDeleted(ctx context.Context, k8s kubernetes.Interface, name, namespace string) error {
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		_, err = k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 
@@ -271,7 +140,7 @@ func waitForPodToBeDeleted(ctx context.Context, k8s *kubernetes.Clientset, name,
 	})
 }
 
-func DeletePod(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
+func DeletePod(ctx context.Context, k8s kubernetes.Interface, name, namespace string) error {
 	err := k8s.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("deleting pod: %w", err)
@@ -279,61 +148,12 @@ func DeletePod(ctx context.Context, k8s *kubernetes.Clientset, name, namespace s
 	return waitForPodToBeDeleted(ctx, k8s, name, namespace)
 }
 
-func DeleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) error {
+func DeleteNode(ctx context.Context, k8s kubernetes.Interface, name string) error {
 	err := k8s.CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("deleting node: %w", err)
 	}
 	return nil
-}
-
-func EnsureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) error {
-	node, err := getNodeByInternalIP(ctx, k8s, internalIP)
-	if err != nil {
-		return fmt.Errorf("getting node by internal IP: %w", err)
-	}
-	if node == nil {
-		return nil
-	}
-
-	err = DeleteNode(ctx, k8s, node.Name)
-	if err != nil {
-		return fmt.Errorf("deleting node %s: %w", node.Name, err)
-	}
-	return nil
-}
-
-func WaitForNodeToHaveVersion(ctx context.Context, k8s *kubernetes.Clientset, nodeName, targetVersion string, logger logr.Logger) (*corev1.Node, error) {
-	foundNode := &corev1.Node{}
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeUpgradeTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			consecutiveErrors += 1
-			logger.Info("consecutiveErrors", "consecutiveErrors", consecutiveErrors)
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
-			}
-			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
-		kubernetesVersion := strings.TrimPrefix(node.Status.NodeInfo.KubeletVersion, "v")
-		// If the current version matches the target version of kubelet, return true to stop polling
-		if strings.HasPrefix(kubernetesVersion, targetVersion) {
-			foundNode = node
-			logger.Info("Node successfully upgraded to desired kubernetes version", "version", targetVersion)
-			return true, nil
-		}
-
-		return false, nil // continue polling
-	})
-	if err != nil {
-		return nil, fmt.Errorf("waiting for node %s kubernetes version to be upgraded to %s: %w", nodeName, targetVersion, err)
-	}
-
-	return foundNode, nil
 }
 
 func PreviousVersion(kubernetesVersion string) (string, error) {
@@ -354,97 +174,8 @@ func IsPreviousVersionSupported(kubernetesVersion string) (bool, error) {
 	return version.MustParseSemantic(prevVersion + ".0").AtLeast(minVersion), nil
 }
 
-func DrainNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node) error {
-	helper := &drain.Helper{
-		Ctx:                             ctx,
-		Client:                          k8s,
-		Force:                           true, // Force eviction
-		GracePeriodSeconds:              -1,   // Use pod's default grace period
-		IgnoreAllDaemonSets:             true, // Ignore DaemonSet-managed pods
-		DisableEviction:                 true, // forces drain to use delete rather than evict
-		DeleteEmptyDirData:              true,
-		SkipWaitForDeleteTimeoutSeconds: 0,
-		Out:                             os.Stdout,
-		ErrOut:                          os.Stderr,
-	}
-
-	err := drain.RunNodeDrain(helper, node.Name)
-	if err != nil {
-		return fmt.Errorf("draining node %s: %v", node.Name, err)
-	}
-
-	return nil
-}
-
-func UncordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node) error {
-	helper := &drain.Helper{
-		Ctx:    ctx,
-		Client: k8s,
-	}
-
-	err := drain.RunCordonOrUncordon(helper, node, false)
-	if err != nil {
-		return fmt.Errorf("cordoning node %s: %v", node.Name, err)
-	}
-
-	return nil
-}
-
-func CordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node, logger logr.Logger) error {
-	helper := &drain.Helper{
-		Ctx:    ctx,
-		Client: k8s,
-	}
-
-	err := drain.RunCordonOrUncordon(helper, node, true)
-	if err != nil {
-		return fmt.Errorf("cordoning node %s: %v", node.Name, err)
-	}
-
-	// Cordon returns before the node has been tainted and since we immediately run
-	// drain, its possible (common) during our tests that pods get scheduled on the node after
-	// drain gets the list of pods to evict and before the taint has been fully applied
-	// leading to an error during nodeadm upgrade/uninstall due to non-daemonset pods running
-	nodeName := node.ObjectMeta.Name
-	consecutiveErrors := 0
-	err = wait.PollUntilContextTimeout(ctx, nodeCordonDelayInterval, nodeCordonTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			consecutiveErrors += 1
-			logger.Info("consecutiveErrors", "consecutiveErrors", consecutiveErrors)
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting node %s: %w", nodeName, err)
-			}
-			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
-		if nodeCordon(node) {
-			logger.Info("Node successfully cordoned")
-			return true, nil
-		}
-
-		return false, nil // continue polling
-	})
-	if err != nil {
-		return fmt.Errorf("waiting for node %s to be cordoned: %w", nodeName, err)
-	}
-
-	return nil
-}
-
-func nodeCordon(node *corev1.Node) bool {
-	for _, taint := range node.Spec.Taints {
-		if taint.Key == "node.kubernetes.io/unschedulable" {
-			return true
-		}
-	}
-	return false
-}
-
 // Retries up to 5 times to avoid connection errors
-func GetPodLogsWithRetries(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (logs string, err error) {
+func GetPodLogsWithRetries(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (logs string, err error) {
 	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
 		// Retry any error type
 		return true
@@ -457,7 +188,7 @@ func GetPodLogsWithRetries(ctx context.Context, k8s *kubernetes.Clientset, name,
 	return logs, err
 }
 
-func getPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (string, error) {
+func getPodLogs(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (string, error) {
 	req := k8s.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
@@ -474,7 +205,7 @@ func getPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace 
 }
 
 // Retries up to 5 times to avoid connection errors
-func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
+func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s kubernetes.Interface, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
 	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
 		// Retry any error type
 		return true
@@ -487,7 +218,7 @@ func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kub
 	return stdout, stderr, err
 }
 
-func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
+func execPod(ctx context.Context, config *restclient.Config, k8s kubernetes.Interface, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
 	req := k8s.CoreV1().RESTClient().Post().Resource("pods").Name(name).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(
 		&corev1.PodExecOptions{
@@ -516,7 +247,7 @@ func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Cli
 	return stdoutBuf.String(), stderrBuf.String(), nil
 }
 
-func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) (*appsv1.DaemonSet, error) {
+func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string) (*appsv1.DaemonSet, error) {
 	var foundDaemonSet *appsv1.DaemonSet
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, daemonSetDelayInternal, daemonSetWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
@@ -545,7 +276,7 @@ func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clien
 	return foundDaemonSet, nil
 }
 
-func NewServiceAccount(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) error {
+func NewServiceAccount(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string) error {
 	if _, err := k8s.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
 		logger.Info("Service account already exists", "namespace", namespace, "name", name)
 		return nil
