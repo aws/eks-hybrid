@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -44,6 +45,7 @@ func NewDelete(aws aws.Config, logger logr.Logger, endpoint string) Delete {
 			cfn:       cloudformation.NewFromConfig(aws),
 			ec2Client: ec2.NewFromConfig(aws),
 			logger:    logger,
+			s3Client:  s3.NewFromConfig(aws),
 		},
 	}
 }
