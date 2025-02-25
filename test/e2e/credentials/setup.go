@@ -11,6 +11,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 // Infrastructure represents the necessary infrastructure for credentials providers to be used by nodeadm.
@@ -43,7 +44,7 @@ func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterNa
 		return nil, err
 	}
 
-	stackName := fmt.Sprintf("EKSHybridCI-%s", e2e.SanitizeForAWSName(clusterName))
+	stackName := fmt.Sprintf("%s-%s", constants.TestCredentialsStackNamePrefix, e2e.SanitizeForAWSName(clusterName))
 	stack := &Stack{
 		ClusterName:            *cluster.Cluster.Name,
 		ClusterArn:             *cluster.Cluster.Arn,

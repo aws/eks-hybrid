@@ -218,6 +218,16 @@ var _ = Describe("Hybrid Nodes", func() {
 					p.TrustAnchorARN = test.stackOut.IRATrustAnchorARN
 					p.CA = test.rolesAnywhereCA
 				}
+
+				Expect(provider.Setup(ctx, test.cluster.Name)).To(Succeed())
+
+				DeferCleanup(func(ctx context.Context) {
+					if test.skipCleanup {
+						test.logger.Info("Skipping ssm hybrid activations and managed instances cleanup")
+						return
+					}
+					Expect(provider.Cleanup(ctx, test.logger)).To(Succeed())
+				}, NodeTimeout(deferCleanupTimeout))
 			}
 		})
 
