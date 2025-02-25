@@ -1,13 +1,19 @@
 package hybrid
 
 import (
+	"context"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"go.uber.org/zap"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 )
+
+const ipValidation = "ip-validation"
 
 type HybridNodeProvider struct {
 	nodeConfig    *api.NodeConfig
@@ -15,6 +21,7 @@ type HybridNodeProvider struct {
 	awsConfig     *aws.Config
 	daemonManager daemon.DaemonManager
 	logger        *zap.Logger
+	cluster       *eks.Cluster
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
@@ -42,6 +49,12 @@ func WithAWSConfig(config *aws.Config) NodeProviderOpt {
 	}
 }
 
+func WithCluster(cluster *eks.Cluster) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.cluster = cluster
+	}
+}
+
 func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
@@ -50,7 +63,55 @@ func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 	return hnp.logger
 }
 
+func (hnp *HybridNodeProvider) Validate(ctx context.Context, skipPhases []string) error {
+	if !slices.Contains(skipPhases, ipValidation) {
+		hnp.logger.Info("skipPhases", zap.Strings("skipPhases", skipPhases))
+		hnp.logger.Info("Validating Node IP...")
+
+		// Only check flags set by user - hybrid nodes does not set node-ip on its own,
+		// and for hostname-override we only want to prevent user from setting it
+		kubeletArgs := hnp.nodeConfig.Spec.Kubelet.Flags
+		var iamNodeName string
+		if hnp.nodeConfig.IsIAMRolesAnywhere() {
+			iamNodeName = hnp.nodeConfig.Status.Hybrid.NodeName
+		}
+		nodeIp, err := getNodeIP(kubeletArgs, iamNodeName)
+		if err != nil {
+			return err
+		}
+
+		cluster, err := hnp.Cluster(ctx)
+		if err != nil {
+			return err
+		}
+		if validateClusterRemoteNetworkConfig(cluster) != nil {
+			return err
+		}
+
+		if err = validateIPInRemoteNodeNetwork(nodeIp, cluster.RemoteNetworkConfig.RemoteNodeNetworks); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (hnp *HybridNodeProvider) Cleanup() error {
 	hnp.daemonManager.Close()
 	return nil
+}
+
+func (p *HybridNodeProvider) Cluster(ctx context.Context) (*eks.Cluster, error) {
+	if p.cluster != nil {
+		return p.cluster, nil
+	}
+
+	cluster, err := readCluster(ctx, *p.awsConfig, p.nodeConfig)
+	if err != nil {
+		p.logger.Error("Failed to read cluster", zap.Error(err))
+		return nil, err
+	}
+	p.cluster = cluster
+
+	return cluster, nil
 }
