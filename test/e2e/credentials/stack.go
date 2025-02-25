@@ -72,10 +72,11 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 		return nil, err
 	}
 
-	output, err := s.readStackOutput(ctx, logger)
+	output, err := s.ReadStackOutput(ctx, logger)
 	if err != nil {
 		return nil, err
 	}
+	logger.Info("E2E resources stack deployed successfully", "stackName", s.Name)
 
 	logger.Info("Creating access entry", "ssmRoleArn", output.SSMNodeRoleARN)
 	_, err = s.EKS.CreateAccessEntry(ctx, &eks.CreateAccessEntryInput{
@@ -263,7 +264,7 @@ func (s *Stack) instanceProfileName(roleName string) string {
 	return roleName
 }
 
-func (s *Stack) readStackOutput(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
+func (s *Stack) ReadStackOutput(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
 	resp, err := s.CFN.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(s.Name),
 	})
@@ -292,7 +293,6 @@ func (s *Stack) readStackOutput(ctx context.Context, logger logr.Logger) (*Stack
 		}
 	}
 
-	logger.Info("E2E resources stack deployed successfully", "stackName", s.Name)
 	return result, nil
 }
 
