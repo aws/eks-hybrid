@@ -13,7 +13,6 @@ const (
 	preprocessPhase = "preprocess"
 	configPhase     = "config"
 	runPhase        = "run"
-	ipValidation    = "ip-validation"
 )
 
 type Initer struct {
@@ -38,12 +37,8 @@ func (i *Initer) Run(ctx context.Context) error {
 		return err
 	}
 
-	if !slices.Contains(i.SkipPhases, ipValidation) {
-		i.Logger.Info("Validating Node IP...")
-
-		if err := i.NodeProvider.ValidateNodeIP(ctx); err != nil {
-			return err
-		}
+	if err := i.NodeProvider.Validate(ctx, i.SkipPhases); err != nil {
+		return err
 	}
 
 	aspects := i.NodeProvider.GetAspects()
@@ -98,6 +93,5 @@ func (i *Initer) Run(ctx context.Context) error {
 			i.Logger.Info("Finished post-launch tasks", nameField)
 		}
 	}
-
 	return i.NodeProvider.Cleanup()
 }

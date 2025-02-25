@@ -21,7 +21,8 @@ type NodeProvider interface {
 	// This doesn't require having aws Credentials or accessing any external services.
 	PopulateNodeConfigDefaults()
 
-	// ValidateConfig validates the node config with appropriate validations for the provider
+	// ValidateConfig performs static validation of node config.
+	// This doesn't require having aws Credentials or accessing any external services.
 	ValidateConfig() error
 
 	// PreProcessDaemon runs a pre-init hook function if required by node provider. This could be SSM registration
@@ -37,8 +38,8 @@ type NodeProvider interface {
 	// Logger defines the logger for the node provider
 	Logger() *zap.Logger
 
-	// ValidateNodeIP validates the node ip is within the allowed range
-	ValidateNodeIP(ctx context.Context) error
+	// Validate performs dynamic validations for the node. Requires calling awsConfigure first.
+	Validate(ctx context.Context, skipPhases []string) error
 
 	// Cleanup runs post init cleanup if any are required by node provider.
 	Cleanup() error

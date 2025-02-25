@@ -28,11 +28,10 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tredoe/osutil v1.5.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.35.0
 	golang.org/x/mod v0.23.0
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
-	k8s.io/component-helpers v0.32.2
 	k8s.io/cri-api v0.32.2
 	k8s.io/kubectl v0.32.2
 	k8s.io/kubelet v0.32.2

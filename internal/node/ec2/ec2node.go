@@ -39,7 +39,7 @@ func (enp *ec2NodeProvider) Logger() *zap.Logger {
 	return enp.logger
 }
 
-func (enp *ec2NodeProvider) ValidateNodeIP(ctx context.Context) error { return nil }
+func (enp *ec2NodeProvider) Validate(ctx context.Context, skipPhases []string) error { return nil }
 
 func (enp *ec2NodeProvider) Cleanup() error {
 	enp.daemonManager.Close()

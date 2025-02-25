@@ -16,10 +16,10 @@ import (
 
 func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 	tests := []struct {
-		name                string
-		nodeConfig          *api.NodeConfig
-		remoteNetworkConfig *eks.RemoteNetworkConfig
-		wantErr             bool
+		name        string
+		nodeConfig  *api.NodeConfig
+		cluster     *eks.Cluster
+		expectedErr string
 	}{
 		{
 			name: "valid node-ip flag in remote node network",
@@ -35,14 +35,17 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			remoteNetworkConfig: &eks.RemoteNetworkConfig{
-				RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-					{
-						CIDRs: []*string{aws.String("10.0.0.0/24")},
+			cluster: &eks.Cluster{
+				Name: aws.String("test-cluster"),
+				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
+					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
+						{
+							CIDRs: []*string{aws.String("10.0.0.0/24")},
+						},
 					},
 				},
 			},
-			wantErr: false,
+			expectedErr: "",
 		},
 		{
 			name: "node-ip flag not in remote node network",
@@ -58,17 +61,56 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			remoteNetworkConfig: &eks.RemoteNetworkConfig{
-				RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-					{
-						CIDRs: []*string{aws.String("10.0.0.0/24")},
+			cluster: &eks.Cluster{
+				Name: aws.String("test-cluster"),
+				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
+					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
+						{
+							CIDRs: []*string{aws.String("10.0.0.0/24")},
+						},
 					},
 				},
 			},
-			wantErr: true,
+			expectedErr: "node IP 192.168.1.1 is not in any of the remote network CIDR blocks: [10.0.0.0/24]",
 		},
 		{
-			name: "hostname override in remote node network",
+			name: "ip in one of multiple remote node networks",
+			nodeConfig: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Kubelet: api.KubeletOptions{
+						Flags: []string{"--node-ip=192.1.0.20"},
+					},
+				},
+			},
+			cluster: &eks.Cluster{
+				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
+					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
+						{CIDRs: []*string{aws.String("10.1.0.0/16"), aws.String("192.1.0.0/24")}},
+					},
+				},
+			},
+			expectedErr: "",
+		},
+		{
+			name: "ip not in one of multiple remote node networks",
+			nodeConfig: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Kubelet: api.KubeletOptions{
+						Flags: []string{"--node-ip=178.1.2.3"},
+					},
+				},
+			},
+			cluster: &eks.Cluster{
+				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
+					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
+						{CIDRs: []*string{aws.String("10.1.0.0/16"), aws.String("192.1.0.0/24")}},
+					},
+				},
+			},
+			expectedErr: "node IP 178.1.2.3 is not in any of the remote network CIDR blocks: [10.1.0.0/16 192.1.0.0/24]",
+		},
+		{
+			name: "hostname override present",
 			nodeConfig: &api.NodeConfig{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
 				Spec: api.NodeConfigSpec{
@@ -81,69 +123,17 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			remoteNetworkConfig: &eks.RemoteNetworkConfig{
-				RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-					{
-						CIDRs: []*string{aws.String("10.0.0.0/8")},
+			cluster: &eks.Cluster{
+				Name: aws.String("test-cluster"),
+				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
+					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
+						{
+							CIDRs: []*string{aws.String("10.0.0.0/8")},
+						},
 					},
 				},
 			},
-			wantErr: false,
-		},
-		{
-			name: "hostname override not in remote node network",
-			nodeConfig: &api.NodeConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
-				Spec: api.NodeConfigSpec{
-					Cluster: api.ClusterDetails{
-						Name:   "test-cluster",
-						Region: "us-west-2",
-					},
-					Kubelet: api.KubeletOptions{
-						Flags: []string{"--hostname-override=192.1.2.3"},
-					},
-				},
-			},
-			remoteNetworkConfig: &eks.RemoteNetworkConfig{
-				RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-					{
-						CIDRs: []*string{aws.String("10.0.0.0/8")},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "ip in one of multiple remote node networks",
-			nodeConfig: &api.NodeConfig{
-				Spec: api.NodeConfigSpec{
-					Kubelet: api.KubeletOptions{
-						Flags: []string{"--node-ip=192.1.0.20"},
-					},
-				},
-			},
-			remoteNetworkConfig: &eks.RemoteNetworkConfig{
-				RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-					{CIDRs: []*string{aws.String("10.1.0.0/16"), aws.String("192.1.0.0/24")}},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "ip not in one of multiple remote node networks",
-			nodeConfig: &api.NodeConfig{
-				Spec: api.NodeConfigSpec{
-					Kubelet: api.KubeletOptions{
-						Flags: []string{"--node-ip=178.1.2.3"},
-					},
-				},
-			},
-			remoteNetworkConfig: &eks.RemoteNetworkConfig{
-				RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-					{CIDRs: []*string{aws.String("10.1.0.0/16"), aws.String("192.1.0.0/24")}},
-				},
-			},
-			wantErr: true,
+			expectedErr: "hostname-override kubelet flag is not supported for hybrid nodes but found override:  10.1.2.3",
 		},
 	}
 
@@ -154,14 +144,15 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 			hnp, err := hybrid.NewHybridNodeProvider(
 				tt.nodeConfig,
 				zap.NewNop(),
-				hybrid.WithRemoteNetworkConfig(tt.remoteNetworkConfig),
+				hybrid.WithCluster(tt.cluster),
 			)
 			g.Expect(err).To(Succeed())
 
-			err = hnp.ValidateNodeIP(context.Background())
+			err = hnp.Validate(context.Background(), []string{})
 
-			if tt.wantErr {
+			if tt.expectedErr != "" {
 				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring(tt.expectedErr))
 			} else {
 				g.Expect(err).NotTo(HaveOccurred())
 			}
