@@ -21,6 +21,8 @@ const (
 	ContainerdSourceNone   SourceName = "none"
 	ContainerdSourceDistro SourceName = "distro"
 	ContainerdSourceDocker SourceName = "docker"
+	// pin containerd to major version 1.x
+	ContainerdVersion = "1.*"
 
 	containerdPackageName = "containerd"
 	runcPackageName       = "runc"
@@ -28,7 +30,7 @@ const (
 
 // Source represents a source that serves a containerd binary.
 type Source interface {
-	GetContainerd() artifact.Package
+	GetContainerd(version string) artifact.Package
 }
 
 func Install(ctx context.Context, tracker *tracker.Tracker, source Source, containerdSource SourceName) error {
@@ -36,7 +38,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source, conta
 		return nil
 	}
 	if isContainerdNotInstalled() {
-		containerd := source.GetContainerd()
+		containerd := source.GetContainerd(ContainerdVersion)
 		// Sometimes install fails due to conflicts with other processes
 		// updating packages, specially when automating at machine startup.
 		// We assume errors are transient and just retry for a bit.
@@ -50,7 +52,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source, conta
 
 func Uninstall(ctx context.Context, source Source) error {
 	if isContainerdInstalled() {
-		containerd := source.GetContainerd()
+		containerd := source.GetContainerd(ContainerdVersion)
 		if err := artifact.UninstallPackageWithRetries(ctx, containerd, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to uninstall containerd")
 		}

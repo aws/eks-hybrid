@@ -1,13 +1,16 @@
 package ssm
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
 	"time"
 
+	"github.com/ProtonMail/gopenpgp/v3/crypto"
 	"github.com/aws/aws-sdk-go-v2/config"
 	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/pkg/errors"
@@ -19,13 +22,15 @@ import (
 )
 
 const (
-	installerPath = "/opt/ssm/ssm-setup-cli"
-	configRoot    = "/etc/amazon"
+	defaultInstallerPath = "/opt/ssm/ssm-setup-cli"
+	configRoot           = "/etc/amazon"
 )
 
 // Source serves an SSM installer binary for the target platform.
 type Source interface {
 	GetSSMInstaller(ctx context.Context) (io.ReadCloser, error)
+	GetSSMInstallerSignature(ctx context.Context) (io.ReadCloser, error)
+	PublicKey() string
 }
 
 // PkgSource serves and defines the package for target platform
@@ -33,22 +38,97 @@ type PkgSource interface {
 	GetSSMPackage() artifact.Package
 }
 
-func Install(ctx context.Context, tracker *tracker.Tracker, source Source, region string) error {
-	installer, err := source.GetSSMInstaller(ctx)
-	if err != nil {
-		return err
-	}
-	defer installer.Close()
+type InstallOptions struct {
+	Tracker       *tracker.Tracker
+	Source        Source
+	Logger        *zap.Logger
+	Region        string
+	InstallerPath string
+}
 
-	if err := artifact.InstallFile(installerPath, installer, 0o755); err != nil {
+func Install(ctx context.Context, opts InstallOptions) error {
+	if opts.InstallerPath == "" {
+		opts.InstallerPath = defaultInstallerPath
+	}
+
+	if err := downloadFileWithRetries(ctx, opts.Source, opts.Logger, opts.InstallerPath, opts.Region); err != nil {
 		return errors.Wrap(err, "failed to install ssm installer")
 	}
-
-	if err = runInstallWithRetries(ctx, region); err != nil {
+	if err := runInstallWithRetries(ctx, opts.InstallerPath, opts.Region); err != nil {
 		return errors.Wrapf(err, "failed to install ssm agent")
 	}
 
-	return tracker.Add(artifact.Ssm)
+	return opts.Tracker.Add(artifact.Ssm)
+}
+
+func downloadFileWithRetries(ctx context.Context, source Source, logger *zap.Logger, installerPath, region string) error {
+	// Retry up to 3 times to download and validate the signature of
+	// the SSM setup cli.
+	var err error
+	for range 3 {
+		err = downloadFileTo(ctx, source, installerPath, region)
+		if err == nil {
+			break
+		}
+		logger.Error("Downloading ssm-setup-cli failed. Retrying...", zap.Error(err))
+	}
+	return err
+}
+
+// Update other functions that use InstallerPath to use the parameter instead
+func downloadFileTo(ctx context.Context, source Source, installerPath, region string) error {
+	installer, err := source.GetSSMInstaller(ctx)
+	if err != nil {
+		return fmt.Errorf("getting ssm-setup-cli: %w", err)
+	}
+	defer installer.Close()
+
+	signature, err := source.GetSSMInstallerSignature(ctx)
+	if err != nil {
+		return fmt.Errorf("getting ssm-setup-cli signature: %w", err)
+	}
+	defer signature.Close()
+
+	var installerBuffer bytes.Buffer
+	installerTee := io.TeeReader(installer, &installerBuffer)
+
+	if err := validateSetupSignature(installerTee, signature, source.PublicKey()); err != nil {
+		return fmt.Errorf("validating ssm-setup-cli signature: %w", err)
+	}
+
+	if err := artifact.InstallFile(installerPath, bytes.NewReader(installerBuffer.Bytes()), 0o755); err != nil {
+		return fmt.Errorf("installing ssm-setup-cli: %w", err)
+	}
+
+	if err = runInstallWithRetries(ctx, installerPath, region); err != nil {
+		return errors.Wrapf(err, "failed to install ssm agent")
+	}
+	return nil
+}
+
+func validateSetupSignature(installer, signature io.Reader, publicKey string) error {
+	verificationKey, err := crypto.NewKeyFromArmored(publicKey)
+	if err != nil {
+		return err
+	}
+
+	pgp := crypto.PGP()
+	verifier, _ := pgp.Verify().
+		VerificationKey(verificationKey).
+		New()
+
+	verifyDataReader, err := verifier.VerifyingReader(installer, signature, crypto.Bytes)
+	if err != nil {
+		return err
+	}
+	verifyResult, err := verifyDataReader.ReadAllAndVerifySignature()
+	if err != nil {
+		return err
+	}
+	if err := verifyResult.SignatureError(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // DeregisterAndUninstall de-registers the managed instance and removes all files and components that
@@ -113,16 +193,15 @@ func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) er
 	if err := artifact.UninstallPackageWithRetries(ctx, ssmPkg, 5*time.Second); err != nil {
 		return errors.Wrapf(err, "failed to uninstall ssm")
 	}
-	return os.RemoveAll(installerPath)
+	return os.RemoveAll(defaultInstallerPath)
 }
 
-func runInstallWithRetries(ctx context.Context, region string) error {
+func runInstallWithRetries(ctx context.Context, installerPath, region string) error {
 	// Sometimes install fails due to conflicts with other processes
 	// updating packages, specially when automating at machine startup.
 	// We assume errors are transient and just retry for a bit.
 	installCmdBuilder := func(ctx context.Context) *exec.Cmd {
 		return exec.CommandContext(ctx, installerPath, "-install", "-region", region)
 	}
-
 	return cmd.Retry(ctx, installCmdBuilder, 5*time.Second)
 }

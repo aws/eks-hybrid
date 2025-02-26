@@ -23,6 +23,14 @@ func NewHTTPSServer(tb testing.TB, handle func(w http.ResponseWriter, r *http.Re
 	return TestServer{ts}
 }
 
+// NewHTTPServer creates a new TestServer without TLS.
+// The server is automatically closed when the test ends.
+func NewHTTPServer(tb testing.TB, handle func(w http.ResponseWriter, r *http.Request)) TestServer {
+	ts := httptest.NewServer(http.HandlerFunc(handle))
+	tb.Cleanup(func() { ts.Close() })
+	return TestServer{ts}
+}
+
 // NewHTTPSServerForJSON creates a new TestServer that responds with a JSON body.
 func NewHTTPSServerForJSON(tb testing.TB, status int, resp any) TestServer {
 	return NewHTTPSServer(tb, func(w http.ResponseWriter, r *http.Request) {

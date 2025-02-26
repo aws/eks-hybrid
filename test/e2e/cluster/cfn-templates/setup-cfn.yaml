@@ -352,7 +352,7 @@ Resources:
               - content: |
                   #!/usr/bin/env bash
 
-                  if ! aws ssm get-parameter --name /ec2/keypair/${JumpboxKeyPair.KeyPairId} --with-decryption --query Parameter.Value --output text > /root/.ssh/id_rsa ||
+                  if ! aws ssm get-parameter --name /ec2/keypair/${JumpboxKeyPair.KeyPairId} --region ${ClusterRegion} --with-decryption --query Parameter.Value --output text > /root/.ssh/id_rsa ||
                     ! openssl rsa -in /root/.ssh/id_rsa -pubout; then
                     echo "Problem downloading private key from ssm!"
                     cat /root/.ssh/id_rsa

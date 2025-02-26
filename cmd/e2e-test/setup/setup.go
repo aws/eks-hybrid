@@ -15,13 +15,13 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 )
 
-type command struct {
+type Command struct {
 	flaggy         *flaggy.Subcommand
 	configFilePath string
 }
 
-func NewCommand() cli.Command {
-	cmd := command{}
+func NewCommand() *Command {
+	cmd := Command{}
 
 	setupCmd := flaggy.NewSubcommand("setup")
 	setupCmd.Description = "Create the E2E test infrastructure"
@@ -34,11 +34,15 @@ func NewCommand() cli.Command {
 	return &cmd
 }
 
-func (c *command) Flaggy() *flaggy.Subcommand {
+func (c *Command) Flaggy() *flaggy.Subcommand {
 	return c.flaggy
 }
 
-func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+func (c *Command) Commands() []cli.Command {
+	return []cli.Command{c}
+}
+
+func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 	file, err := os.ReadFile(s.configFilePath)
 	if err != nil {

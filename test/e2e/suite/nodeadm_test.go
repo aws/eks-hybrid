@@ -48,19 +48,6 @@ var (
 	suite    *suiteConfiguration
 )
 
-type TestConfig struct {
-	ClusterName     string `yaml:"clusterName"`
-	ClusterRegion   string `yaml:"clusterRegion"`
-	NodeadmUrlAMD   string `yaml:"nodeadmUrlAMD"`
-	NodeadmUrlARM   string `yaml:"nodeadmUrlARM"`
-	SetRootPassword bool   `yaml:"setRootPassword"`
-	NodeK8sVersion  string `yaml:"nodeK8SVersion"`
-	LogsBucket      string `yaml:"logsBucket"`
-	Endpoint        string `yaml:"endpoint"`
-	// ArtifactsFolder is the local path where the test will store the artifacts.
-	ArtifactsFolder string `yaml:"artifactsFolder"`
-}
-
 type suiteConfiguration struct {
 	TestConfig             *TestConfig              `json:"testConfig"`
 	SkipCleanup            bool                     `json:"skipCleanup"`
@@ -119,7 +106,7 @@ var _ = SynchronizedBeforeSuite(
 	// In this case, we use a struct marshalled in json.
 	func(ctx context.Context) []byte {
 		Expect(filePath).NotTo(BeEmpty(), "filepath should be configured") // Fail the test if the filepath flag is not provided
-		config, err := readTestConfig(filePath)
+		config, err := ReadConfig(filePath)
 		Expect(err).NotTo(HaveOccurred(), "should read valid test configuration")
 
 		logger := newLoggerForTests().Logger
@@ -396,25 +383,6 @@ var _ = Describe("Hybrid Nodes", func() {
 	})
 })
 
-// readTestConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.
-func readTestConfig(configPath string) (*TestConfig, error) {
-	config := &TestConfig{}
-	file, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading tests configuration file %s: %w", filePath, err)
-	}
-
-	if err = yaml.Unmarshal(file, config); err != nil {
-		return nil, fmt.Errorf("unmarshaling test configuration: %w", err)
-	}
-
-	if config.ArtifactsFolder == "" {
-		config.ArtifactsFolder = "/tmp"
-	}
-
-	return config, nil
-}
-
 func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) (*peeredVPCTest, error) {
 	pausableLogger := newLoggerForTests()
 	test := &peeredVPCTest{
@@ -466,38 +434,37 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		return nil, err
 	}
 
-	if suite.TestConfig.NodeadmUrlAMD != "" {
-		nodeadmUrl, err := s3.GetNodeadmURL(ctx, test.s3Client, suite.TestConfig.NodeadmUrlAMD)
-		if err != nil {
-			return nil, err
-		}
-		test.nodeadmURLs.AMD = nodeadmUrl
+	urls, err := s3.BuildNodeamURLs(ctx, test.s3Client, suite.TestConfig.NodeadmUrlAMD, suite.TestConfig.NodeadmUrlARM)
+	if err != nil {
+		return nil, err
 	}
-	if suite.TestConfig.NodeadmUrlARM != "" {
-		nodeadmUrl, err := s3.GetNodeadmURL(ctx, test.s3Client, suite.TestConfig.NodeadmUrlARM)
-		if err != nil {
-			return nil, err
-		}
-		test.nodeadmURLs.ARM = nodeadmUrl
-	}
+	test.nodeadmURLs = *urls
 
 	return test, nil
 }
 
 func (t *peeredVPCTest) newPeeredNode() *peered.Node {
 	return &peered.Node{
-		AWS:                 t.aws,
-		Cluster:             t.cluster,
-		EC2:                 t.ec2Client,
-		K8s:                 t.k8sClient,
-		Logger:              t.logger,
-		LogsBucket:          t.logsBucket,
-		NodeadmURLs:         t.nodeadmURLs,
-		PublicKey:           t.publicKey,
-		RemoteCommandRunner: t.remoteCommandRunner,
-		S3:                  t.s3Client,
-		SkipDelete:          t.skipCleanup,
-		SetRootPassword:     t.setRootPassword,
+		NodeCreate: peered.NodeCreate{
+			AWS:             t.aws,
+			EC2:             t.ec2Client,
+			SSM:             t.ssmClient,
+			Logger:          t.logger,
+			Cluster:         t.cluster,
+			NodeadmURLs:     t.nodeadmURLs,
+			PublicKey:       t.publicKey,
+			SetRootPassword: t.setRootPassword,
+		},
+		NodeCleanup: peered.NodeCleanup{
+			RemoteCommandRunner: t.remoteCommandRunner,
+			EC2:                 t.ec2Client,
+			S3:                  t.s3Client,
+			K8s:                 t.k8sClient,
+			Logger:              t.logger,
+			SkipDelete:          t.skipCleanup,
+			ClusterName:         t.cluster.Name,
+			LogsBucket:          t.logsBucket,
+		},
 	}
 }
 

@@ -82,7 +82,12 @@ func (i *Installer) installCredentialProcess(ctx context.Context) error {
 		ssmInstaller := ssm.NewSSMInstaller(i.Logger, i.SsmRegion)
 
 		i.Logger.Info("Installing SSM agent installer...")
-		if err := ssm.Install(ctx, i.Tracker, ssmInstaller, i.SsmRegion); err != nil {
+		if err := ssm.Install(ctx, ssm.InstallOptions{
+			Tracker: i.Tracker,
+			Source:  ssmInstaller,
+			Logger:  i.Logger,
+			Region:  i.SsmRegion,
+		}); err != nil {
 			return err
 		}
 	default:

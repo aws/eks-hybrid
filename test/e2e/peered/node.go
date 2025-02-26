@@ -35,20 +35,8 @@ const (
 
 // Node represents is a Hybrid node running as an EC2 instance in a peered VPC.
 type Node struct {
-	AWS                 aws.Config
-	Cluster             *HybridCluster
-	EC2                 *ec2sdk.Client
-	SSM                 *ssm.Client
-	S3                  *s3sdk.Client
-	K8s                 *clientgo.Clientset
-	RemoteCommandRunner commands.RemoteCommandRunner
-	Logger              logr.Logger
-	SkipDelete          bool
-	SetRootPassword     bool
-
-	LogsBucket  string
-	NodeadmURLs e2e.NodeadmURLs
-	PublicKey   string
+	NodeCreate
+	NodeCleanup
 }
 
 // NodeSpec configures the Hybrid Node.
@@ -61,12 +49,20 @@ type NodeSpec struct {
 	Provider           e2e.NodeadmCredentialsProvider
 }
 
-// Create spins up an EC2 instance with the proper user data to join as a Hybrid node to the cluster.
-func (c Node) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) {
-	if c.LogsBucket != "" {
-		c.Logger.Info("Instance logs will be collected in S3", "url", c.S3LogsURL(spec.InstanceName))
-	}
+type NodeCreate struct {
+	AWS     aws.Config
+	Cluster *HybridCluster
+	EC2     *ec2sdk.Client
+	SSM     *ssm.Client
+	Logger  logr.Logger
 
+	SetRootPassword bool
+	NodeadmURLs     e2e.NodeadmURLs
+	PublicKey       string
+}
+
+// Create spins up an EC2 instance with the proper user data to join as a Hybrid node to the cluster.
+func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) {
 	nodeSpec := e2e.NodeSpec{
 		OS:         spec.OS,
 		NamePrefix: spec.NodeNamePrefix,
@@ -142,7 +138,7 @@ func (c Node) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) 
 }
 
 // SerialConsole returns the serial console for the given instance.
-func (c *Node) SerialConsole(ctx context.Context, instanceId string) (*ssh.SerialConsole, error) {
+func (c *NodeCreate) SerialConsole(ctx context.Context, instanceId string) (*ssh.SerialConsole, error) {
 	privateKey, publicKey, err := generateKeyPair()
 	if err != nil {
 		return nil, fmt.Errorf("generating keypair: %w", err)
@@ -201,8 +197,20 @@ func generateKeyPair() ([]byte, []byte, error) {
 	return pem.EncodeToMemory(privateKeyPEM), gssh.MarshalAuthorizedKey(publicKey), nil
 }
 
+type NodeCleanup struct {
+	S3                  *s3sdk.Client
+	EC2                 *ec2sdk.Client
+	K8s                 *clientgo.Clientset
+	Logger              logr.Logger
+	RemoteCommandRunner commands.RemoteCommandRunner
+
+	LogsBucket  string
+	ClusterName string
+	SkipDelete  bool
+}
+
 // Cleanup collects logs and deletes the EC2 instance and Node object.
-func (c *Node) Cleanup(ctx context.Context, instance ec2.Instance) error {
+func (c *NodeCleanup) Cleanup(ctx context.Context, instance ec2.Instance) error {
 	logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	err := c.collectLogs(logCtx, "bundle", instance)
@@ -232,11 +240,11 @@ func (c Node) S3LogsURL(instanceName string) string {
 	return fmt.Sprintf("https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.Cluster.Region, c.LogsBucket, c.logsPrefix(instanceName))
 }
 
-func (c Node) logsPrefix(instanceName string) string {
-	return fmt.Sprintf("logs/%s/%s", c.Cluster.Name, instanceName)
+func (c NodeCleanup) logsPrefix(instanceName string) string {
+	return fmt.Sprintf("logs/%s/%s", c.ClusterName, instanceName)
 }
 
-func (c Node) collectLogs(ctx context.Context, bundleName string, instance ec2.Instance) error {
+func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instance ec2.Instance) error {
 	if c.LogsBucket == "" {
 		return nil
 	}

@@ -16,13 +16,13 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 )
 
-type command struct {
+type Command struct {
 	flaggy     *flaggy.Subcommand
 	instanceID string
 }
 
-func NewCommand() cli.Command {
-	cmd := command{}
+func NewCommand() *Command {
+	cmd := Command{}
 
 	setupCmd := flaggy.NewSubcommand("ssh")
 	setupCmd.Description = "SSH into a E2E Hybrid Node running in the peered VPC through the jumpbox"
@@ -33,11 +33,15 @@ func NewCommand() cli.Command {
 	return &cmd
 }
 
-func (c *command) Flaggy() *flaggy.Subcommand {
+func (c *Command) Flaggy() *flaggy.Subcommand {
 	return c.flaggy
 }
 
-func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+func (c *Command) Commands() []cli.Command {
+	return []cli.Command{c}
+}
+
+func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 
 	cfg, err := config.LoadDefaultConfig(ctx)

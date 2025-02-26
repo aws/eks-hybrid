@@ -64,6 +64,8 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 	for range 2 {
 		if err = s.deployStack(ctx, logger); err == nil {
 			break
+		} else {
+			logger.Error(err, "Error deploying stack, retrying")
 		}
 	}
 	if err != nil {

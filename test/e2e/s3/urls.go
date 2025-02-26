@@ -9,12 +9,34 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"github.com/aws/eks-hybrid/test/e2e"
 )
 
 const (
 	httpsScheme = "https"
 	s3Scheme    = "s3"
 )
+
+func BuildNodeamURLs(ctx context.Context, client *s3.Client, amdURL, armURL string) (*e2e.NodeadmURLs, error) {
+	urls := &e2e.NodeadmURLs{}
+	if amdURL != "" {
+		url, err := GetNodeadmURL(ctx, client, amdURL)
+		if err != nil {
+			return nil, err
+		}
+		urls.AMD = url
+	}
+	if armURL != "" {
+		url, err := GetNodeadmURL(ctx, client, armURL)
+		if err != nil {
+			return nil, err
+		}
+		urls.ARM = url
+	}
+
+	return urls, nil
+}
 
 func GetNodeadmURL(ctx context.Context, client *s3.Client, nodeadmUrl string) (string, error) {
 	parsedURL, err := url.Parse(nodeadmUrl)
