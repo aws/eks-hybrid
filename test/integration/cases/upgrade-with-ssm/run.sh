@@ -58,7 +58,14 @@ validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644
 
+# Since we are upgrading kubernetes version primarily also check if the checksums of artifacts changed
+generate::checksum-file /usr/bin/kubelet
+generate::checksum-file /usr/local/bin/kubectl
 nodeadm upgrade $TARGET_VERSION --skip run,preprocess,pod-validation,node-validation,init-validation --config-source file://config.yaml
+
+assert::checksum-match /usr/bin/kubelet
+assert::checksum-match /usr/local/bin/kubectl
+
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables
 assert::path-exists /usr/local/bin/kubectl

@@ -12,7 +12,6 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
@@ -21,7 +20,6 @@ import (
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
-	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -178,33 +176,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	uninstaller := &flows.Uninstaller{
-		Artifacts:      installed.Artifacts,
-		DaemonManager:  daemonManager,
-		PackageManager: packageManager,
-		SSMUninstall:   ssm.Uninstall,
-		Logger:         log,
-		CNIUninstall:   cni.NoOp,
-	}
-
-	installer := &flows.Installer{
+	upgrader := &flows.Upgrader{
+		NodeProvider:       nodeProvider,
 		AwsSource:          awsSource,
-		ContainerdSource:   containerdSource,
 		PackageManager:     packageManager,
 		CredentialProvider: credsProvider,
+		Artifacts:          installed.Artifacts,
+		DaemonManager:      daemonManager,
+		SkipPhases:         c.skipPhases,
 		Logger:             log,
-	}
-
-	initer := &flows.Initer{
-		NodeProvider: nodeProvider,
-		SkipPhases:   c.skipPhases,
-		Logger:       log,
-	}
-
-	upgrader := &flows.Upgrader{
-		Uninstaller: uninstaller,
-		Installer:   installer,
-		Initer:      initer,
 	}
 
 	return upgrader.Run(ctx)
