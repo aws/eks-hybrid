@@ -13,7 +13,7 @@ const (
 	notRunningExitCode       = 252
 )
 
-var firewalldActiveRegex = regexp.MustCompile(`.*running*`)
+var firewalldNotRunningRegex = regexp.MustCompile(`.*not running*`)
 
 type firewalld struct {
 	binPath string
@@ -29,23 +29,27 @@ func NewFirewalld() Manager {
 // IsEnabled returns true if firewalld is enabled and running on the node
 func (fd *firewalld) IsEnabled() (bool, error) {
 	// Check if firewalld is installed
-	if fd.binPath != "" {
-		enabledCmd := exec.Command(fd.binPath, "--state")
-		out, err := enabledCmd.CombinedOutput()
-		if err != nil {
-			exitError, ok := err.(*exec.ExitError)
-			// firewall-cmd returns non-zero exit codes for states other than running
-			if ok && (exitError.ExitCode() == runningButFailedExitCode || exitError.ExitCode() == notRunningExitCode) {
-				return false, nil
-			}
-			return false, err
-		}
-		// check for running status output
-		if match := firewalldActiveRegex.MatchString(string(out)); match {
-			return true, nil
-		}
+	if fd.binPath == "" {
+		return false, nil
 	}
-	return false, nil
+
+	enabledCmd := exec.Command(fd.binPath, "--state")
+	out, err := enabledCmd.CombinedOutput()
+	if err != nil {
+		exitError, ok := err.(*exec.ExitError)
+		// firewall-cmd returns non-zero exit codes for states other than running
+		if ok && (exitError.ExitCode() == runningButFailedExitCode || exitError.ExitCode() == notRunningExitCode) {
+			return false, nil
+		}
+		return false, err
+	}
+	// check for running status output
+	// `firewall-cmd --state` returns 'running' or 'not running'
+	if match := firewalldNotRunningRegex.MatchString(string(out)); match {
+		return false, nil
+	} else {
+		return true, nil
+	}
 }
 
 // AllowTcpPort adds a rule to the firewall to open input port
