@@ -145,6 +145,20 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 	}, nil
 }
 
+// DisableSourceDestCheck disables the source/destination check for the given instance.
+func DisableSourceDestCheck(ctx context.Context, ec2Client *ec2.Client, instanceID string) error {
+	_, err := ec2Client.ModifyInstanceAttribute(ctx, &ec2.ModifyInstanceAttributeInput{
+		InstanceId: aws.String(instanceID),
+		SourceDestCheck: &types.AttributeBooleanValue{
+			Value: aws.Bool(false),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("disabling source/dest check for instance %s: %w", instanceID, err)
+	}
+	return nil
+}
+
 func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
 	terminateInstanceInput := &ec2.TerminateInstancesInput{
 		InstanceIds: []string{instanceID},
@@ -153,6 +167,40 @@ func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 	if _, err := client.TerminateInstances(ctx, terminateInstanceInput); err != nil {
 		return err
 	}
+	return nil
+}
+
+// DeleteRoutesForInstance deletes the routes entries that point to the instance from
+// the tables associated with the given subnet.
+func DeleteRoutesForInstance(ctx context.Context, ec2Client *ec2.Client, subnetID, instanceID string) error {
+	routeTables, err := ec2Client.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("association.subnet-id"),
+				Values: []string{subnetID},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("describing route tables: %w", err)
+	}
+
+	for _, routeTable := range routeTables.RouteTables {
+		for _, route := range routeTable.Routes {
+			if route.InstanceId == nil || *route.InstanceId != instanceID {
+				continue
+			}
+
+			_, err := ec2Client.DeleteRoute(ctx, &ec2.DeleteRouteInput{
+				RouteTableId:         routeTable.RouteTableId,
+				DestinationCidrBlock: route.DestinationCidrBlock,
+			})
+			if err != nil {
+				return fmt.Errorf("deleting route for instance %s: %w", instanceID, err)
+			}
+		}
+	}
+
 	return nil
 }
 
