@@ -48,4 +48,8 @@ assert::path-not-exist /opt/ssm/ssm-setup-cli
 assert::path-not-exist /usr/bin/amazon-ssm-agent
 assert::path-not-exist /opt/nodeadm/tracker
 
-assert::install-fails-with-region $VERSION "bad-region-name"
+# Check that an invalid region name does not succeed
+if nodeadm install $VERSION --credential-provider ssm --region "bad-region-name" >/dev/null 2>&1; then
+    echo "Install unexpectedly succeeded with --region 'bad-region-name'"
+    exit 1
+fi

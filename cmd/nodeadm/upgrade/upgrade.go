@@ -54,7 +54,6 @@ func NewUpgradeCommand() cli.Command {
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of the upgrade to skip. Allowed values: [init-validation, pod-validation, node-validation].")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum upgrade command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
-	cmd.region = ssm.DefaultSsmInstallerRegion
 	return &cmd
 }
 
@@ -63,7 +62,6 @@ type command struct {
 	configSource      string
 	skipPhases        []string
 	kubernetesVersion string
-	region            string
 	timeout           time.Duration
 }
 
@@ -179,9 +177,13 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	_, region, err := ssm.GetManagedHybridInstanceIdAndRegion()
-	if err != nil {
-		return err
+
+	var region string
+	if installed.Artifacts.Ssm {
+		_, region, err = ssm.GetManagedHybridInstanceIdAndRegion()
+		if err != nil {
+			return err
+		}
 	}
 
 	uninstaller := &flows.Uninstaller{

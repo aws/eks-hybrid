@@ -2,7 +2,6 @@ package install
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/integrii/flaggy"
@@ -33,6 +32,7 @@ func NewCommand() cli.Command {
 	cmd := command{
 		timeout: 20 * time.Minute,
 	}
+	cmd.region = ssm.DefaultSsmInstallerRegion
 
 	fc := flaggy.NewSubcommand("install")
 	fc.Description = "Install components required to join an EKS cluster"
@@ -40,10 +40,9 @@ func NewCommand() cli.Command {
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values: [ssm, iam-ra].")
 	fc.String(&cmd.containerdSource, "s", "containerd-source", "Source for containerd artifact. Allowed values: [none, distro, docker].")
-	fc.String(&cmd.region, "r", "region", fmt.Sprintf("AWS region for downloading regional artifacts. Default: %s", ssm.DefaultSsmInstallerRegion))
+	fc.String(&cmd.region, "r", "region", "AWS region for downloading regional artifacts.")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum install command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
-	cmd.region = ssm.DefaultSsmInstallerRegion
 
 	return &cmd
 }
