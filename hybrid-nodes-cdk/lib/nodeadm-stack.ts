@@ -19,6 +19,7 @@ export class NodeadmBuildStack extends cdk.Stack {
 
     const testClusterTagKey = "Nodeadm-E2E-Tests-Cluster"
     const testClusterPrefix = "nodeadm-e2e-tests"
+    const podIdentityS3BucketPrefix = "podidentitys3bucket"
     const requestTagCondition = {
       StringLike: {
         [`aws:RequestTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`
@@ -421,6 +422,26 @@ export class NodeadmBuildStack extends cdk.Stack {
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
           actions: [
+            's3:CreateBucket',
+            's3:DeleteBucket',
+            's3:PutBucketTagging',
+            's3:GetBucketTagging',
+            's3:ListBucket',
+            's3:PutObject*',
+            's3:DeleteObject',
+          ],
+          resources: [`arn:aws:s3:::${podIdentityS3BucketPrefix}-${this.account}-${this.region}-*`]
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:ListAllMyBuckets',
+          ],
+          resources: ['*']
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
             'eks:CreateAccessEntry',
             'eks:DescribeCluster',
             'eks:ListClusters',
@@ -458,7 +479,7 @@ export class NodeadmBuildStack extends cdk.Stack {
         }),
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
-          actions: ['eks:CreateAddon'],
+          actions: ['eks:CreateAddon', 'eks:CreatePodIdentityAssociation'],
           resources: [`arn:aws:eks:${this.region}:${this.account}:cluster/*`]
         }),
         new iam.PolicyStatement({
@@ -471,6 +492,7 @@ export class NodeadmBuildStack extends cdk.Stack {
           actions: [
             'cloudformation:DescribeStackEvents',
             'cloudformation:DescribeStacks',
+            'cloudformation:DescribeStackResource',
             'cloudformation:UpdateStack',
           ],
           resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/*`],
