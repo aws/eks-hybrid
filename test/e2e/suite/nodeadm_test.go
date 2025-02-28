@@ -240,40 +240,62 @@ var _ = Describe("Hybrid Nodes", func() {
 							if test.overrideNodeK8sVersion != "" {
 								k8sVersion = suite.TestConfig.NodeK8sVersion
 							}
-
 							peeredNode := test.newPeeredNode()
-							instance, err := peeredNode.Create(ctx, &peered.NodeSpec{
-								InstanceName:   instanceName,
-								NodeK8sVersion: k8sVersion,
-								NodeNamePrefix: "simpleflow",
-								OS:             nodeOS,
-								Provider:       provider,
-							})
-							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
-							DeferCleanup(func(ctx context.Context) {
-								Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
-							}, NodeTimeout(deferCleanupTimeout))
 
-							verifyNode := test.newVerifyNode(instance.IP)
+							var verifyNode *kubernetes.VerifyNode
+							var serialOutput peered.ItBlockCloser
+							var instance ec2.Instance
 
-							serialOutput := peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
-								PeeredNode:   peeredNode,
-								Instance:     instance,
-								TestLogger:   test.loggerControl,
-								OutputFolder: test.artifactsPath,
-							})
-							Expect(err).NotTo(HaveOccurred(), "should prepare serial output")
-							DeferCleanup(func() {
-								serialOutput.Close()
-							})
+							flakeAttempt := &FlakeAttempt{
+								logger: test.logger,
+							}
+							flakeAttempt.It(ctx, "Creating a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
+								var err error
+								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
+									InstanceName:   instanceName,
+									NodeK8sVersion: k8sVersion,
+									NodeNamePrefix: "simpleflow",
+									OS:             nodeOS,
+									Provider:       provider,
+								})
+								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
+								flakeRun.DeferCleanup(func(ctx context.Context) {
+									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
+								}, NodeTimeout(deferCleanupTimeout))
 
-							serialOutput.It("joins the cluster", func() {
-								test.logger.Info("Waiting for EC2 Instance to be Running...")
-								Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
-								Expect(verifyNode.WaitForNodeReady(ctx)).Error().To(
-									Succeed(), "node should have joined the cluster successfully"+
-										". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
-								)
+								verifyNode = test.newVerifyNode(instance.IP)
+
+								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
+									PeeredNode:   peeredNode,
+									Instance:     instance,
+									TestLogger:   test.loggerControl,
+									OutputFolder: test.artifactsPath,
+								})
+								flakeRun.DeferCleanup(func(ctx context.Context) {
+									serialOutput.Close()
+								}, NodeTimeout(deferCleanupTimeout))
+
+								serialOutput.It("joins the cluster", func() {
+									test.logger.Info("Waiting for EC2 Instance to be Running...")
+									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+									_, err := verifyNode.WaitForNodeReady(ctx)
+									if err != nil {
+										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, instance.ID)
+										if oErr != nil {
+											Expect(err).NotTo(HaveOccurred(), "should describe instance status")
+										}
+										expect := Expect
+										if isImpaired {
+											expect = flakeRun.RetryableExpect
+										}
+
+										expect(err).To(
+											Succeed(), "node should have joined the cluster successfully"+
+												". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
+										)
+
+									}
+								})
 							})
 
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
