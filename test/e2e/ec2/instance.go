@@ -163,6 +163,27 @@ func WaitForEC2InstanceRunning(ctx context.Context, ec2Client *ec2.Client, insta
 	return waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instanceID}}, nodeRunningTimeout)
 }
 
+func IsEC2InstanceImpaired(ctx context.Context, ec2Client *ec2.Client, instanceID string) (bool, error) {
+	describeStatusOutput, err := ec2Client.DescribeInstanceStatus(ctx, &ec2.DescribeInstanceStatusInput{
+		InstanceIds:         []string{instanceID},
+		IncludeAllInstances: aws.Bool(true),
+	})
+	if err != nil {
+		return false, fmt.Errorf("describing instance status %s: %w", instanceID, err)
+	}
+	for _, status := range describeStatusOutput.InstanceStatuses[0].SystemStatus.Details {
+		if status.Name == "reachability" {
+			return true, nil
+		}
+	}
+	for _, status := range describeStatusOutput.InstanceStatuses[0].InstanceStatus.Details {
+		if status.Name == "reachability" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instanceID string, logger logr.Logger) error {
 	instances, ec2Err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		InstanceIds: []string{instanceID},
