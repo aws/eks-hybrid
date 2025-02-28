@@ -203,29 +203,32 @@ func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.C
 	return cmd.Retry(ctx, pm.updateDockerAptPackagesCommand, 5*time.Second)
 }
 
-func (pm *DistroPackageManager) appendContainerdVersion(target string) string {
+func (pm *DistroPackageManager) appendPackageVersion(packageName, version string) string {
+	if version == "" {
+		return packageName
+	}
 	switch pm.manager {
 	case yumPackageManager:
-		return fmt.Sprintf("%s-%s", target, containerd.ContainerdVersion)
+		return fmt.Sprintf("%s-%s", packageName, version)
 	case aptPackageManager:
-		return fmt.Sprintf("%s=%s", target, containerd.ContainerdVersion)
+		return fmt.Sprintf("%s=%s", packageName, version)
 	default:
-		return target
+		return packageName
 	}
 }
 
-func (pm *DistroPackageManager) getContainerdPackageNameWithVersion() string {
-	packageName := containerdDistroPkgName
+func (pm *DistroPackageManager) getContainerdPackageNameWithVersion(version string) string {
+	containerdPkgName := containerdDistroPkgName
 	if pm.dockerRepo != "" {
-		packageName = containerdDockerPkgName
+		containerdPkgName = containerdDockerPkgName
 	}
-	return pm.appendContainerdVersion(packageName)
+	return pm.appendPackageVersion(containerdPkgName, version)
 }
 
 // GetContainerd gets the Package
 // Satisfies the containerd source interface
-func (pm *DistroPackageManager) GetContainerd() artifact.Package {
-	packageName := pm.getContainerdPackageNameWithVersion()
+func (pm *DistroPackageManager) GetContainerd(version string) artifact.Package {
+	packageName := pm.getContainerdPackageNameWithVersion(version)
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, packageName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, packageName, "-y"),

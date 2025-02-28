@@ -35,3 +35,11 @@ assert::swap-disabled-validate-path
 assert::allowed-by-firewalld "10250" "tcp"
 assert::allowed-by-firewalld "10256" "tcp"
 assert::allowed-by-firewalld "30000-32767" "tcp"
+
+exit_code=0
+systemctl stop firewalld
+STDERR=$(nodeadm init --skip run,install-validation --config-source file://config.yaml 2>&1) || exit_code=$?
+if [ $exit_code -ne 0]; then
+  echo "nodeadm init should not fail with firewall-cmd installed but firewalld service not running"
+  exit 1
+fi

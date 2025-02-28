@@ -6,7 +6,12 @@ import (
 	"regexp"
 )
 
-const firewalldBinary = "firewall-cmd"
+const (
+	firewalldBinary = "firewall-cmd"
+
+	runningButFailedExitCode = 251
+	notRunningExitCode       = 252
+)
 
 var firewalldActiveRegex = regexp.MustCompile(`.*running*`)
 
@@ -28,7 +33,12 @@ func (fd *firewalld) IsEnabled() (bool, error) {
 		enabledCmd := exec.Command(fd.binPath, "--state")
 		out, err := enabledCmd.CombinedOutput()
 		if err != nil {
-			return false, fmt.Errorf("failed to get firewalld status: %s, error: %v", out, err)
+			exitError, ok := err.(*exec.ExitError)
+			// firewall-cmd returns non-zero exit codes for states other than running
+			if ok && (exitError.ExitCode() == runningButFailedExitCode || exitError.ExitCode() == notRunningExitCode) {
+				return false, nil
+			}
+			return false, err
 		}
 		// check for running status output
 		if match := firewalldActiveRegex.MatchString(string(out)); match {
