@@ -13,7 +13,10 @@ const (
 	notRunningExitCode       = 252
 )
 
-var firewalldActiveRegex = regexp.MustCompile(`.*running*`)
+var (
+	firewalldActiveRegex  = regexp.MustCompile(`.*running*`)
+	firewallPortOpenRegex = regexp.MustCompile(`.*yes*`)
+)
 
 type firewalld struct {
 	binPath string
@@ -82,4 +85,17 @@ func (fd *firewalld) FlushRules() error {
 		return fmt.Errorf("failed to persist firewall rules: %s, error: %v", out, err)
 	}
 	return nil
+}
+
+func (fd *firewalld) IsPortOpen(port, protocol string) (bool, error) {
+	queryCmd := exec.Command(fd.binPath, fmt.Sprintf("--query-port=%s/%s", port, protocol))
+	out, err := queryCmd.CombinedOutput()
+	if err != nil {
+		// firewall-cmd returns an error if the port is not open
+		return false, nil
+	}
+	if match := firewallPortOpenRegex.MatchString(string(out)); match {
+		return true, nil
+	}
+	return false, fmt.Errorf("unsupported firewall port status")
 }
