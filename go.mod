@@ -11,11 +11,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.206.0
 	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.28.0
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.42.0
-	github.com/aws/aws-sdk-go-v2/service/eks v1.59.0
+	github.com/aws/aws-sdk-go-v2/service/eks v1.60.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.40.0
 	github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.78.0
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.57.0
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.57.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.16
 	github.com/aws/smithy-go v1.22.3
 	github.com/containerd/containerd v1.7.26
