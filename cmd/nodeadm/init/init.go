@@ -14,10 +14,17 @@ import (
 	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
-const installValidation = "install-validation"
+const (
+	installValidation      = "install-validation"
+	cniPortCheckValidation = "cni-validation"
+	calicoVxLanPort        = "4789"
+	ciliumVxLanPort        = "8472"
+	vxLanProtocol          = "udp"
+)
 
 const initHelpText = `Examples:
   # Initialize using configuration file
@@ -31,7 +38,7 @@ func NewInitCommand() cli.Command {
 	init.cmd = flaggy.NewSubcommand("init")
 	init.cmd.String(&init.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	init.cmd.StringSlice(&init.daemons, "d", "daemon", "Specify one or more of `containerd` and `kubelet`. This is intended for testing and should not be used in a production environment.")
-	init.cmd.StringSlice(&init.skipPhases, "s", "skip", "Phases of the bootstrap to skip. Allowed values: [install-validation, preprocess, config, run, ip-validation].")
+	init.cmd.StringSlice(&init.skipPhases, "s", "skip", "Phases of the bootstrap to skip. Allowed values: [install-validation, cni-validation, ip-validation, preprocess, config, run].")
 	init.cmd.Description = "Initialize this instance as a node in an EKS cluster"
 	init.cmd.AdditionalHelpAppend = initHelpText
 	return &init
@@ -80,6 +87,14 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
+	// Check if either of cilium or calico vxlan port are open
+	if !slices.Contains(c.skipPhases, cniPortCheckValidation) {
+		log.Info("Validating firewall ports for cilium and calico")
+		if err := validateFirewallOpenPorts(); err != nil {
+			return fmt.Errorf("Cilium (%s/%s) or Calico (%s/%s) VxLan ports are not open on the host. If you are not using VxLan, this validation can by bypassed with --skip %s",
+				ciliumVxLanPort, vxLanProtocol, calicoVxLanPort, vxLanProtocol, cniPortCheckValidation)
+		}
+	}
 	nodeProvider, err := node.NewNodeProvider(c.configSource, log)
 	if err != nil {
 		return err
@@ -92,4 +107,31 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	return initer.Run(ctx)
+}
+
+func validateFirewallOpenPorts() error {
+	firewallManager := system.NewFirewallManager()
+	enabled, err := firewallManager.IsEnabled()
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		return nil
+	}
+	if err := firewallManager.FlushRules(); err != nil {
+		return err
+	}
+	ciliumVxlanPortOpen, err := firewallManager.IsPortOpen(ciliumVxLanPort, vxLanProtocol)
+	if err != nil {
+		return err
+	}
+	calicoVxlanPortOpen, err := firewallManager.IsPortOpen(calicoVxLanPort, vxLanProtocol)
+	if err != nil {
+		return err
+	}
+
+	if !ciliumVxlanPortOpen && !calicoVxlanPortOpen {
+		return fmt.Errorf("both cilium and calico vxlan ports are closed")
+	}
+	return nil
 }

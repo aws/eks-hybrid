@@ -13,4 +13,7 @@ type Manager interface {
 
 	// FlushRules writes newly added rules to disk and reloads the firewall
 	FlushRules() error
+
+	// IsPortOpen return true if firewall allows traffic on input port
+	IsPortOpen(string, string) (bool, error)
 }

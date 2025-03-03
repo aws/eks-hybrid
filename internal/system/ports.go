@@ -26,18 +26,19 @@ type portsAspect struct {
 var _ SystemAspect = &portsAspect{}
 
 func NewPortsAspect(cfg *api.NodeConfig, logger *zap.Logger) SystemAspect {
-	var firewallManager firewall.Manager
-	osName := GetOsName()
-	if osName == UbuntuOsName {
-		firewallManager = firewall.NewUncomplicatedFirewall()
-	} else {
-		firewallManager = firewall.NewFirewalld()
-	}
 	return &portsAspect{
 		nodeConfig:      cfg,
 		logger:          logger,
-		firewallManager: firewallManager,
+		firewallManager: NewFirewallManager(),
 	}
+}
+
+func NewFirewallManager() firewall.Manager {
+	osName := GetOsName()
+	if osName == UbuntuOsName {
+		return firewall.NewUncomplicatedFirewall()
+	}
+	return firewall.NewFirewalld()
 }
 
 func (s *portsAspect) Name() string {

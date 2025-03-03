@@ -14,6 +14,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
+	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/system"
 )
 
@@ -31,6 +32,7 @@ func NewCommand() cli.Command {
 	cmd := command{
 		timeout: 20 * time.Minute,
 	}
+	cmd.region = ssm.DefaultSsmInstallerRegion
 
 	fc := flaggy.NewSubcommand("install")
 	fc.Description = "Install components required to join an EKS cluster"
@@ -38,6 +40,7 @@ func NewCommand() cli.Command {
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values: [ssm, iam-ra].")
 	fc.String(&cmd.containerdSource, "s", "containerd-source", "Source for containerd artifact. Allowed values: [none, distro, docker].")
+	fc.String(&cmd.region, "r", "region", "AWS region for downloading regional artifacts.")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum install command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 
@@ -49,15 +52,8 @@ type command struct {
 	kubernetesVersion  string
 	credentialProvider string
 	containerdSource   string
+	region             string
 	timeout            time.Duration
-}
-
-type Config struct {
-	AwsSource          aws.Source
-	ContainerdSource   containerd.SourceName
-	CredentialProvider creds.CredentialProvider
-	Log                *zap.Logger
-	DownloadTimeout    time.Duration
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -118,6 +114,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		AwsSource:          awsSource,
 		PackageManager:     packageManager,
 		ContainerdSource:   containerdSource,
+		SsmRegion:          c.region,
 		CredentialProvider: credentialProvider,
 		Logger:             log,
 	}

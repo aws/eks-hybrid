@@ -78,6 +78,9 @@ func WithPublicKey(key string) SSMInstallerOption {
 // SSMInstaller provides a Source that retrieves the SSM installer from the official
 // release endpoint.
 func NewSSMInstaller(logger *zap.Logger, region string, opts ...SSMInstallerOption) Source {
+	if region == "" {
+		region = DefaultSsmInstallerRegion
+	}
 	s := &ssmInstallerSource{
 		region:    region,
 		logger:    logger,
@@ -106,7 +109,9 @@ func (s ssmInstallerSource) GetSSMInstaller(ctx context.Context) (io.ReadCloser,
 	if err != nil {
 		return nil, err
 	}
-	s.logger.Info("Downloading SSM installer", zap.String("url", endpoint))
+
+	s.logger.Info("Downloading SSM installer", zap.String("region", s.region), zap.String("url", endpoint))
+
 	obj, err := util.GetHttpFileReader(ctx, endpoint)
 	if err != nil {
 		return nil, err

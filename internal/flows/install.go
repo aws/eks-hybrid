@@ -26,6 +26,7 @@ type Installer struct {
 	ContainerdSource   containerd.SourceName
 	PackageManager     *packagemanager.DistroPackageManager
 	CredentialProvider creds.CredentialProvider
+	SsmRegion          string
 	Tracker            *tracker.Tracker
 	Logger             *zap.Logger
 }
@@ -78,13 +79,14 @@ func (i *Installer) installCredentialProcess(ctx context.Context) error {
 			return err
 		}
 	case creds.SsmCredentialProvider:
-		ssmInstaller := ssm.NewSSMInstaller(i.Logger, ssm.DefaultSsmInstallerRegion)
+		ssmInstaller := ssm.NewSSMInstaller(i.Logger, i.SsmRegion)
 
 		i.Logger.Info("Installing SSM agent installer...")
 		if err := ssm.Install(ctx, ssm.InstallOptions{
 			Tracker: i.Tracker,
 			Source:  ssmInstaller,
 			Logger:  i.Logger,
+			Region:  i.SsmRegion,
 		}); err != nil {
 			return err
 		}

@@ -178,6 +178,14 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	var region string
+	if installed.Artifacts.Ssm {
+		_, region, err = ssm.GetManagedHybridInstanceIdAndRegion()
+		if err != nil {
+			return err
+		}
+	}
+
 	uninstaller := &flows.Uninstaller{
 		Artifacts:      installed.Artifacts,
 		DaemonManager:  daemonManager,
@@ -192,6 +200,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		ContainerdSource:   containerdSource,
 		PackageManager:     packageManager,
 		CredentialProvider: credsProvider,
+		SsmRegion:          region,
 		Logger:             log,
 	}
 

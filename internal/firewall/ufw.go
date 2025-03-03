@@ -1,17 +1,33 @@
 package firewall
 
 import (
+	"bufio"
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strings"
 )
 
-const ufwBinary = "ufw"
+const (
+	ufwBinary = "ufw"
 
-var ufwActiveRegex = regexp.MustCompile(`.*Status: active*`)
+	actionAllow = "ALLOW"
+)
+
+var (
+	ufwActiveRegex     = regexp.MustCompile(`.*Status: active*`)
+	ufwStatusRuleRegex = regexp.MustCompile(`(\d+)\s*/(\w+)\s+(ALLOW|DENY)\s+Anywhere`)
+)
 
 type UncomplicatedFireWall struct {
 	binPath string
+	rules   []rule
+}
+
+type rule struct {
+	port     string
+	protocol string
+	action   string
 }
 
 func NewUncomplicatedFirewall() Manager {
@@ -61,5 +77,47 @@ func (ufw *UncomplicatedFireWall) AllowTcpPortRange(startPort, endPort string) e
 // FlushRules flushes the rules and reloads the firewall to enforce the rules
 func (ufw *UncomplicatedFireWall) FlushRules() error {
 	// UFW activates the rules the moment its added, there is no need to flush them out to disk explicitly
+	return nil
+}
+
+// IsPortOpen returns is port/protocol is open on the firewall
+// UFW doesn't have a way to query a port, so this function refreshes the active rules
+// maintained by firewall and checks if port/protocol is allowed.
+func (ufw *UncomplicatedFireWall) IsPortOpen(port, protocol string) (bool, error) {
+	if len(ufw.rules) == 0 {
+		if err := ufw.refreshActiveRules(); err != nil {
+			return false, err
+		}
+	}
+	for _, rule := range ufw.rules {
+		if rule.port == port && rule.protocol == protocol && rule.action == actionAllow {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (ufw *UncomplicatedFireWall) refreshActiveRules() error {
+	statusCmd := exec.Command(ufw.binPath, "status")
+	out, err := statusCmd.CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		ruleLine := scanner.Text()
+		matches := ufwStatusRuleRegex.FindStringSubmatch(ruleLine)
+		if len(matches) > 0 {
+			ufw.rules = append(ufw.rules, rule{
+				port:     matches[1],
+				protocol: matches[2],
+				action:   matches[3],
+			})
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
 	return nil
 }
