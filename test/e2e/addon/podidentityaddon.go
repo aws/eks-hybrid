@@ -2,14 +2,16 @@ package addon
 
 import (
 	"context"
+	"errors"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-logr/logr"
 	clientgo "k8s.io/client-go/kubernetes"
 
-	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -21,13 +23,16 @@ type PodIdentityAddon struct {
 const (
 	podIdentityServiceAccount = "pod-identity-sa"
 	namespace                 = "default"
+	podIdentityAgent          = "eks-pod-identity-agent"
+	bucketObjectKey           = "test"
+	bucketObjectContent       = "RANDOM-WORD"
 )
 
-func NewPodIdentityAddon(cluster, name, roleArn string) PodIdentityAddon {
+func NewPodIdentityAddon(cluster, roleArn string) PodIdentityAddon {
 	return PodIdentityAddon{
 		Addon: Addon{
 			Cluster:       cluster,
-			Name:          name,
+			Name:          podIdentityAgent,
 			Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
 		},
 		roleArn: roleArn,
@@ -53,7 +58,19 @@ func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksCli
 	}
 
 	_, err := eksClient.CreatePodIdentityAssociation(ctx, createPodIdentityAssociationInput)
-	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
+	if err == nil || errors.Is(err, &types.ResourceInUseException{}) {
+		return nil
+	}
+
+	return err
+}
+
+func (p PodIdentityAddon) UploadFileForVerification(ctx context.Context, logger logr.Logger, client *s3.Client, bucket string) error {
+	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(bucketObjectKey),
+		Body:   strings.NewReader(bucketObjectContent),
+	}); err != nil {
 		return err
 	}
 
