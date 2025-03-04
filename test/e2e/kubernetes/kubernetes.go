@@ -214,19 +214,26 @@ func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeNa
 		},
 	}
 
+	return CreatePod(ctx, k8s, pod, logger)
+}
+
+func CreatePod(ctx context.Context, k8s *kubernetes.Clientset, pod *corev1.Pod, logger logr.Logger) error {
+	podName := pod.ObjectMeta.Name
+	namespace := pod.ObjectMeta.Namespace
+
 	_, err := k8s.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("creating the test pod: %w", err)
 	}
 
-	err = waitForPodToBeRunning(ctx, k8s, podName, namespace, nodeName, logger)
+	err = waitForPodToBeRunning(ctx, k8s, podName, namespace, logger)
 	if err != nil {
 		return fmt.Errorf("waiting for test pod to be running: %w", err)
 	}
 	return nil
 }
 
-func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name, namespace, nodeName string, logger logr.Logger) error {
+func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		pod, err := k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
