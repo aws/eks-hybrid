@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/aws/eks-hybrid/internal/aws/eks"
+	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks"
 )
 
 // NewEKSDescribeClusterAPI creates a new TestServer that behaves like the EKS DescribeCluster API.
-func NewEKSDescribeClusterAPI(tb testing.TB, resp *eks.DescribeClusterOutput) TestServer {
+func NewEKSDescribeClusterAPI(tb testing.TB, resp *eks_sdk.DescribeClusterOutput) TestServer {
 	return NewHTTPSServerForJSON(tb, http.StatusOK, resp)
 }
