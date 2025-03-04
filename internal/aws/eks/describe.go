@@ -9,6 +9,7 @@ import (
 
 var NewClient = eks_sdk.NewFromConfig
 
+// DescribeCluster wraps the EKS DescribeCluster API call
 func DescribeCluster(ctx context.Context, c *eks_sdk.Client, name string) (*eks_sdk.DescribeClusterOutput, error) {
 	input := &eks_sdk.DescribeClusterInput{
 		Name: &name,
