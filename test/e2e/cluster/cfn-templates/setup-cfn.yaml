@@ -370,6 +370,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
+      # use a predictable prefix for PodIdentity S3 bucket while maintaining uniqueness requirement for S3 bucket name
       BucketName:
         Fn::Join:
         - '-'

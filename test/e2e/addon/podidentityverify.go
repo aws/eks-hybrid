@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -20,14 +19,13 @@ import (
 )
 
 const (
-	getAddonTimeout      = 2 * time.Minute
-	podIdentityDaemonSet = "eks-pod-identity-agent-hybrid"
-	podIdentityToken     = "eks-pod-identity-token"
-	policyName           = "pod-identity-association-role-policy"
-	PodIdentityS3Bucket  = "PodIdentityS3Bucket"
+	getAddonTimeout           = 2 * time.Minute
+	podIdentityDaemonSet      = "eks-pod-identity-agent-hybrid"
+	podIdentityToken          = "eks-pod-identity-token"
+	policyName                = "pod-identity-association-role-policy"
+	PodIdentityS3Bucket       = "PodIdentityS3Bucket"
+	PodIdentityS3BucketPrefix = "podidentitys3bucket"
 )
-
-var PodIdentityS3BucketPrefix = strings.ToLower(PodIdentityS3Bucket)
 
 type VerifyPodIdentityAddon struct {
 	Cluster             string
