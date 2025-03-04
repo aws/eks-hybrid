@@ -100,9 +100,6 @@ func downloadFileTo(ctx context.Context, source Source, installerPath, region st
 		return fmt.Errorf("installing ssm-setup-cli: %w", err)
 	}
 
-	if err = runInstallWithRetries(ctx, installerPath, region); err != nil {
-		return errors.Wrapf(err, "failed to install ssm agent")
-	}
 	return nil
 }
 
