@@ -170,6 +170,31 @@ func Test_HybridNodeProviderValidateConfig(t *testing.T) {
 			},
 			wantError: "IAM Roles Anywhere private key " + tmpDir + "/missing.key not found",
 		},
+		{
+			name: "hostname-override present",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						IAMRolesAnywhere: &api.IAMRolesAnywhere{
+							NodeName:        "my-node",
+							TrustAnchorARN:  "trust-anchor-arn",
+							ProfileARN:      "profile-arn",
+							RoleARN:         "role-arn",
+							CertificatePath: certPath,
+							PrivateKeyPath:  keyPath,
+						},
+					},
+					Kubelet: api.KubeletOptions{
+						Flags: []string{"--hostname-override=bad-config"},
+					},
+				},
+			},
+			wantError: "hostname-override kubelet flag is not supported for hybrid nodes but found override: bad-config",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
