@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -19,6 +20,9 @@ const (
 
 	// UnitPath is the path to the Kubelet systemd unit file.
 	UnitPath = "/etc/systemd/system/kubelet.service"
+
+	artifactName      = "kubelet"
+	artifactFilePerms = 0o755
 )
 
 //go:embed kubelet.service
@@ -38,7 +42,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	}
 	defer kubelet.Close()
 
-	if err := artifact.InstallFile(BinPath, kubelet, 0o755); err != nil {
+	if err := artifact.InstallFile(BinPath, kubelet, artifactFilePerms); err != nil {
 		return errors.Wrap(err, "failed to install kubelet")
 	}
 
@@ -72,4 +76,14 @@ func Uninstall() error {
 		}
 	}
 	return nil
+}
+
+func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {
+	kubelet, err := src.GetKubelet(ctx)
+	if err != nil {
+		return errors.Wrap(err, "getting kubelet source")
+	}
+	defer kubelet.Close()
+
+	return artifact.Upgrade(artifactName, BinPath, kubelet, artifactFilePerms, log)
 }

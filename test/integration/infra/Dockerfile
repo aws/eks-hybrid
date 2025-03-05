@@ -49,4 +49,10 @@ RUN touch /etc/eks/image-credential-provider/ecr-credential-provider
 ENV CPU_DIR /sys_devices_system_mock/cpu
 ENV NODE_DIR /sys_devices_system_mock/node
 
+# GPG is invoked by ssm for signature verification under few test scenarios
+# Without tty inside the container, gpg commands fail. With this config gpg ignores tty
+RUN mkdir -p $HOME/.gnupg
+RUN touch $HOME/.gnupg/gpg.conf
+RUN echo "no-tty" >> $HOME/.gnupg/gpg.conf
+
 ENTRYPOINT ["/usr/lib/systemd/systemd","--system"]

@@ -86,7 +86,6 @@ func (i *Installer) installCredentialProcess(ctx context.Context) error {
 			Tracker: i.Tracker,
 			Source:  ssmInstaller,
 			Logger:  i.Logger,
-			Region:  i.SsmRegion,
 		}); err != nil {
 			return err
 		}
