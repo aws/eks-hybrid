@@ -39,8 +39,9 @@ func needsClusterDetails(nodeConfig *api.NodeConfig) bool {
 	return nodeConfig.Spec.Cluster.APIServerEndpoint == "" || nodeConfig.Spec.Cluster.CertificateAuthority == nil || nodeConfig.Spec.Cluster.CIDR == ""
 }
 
-func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*eks.Cluster, error) {
-	cluster, err := eks.DescribeCluster(ctx, eks.NewClient(awsConfig), nodeConfig.Spec.Cluster.Name)
+func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*eks_sdk.Cluster, error) {
+	client := eks.NewClient(awsConfig)
+	cluster, err := eks.DescribeCluster(ctx, client, nodeConfig.Spec.Cluster.Name)
 	if err != nil {
 		return nil, err
 	}

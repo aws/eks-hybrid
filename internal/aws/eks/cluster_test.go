@@ -6,7 +6,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks"
+	eks_sdk_types "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	. "github.com/onsi/gomega"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -41,15 +42,15 @@ func TestReadClusterDetailsSuccess(t *testing.T) {
 	g := NewGomegaWithT(t)
 	ctx := context.Background()
 
-	resp := &eks.DescribeClusterOutput{
-		Cluster: &eks.Cluster{
+	resp := &eks_sdk.DescribeClusterOutput{
+		Cluster: &eks_sdk_types.Cluster{
 			Endpoint: aws.String("https://my-endpoint.example.com"),
 			Name:     aws.String("my-cluster"),
-			Status:   eks_sdk.ClusterStatusActive,
-			CertificateAuthority: &eks_sdk.Certificate{
+			Status:   eks_sdk_types.ClusterStatusActive,
+			CertificateAuthority: &eks_sdk_types.Certificate{
 				Data: aws.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 			},
-			KubernetesNetworkConfig: &eks_sdk.KubernetesNetworkConfigResponse{
+			KubernetesNetworkConfig: &eks_sdk_types.KubernetesNetworkConfigResponse{
 				ServiceIpv4Cidr: aws.String("172.0.0.0/16"),
 			},
 		},
@@ -83,11 +84,11 @@ func TestReadClusterDetailsErrorClusterNotActive(t *testing.T) {
 	g := NewGomegaWithT(t)
 	ctx := context.Background()
 
-	resp := &eks.DescribeClusterOutput{
-		Cluster: &eks.Cluster{
+	resp := &eks_sdk.DescribeClusterOutput{
+		Cluster: &eks_sdk_types.Cluster{
 			Endpoint: aws.String("https://my-endpoint.example.com"),
 			Name:     aws.String("my-cluster"),
-			Status:   eks_sdk.ClusterStatusCreating,
+			Status:   eks_sdk_types.ClusterStatusCreating,
 		},
 	}
 
