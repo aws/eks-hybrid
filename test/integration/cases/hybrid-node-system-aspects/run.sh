@@ -22,7 +22,7 @@ systemctl start firewalld
 # allow cilium vxlan
 firewall-cmd --permanent --add-port=4789/udp
 
-nodeadm init --skip run,install-validation,ip-validation --config-source file://config.yaml
+nodeadm init --skip run,install-validation,node-ip-validation --config-source file://config.yaml
 
 # Check if aws config file has been created as specifed in NodeConfig
 assert::files-equal /.aws/config expected-aws-config

@@ -3,7 +3,6 @@ package hybrid
 import (
 	"fmt"
 	"net"
-	"strings"
 
 	apimachinerynet "k8s.io/apimachinery/pkg/util/net"
 
@@ -11,8 +10,8 @@ import (
 )
 
 const (
-	nodeIPFlag           = "--node-ip="
-	hostnameOverrideFlag = "--hostname-override="
+	nodeIPFlag           = "node-ip"
+	hostnameOverrideFlag = "hostname-override"
 )
 
 func containsIP(cidr string, ip net.IP) (bool, error) {
@@ -55,24 +54,8 @@ func extractCIDRsFromNodeNetworks(networks []*eks.RemoteNodeNetwork) []string {
 	return cidrs
 }
 
-func extractFlagValue(kubeletArgs []string, flag string) (string, error) {
-	var flagValue string
-
-	// pick last instance of the flag if it exists
-	for _, s := range kubeletArgs {
-		if strings.HasPrefix(s, flag) {
-			flagValue = strings.TrimPrefix(s, flag)
-		}
-	}
-
-	return flagValue, nil
-}
-
 func extractNodeIPFromFlags(kubeletArgs []string) (net.IP, error) {
-	ipStr, err := extractFlagValue(kubeletArgs, nodeIPFlag)
-	if err != nil {
-		return nil, err
-	}
+	ipStr := extractFlagValue(kubeletArgs, nodeIPFlag)
 
 	if ipStr != "" {
 		ip := net.ParseIP(ipStr)
@@ -86,17 +69,6 @@ func extractNodeIPFromFlags(kubeletArgs []string) (net.IP, error) {
 
 	//--node-ip flag not set
 	return nil, nil
-}
-
-func ensureNoHostnameOverride(kubeletArgs []string) error {
-	hostnameOverride, err := extractFlagValue(kubeletArgs, hostnameOverrideFlag)
-	if err != nil {
-		return fmt.Errorf("failure while looking for hostname-override: %w", err)
-	}
-	if hostnameOverride != "" {
-		return fmt.Errorf("hostname-override kubelet flag is not supported for hybrid nodes but found override:  %s", hostnameOverride)
-	}
-	return nil
 }
 
 func validateClusterRemoteNetworkConfig(cluster *eks.Cluster) error {
@@ -151,7 +123,7 @@ func validateNodeIP(nodeIP net.IP) error {
 }
 
 // getNodeIP determines the node's IP address based on kubelet configuration and system information.
-func getNodeIP(kubeletArgs []string, iamNodeName string) (net.IP, error) {
+func getNodeIP(kubeletArgs []string, nodeName string) (net.IP, error) {
 	// Follows algorithm used by kubelet to assign nodeIP
 	// Implementation adapted for hybrid nodes
 	// 1) Use nodeIP if set (and not "0.0.0.0"/"::")
@@ -159,10 +131,6 @@ func getNodeIP(kubeletArgs []string, iamNodeName string) (net.IP, error) {
 	// 3) Lookup the IP from node name by DNS
 	// 4) Try to get the IP from the network interface used as default gateway
 	// Source: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/nodestatus/setters.go#L206
-
-	if err := ensureNoHostnameOverride(kubeletArgs); err != nil {
-		return nil, err
-	}
 
 	nodeIP, err := extractNodeIPFromFlags(kubeletArgs)
 	if err != nil {
@@ -178,10 +146,8 @@ func getNodeIP(kubeletArgs []string, iamNodeName string) (net.IP, error) {
 	} else {
 		// If using SSM, the node name will be set at initialization to the SSM instance ID,
 		// so it won't resolve to anything via DNS, hence we're only checking in the case of IAM-RA
-		if iamNodeName != "" {
-			var addrs []net.IP
-
-			addrs, _ = net.LookupIP(iamNodeName)
+		if nodeName != "" {
+			addrs, _ := net.LookupIP(nodeName)
 			for _, addr := range addrs {
 				if err = validateNodeIP(addr); addr.To4() != nil && err == nil {
 					ipAddr = addr
@@ -214,8 +180,39 @@ func validateIPInRemoteNodeNetwork(ipAddr net.IP, remoteNodeNetwork []*eks.Remot
 		// TODO: Update url with specific node IP troubleshooting section
 		return fmt.Errorf(
 			"node IP %s is not in any of the remote network CIDR blocks: %s. "+
-				"See https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-troubleshooting.html or use --skip ip-validation",
+				"See https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-troubleshooting.html or use --skip node-ip-validation",
 			ipAddr, nodeNetworkCidrs)
 	}
+	return nil
+}
+
+func (hnp *HybridNodeProvider) ValidateIP() error {
+	if hnp.cluster == nil {
+		hnp.Logger().Info("Node IP validation skipped")
+	} else {
+		hnp.logger.Info("Validating Node IP...")
+
+		// Only check flags set by user in config file since hybrid nodes do not set --node-ip flag
+		// and we want to prevent hostname-override by user
+		kubeletArgs := hnp.nodeConfig.Spec.Kubelet.Flags
+		var iamNodeName string
+		if hnp.nodeConfig.IsIAMRolesAnywhere() {
+			iamNodeName = hnp.nodeConfig.Status.Hybrid.NodeName
+		}
+		nodeIp, err := getNodeIP(kubeletArgs, iamNodeName)
+		if err != nil {
+			return err
+		}
+
+		cluster := hnp.cluster
+		if validateClusterRemoteNetworkConfig(cluster) != nil {
+			return err
+		}
+
+		if err = validateIPInRemoteNodeNetwork(nodeIp, cluster.RemoteNetworkConfig.RemoteNodeNetworks); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

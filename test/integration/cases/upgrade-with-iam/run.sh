@@ -47,7 +47,7 @@ assert::file-permission-matches /usr/local/bin/kubectl 755
 assert::file-permission-matches /etc/eks/image-credential-provider/ecr-credential-provider 755
 assert::file-permission-matches /usr/local/bin/aws-iam-authenticator 755
 
-nodeadm init --skip run,ip-validation --config-source file://config.yaml
+nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
 validate-file /etc/systemd/system/aws_signing_helper_update.service 644 expected-aws-signing-helper-systemd-unit
 validate-file /.aws/config 644 expected-aws-config
 # The memory reserved by kubelet is dynamic depending on the host that builts the docker image
@@ -69,7 +69,7 @@ systemctl disable aws_signing_helper_update.service
 systemctl daemon-reload
 systemctl reset-failed
 
-nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,ip-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,node-ip-validation --config-source file://config.yaml
 
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables

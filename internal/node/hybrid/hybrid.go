@@ -13,7 +13,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 )
 
-const ipValidation = "ip-validation"
+const nodeIpValidation = "node-ip-validation"
 
 type HybridNodeProvider struct {
 	nodeConfig    *api.NodeConfig
@@ -49,6 +49,7 @@ func WithAWSConfig(config *aws.Config) NodeProviderOpt {
 	}
 }
 
+// WithCluster adds an EKS cluster to the HybridNodeProvider for testing purposes.
 func WithCluster(cluster *eks.Cluster) NodeProviderOpt {
 	return func(hnp *HybridNodeProvider) {
 		hnp.cluster = cluster
@@ -64,35 +65,9 @@ func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 }
 
 func (hnp *HybridNodeProvider) Validate(ctx context.Context, skipPhases []string) error {
-	if !slices.Contains(skipPhases, ipValidation) {
-		if hnp.cluster == nil {
-			hnp.Logger().Info("Warning: EKS Cluster details not retrieved - IP validation skipped")
-		} else {
-			hnp.logger.Info("Validating Node IP...")
-
-			// Only check flags set by user since hybrid nodes do not set --node-ip flag
-			// and we want to prevent hostname-override by user
-			kubeletArgs := hnp.nodeConfig.Spec.Kubelet.Flags
-			var iamNodeName string
-			if hnp.nodeConfig.IsIAMRolesAnywhere() {
-				iamNodeName = hnp.nodeConfig.Status.Hybrid.NodeName
-			}
-			nodeIp, err := getNodeIP(kubeletArgs, iamNodeName)
-			if err != nil {
-				return err
-			}
-
-			cluster, err := hnp.Cluster(ctx)
-			if err != nil {
-				return err
-			}
-			if validateClusterRemoteNetworkConfig(cluster) != nil {
-				return err
-			}
-
-			if err = validateIPInRemoteNodeNetwork(nodeIp, cluster.RemoteNetworkConfig.RemoteNodeNetworks); err != nil {
-				return err
-			}
+	if !slices.Contains(skipPhases, nodeIpValidation) {
+		if err := hnp.ValidateIP(); err != nil {
+			return err
 		}
 	}
 
@@ -104,18 +79,17 @@ func (hnp *HybridNodeProvider) Cleanup() error {
 	return nil
 }
 
-// Cluster retrieves the eks.Cluster object or makes a DescribeCluster call to the EKS API and caches the result if not already present
-func (p *HybridNodeProvider) Cluster(ctx context.Context) (*eks.Cluster, error) {
-	if p.cluster != nil {
-		return p.cluster, nil
+// getCluster retrieves the eks.Cluster object or makes a DescribeCluster call to the EKS API and caches the result if not already present
+func (hnp *HybridNodeProvider) getCluster(ctx context.Context) (*eks.Cluster, error) {
+	if hnp.cluster != nil {
+		return hnp.cluster, nil
 	}
 
-	cluster, err := readCluster(ctx, *p.awsConfig, p.nodeConfig)
+	cluster, err := readCluster(ctx, *hnp.awsConfig, hnp.nodeConfig)
 	if err != nil {
-		p.logger.Error("Failed to read cluster", zap.Error(err))
 		return nil, err
 	}
-	p.cluster = cluster
+	hnp.cluster = cluster
 
 	return cluster, nil
 }

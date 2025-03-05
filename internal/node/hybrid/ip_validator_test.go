@@ -109,32 +109,6 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 			},
 			expectedErr: "node IP 178.1.2.3 is not in any of the remote network CIDR blocks: [10.1.0.0/16 192.1.0.0/24]",
 		},
-		{
-			name: "hostname override present",
-			nodeConfig: &api.NodeConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-node"},
-				Spec: api.NodeConfigSpec{
-					Cluster: api.ClusterDetails{
-						Name:   "test-cluster",
-						Region: "us-west-2",
-					},
-					Kubelet: api.KubeletOptions{
-						Flags: []string{"--hostname-override=10.1.2.3"},
-					},
-				},
-			},
-			cluster: &eks.Cluster{
-				Name: aws.String("test-cluster"),
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{
-							CIDRs: []*string{aws.String("10.0.0.0/8")},
-						},
-					},
-				},
-			},
-			expectedErr: "hostname-override kubelet flag is not supported for hybrid nodes but found override:  10.1.2.3",
-		},
 	}
 
 	for _, tt := range tests {
@@ -156,6 +130,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 			} else {
 				g.Expect(err).NotTo(HaveOccurred())
 			}
+
+			// Check that all cases pass when node-ip-validation is skipped
+			err = hnp.Validate(context.Background(), []string{"node-ip-validation"})
+			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}
 }
