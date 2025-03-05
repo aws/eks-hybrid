@@ -311,6 +311,17 @@ function delete_vpc(){
         aws ec2 delete-internet-gateway --internet-gateway-id $internet_gateway
     done
 
+    for eni in $(aws ec2 describe-network-interfaces --filters "Name=vpc-id,Values=$vpc" --query "NetworkInterfaces[*].{Id:NetworkInterfaceId,Attachment:Attachment}" --output json | jq -c '.[]'); do
+        id=$(echo $eni | jq -r ".Id")
+        attachment=$(echo $eni | jq -r ".Attachment.AttachmentId")
+        if [ -n "$attachment" ] && [ "$attachment" != "null" ]; then
+            echo "network interface found with an attachment: interface $id, attachment $attachment"
+            echo "skipping deletion of interface, but this could cause problems with the deletion of the vpc"  
+            continue
+        fi
+        aws ec2 delete-network-interface --network-interface-id $id
+    done
+
     for subnet in $(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[*].SubnetId" --output text); do
         aws ec2 delete-subnet --subnet-id $subnet
     done
