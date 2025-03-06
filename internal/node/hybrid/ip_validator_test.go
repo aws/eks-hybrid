@@ -1,7 +1,6 @@
 package hybrid_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -117,12 +116,13 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 
 			hnp, err := hybrid.NewHybridNodeProvider(
 				tt.nodeConfig,
+				[]string{},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),
 			)
 			g.Expect(err).To(Succeed())
 
-			err = hnp.Validate(context.Background(), []string{})
+			err = hnp.Validate()
 
 			if tt.expectedErr != "" {
 				g.Expect(err).To(HaveOccurred())
@@ -132,7 +132,14 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 			}
 
 			// Check that all cases pass when node-ip-validation is skipped
-			err = hnp.Validate(context.Background(), []string{"node-ip-validation"})
+			hnp, err = hybrid.NewHybridNodeProvider(
+				tt.nodeConfig,
+				[]string{"node-ip-validation"},
+				zap.NewNop(),
+				hybrid.WithCluster(tt.cluster),
+			)
+			g.Expect(err).To(Succeed())
+			err = hnp.Validate()
 			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}

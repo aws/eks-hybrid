@@ -95,7 +95,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 				ciliumVxLanPort, vxLanProtocol, calicoVxLanPort, vxLanProtocol, cniPortCheckValidation)
 		}
 	}
-	nodeProvider, err := node.NewNodeProvider(c.configSource, log)
+	nodeProvider, err := node.NewNodeProvider(c.configSource, c.skipPhases, log)
 	if err != nil {
 		return err
 	}

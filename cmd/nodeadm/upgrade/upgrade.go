@@ -106,7 +106,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	log.Info("Loading configuration..", zap.String("configSource", c.configSource))
-	nodeProvider, err := node.NewNodeProvider(c.configSource, log)
+	nodeProvider, err := node.NewNodeProvider(c.configSource, c.skipPhases, log)
 	if err != nil {
 		return err
 	}

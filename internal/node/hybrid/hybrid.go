@@ -22,14 +22,16 @@ type HybridNodeProvider struct {
 	daemonManager daemon.DaemonManager
 	logger        *zap.Logger
 	cluster       *eks.Cluster
+	skipPhases    []string
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
 
-func NewHybridNodeProvider(nodeConfig *api.NodeConfig, logger *zap.Logger, opts ...NodeProviderOpt) (nodeprovider.NodeProvider, error) {
+func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logger *zap.Logger, opts ...NodeProviderOpt) (nodeprovider.NodeProvider, error) {
 	np := &HybridNodeProvider{
 		nodeConfig: nodeConfig,
 		logger:     logger,
+		skipPhases: skipPhases,
 	}
 	np.withHybridValidators()
 	if err := np.withDaemonManager(); err != nil {
@@ -64,8 +66,8 @@ func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 	return hnp.logger
 }
 
-func (hnp *HybridNodeProvider) Validate(ctx context.Context, skipPhases []string) error {
-	if !slices.Contains(skipPhases, nodeIpValidation) {
+func (hnp *HybridNodeProvider) Validate() error {
+	if !slices.Contains(hnp.skipPhases, nodeIpValidation) {
 		if err := hnp.ValidateIP(); err != nil {
 			return err
 		}

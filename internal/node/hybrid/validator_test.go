@@ -199,7 +199,7 @@ func Test_HybridNodeProviderValidateConfig(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
-			p, err := hybrid.NewHybridNodeProvider(tc.node, zap.NewNop())
+			p, err := hybrid.NewHybridNodeProvider(tc.node, []string{}, zap.NewNop())
 			g.Expect(err).NotTo(HaveOccurred())
 
 			err = p.ValidateConfig()

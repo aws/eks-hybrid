@@ -164,7 +164,7 @@ func Test_HybridNodeProvider_ConfigureAws_RolesAnywhere(t *testing.T) {
 		},
 	}
 
-	p, err := hybrid.NewHybridNodeProvider(node, zap.NewNop())
+	p, err := hybrid.NewHybridNodeProvider(node, []string{}, zap.NewNop())
 	g.Expect(err).To(Succeed())
 	g.Expect(p.ConfigureAws(ctx)).To(Succeed())
 	g.Expect(p.GetConfig().Region).To(Equal("us-west-2"))
