@@ -189,6 +189,7 @@ func validateIPInRemoteNodeNetwork(ipAddr net.IP, remoteNodeNetwork []*eks.Remot
 func (hnp *HybridNodeProvider) ValidateIP() error {
 	if hnp.cluster == nil {
 		hnp.Logger().Info("Node IP validation skipped")
+		return nil
 	} else {
 		hnp.logger.Info("Validating Node IP...")
 

@@ -9,12 +9,13 @@ import (
 )
 
 func extractFlagValue(args []string, flag string) string {
+	flagPrefix := "--" + flag + "="
 	var flagValue string
 
 	// get last instance of flag value if it exists
 	for _, arg := range args {
-		if strings.HasPrefix(arg, "--"+flag+"=") {
-			flagValue = strings.TrimPrefix(arg, "--"+flag+"=")
+		if strings.HasPrefix(arg, flagPrefix) {
+			flagValue = strings.TrimPrefix(arg, flagPrefix)
 		}
 	}
 
