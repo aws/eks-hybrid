@@ -14,6 +14,27 @@ const (
 	hostnameOverrideFlag = "hostname-override"
 )
 
+type IPValidationNetworkUtils interface {
+	LookupIP(host string) ([]net.IP, error)
+	ResolveBindAddress(bindAddress net.IP) (net.IP, error)
+	InterfaceAddrs() ([]net.Addr, error)
+}
+
+// Implements the network util functions used by kubelet
+type defaultIPValidationNetworkUtils struct{}
+
+func (u *defaultIPValidationNetworkUtils) LookupIP(host string) ([]net.IP, error) {
+	return net.LookupIP(host)
+}
+
+func (u *defaultIPValidationNetworkUtils) ResolveBindAddress(bindAddress net.IP) (net.IP, error) {
+	return apimachinerynet.ResolveBindAddress(bindAddress)
+}
+
+func (u *defaultIPValidationNetworkUtils) InterfaceAddrs() ([]net.Addr, error) {
+	return net.InterfaceAddrs()
+}
+
 func containsIP(cidr string, ip net.IP) (bool, error) {
 	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -85,7 +106,7 @@ func validateClusterRemoteNetworkConfig(cluster *eks.Cluster) error {
 //
 // validateNodeIP adapts the unexported 'validateNodeIP' function from kubelet.
 // Source: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_node_status.go#L796
-func validateNodeIP(nodeIP net.IP) error {
+func validateNodeIP(nodeIP net.IP, interfaceAddrs func() ([]net.Addr, error)) error {
 	// Honor IP limitations set in setNodeStatus()
 	if nodeIP.To4() == nil && nodeIP.To16() == nil {
 		return fmt.Errorf("nodeIP must be a valid IP address")
@@ -103,7 +124,7 @@ func validateNodeIP(nodeIP net.IP) error {
 		return fmt.Errorf("nodeIP can't be an all zeros address")
 	}
 
-	addrs, err := net.InterfaceAddrs()
+	addrs, err := interfaceAddrs()
 	if err != nil {
 		return err
 	}
@@ -123,7 +144,7 @@ func validateNodeIP(nodeIP net.IP) error {
 }
 
 // getNodeIP determines the node's IP address based on kubelet configuration and system information.
-func getNodeIP(kubeletArgs []string, nodeName string) (net.IP, error) {
+func getNodeIP(kubeletArgs []string, nodeName string, utils IPValidationNetworkUtils) (net.IP, error) {
 	// Follows algorithm used by kubelet to assign nodeIP
 	// Implementation adapted for hybrid nodes
 	// 1) Use nodeIP if set (and not "0.0.0.0"/"::")
@@ -147,9 +168,9 @@ func getNodeIP(kubeletArgs []string, nodeName string) (net.IP, error) {
 		// If using SSM, the node name will be set at initialization to the SSM instance ID,
 		// so it won't resolve to anything via DNS, hence we're only checking in the case of IAM-RA
 		if nodeName != "" {
-			addrs, _ := net.LookupIP(nodeName)
+			addrs, _ := utils.LookupIP(nodeName)
 			for _, addr := range addrs {
-				if err = validateNodeIP(addr); addr.To4() != nil && err == nil {
+				if err = validateNodeIP(addr, utils.InterfaceAddrs); addr.To4() != nil && err == nil {
 					ipAddr = addr
 					break
 				}
@@ -158,10 +179,10 @@ func getNodeIP(kubeletArgs []string, nodeName string) (net.IP, error) {
 
 		if ipAddr == nil {
 			// current standard function for resolving bind address: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_node_status.go#L768
-			ipAddr, err = apimachinerynet.ResolveBindAddress(nodeIP)
+			ipAddr, err = utils.ResolveBindAddress(nodeIP)
 		}
 
-		if ipAddr == nil {
+		if err != nil || ipAddr == nil {
 			// We tried everything we could, but the IP address wasn't fetchable; error out
 			return nil, fmt.Errorf("couldn't get ip address of node: %w", err)
 		}
@@ -186,7 +207,7 @@ func validateIPInRemoteNodeNetwork(ipAddr net.IP, remoteNodeNetwork []*eks.Remot
 	return nil
 }
 
-func (hnp *HybridNodeProvider) ValidateIP() error {
+func (hnp *HybridNodeProvider) ValidateNodeIP() error {
 	if hnp.cluster == nil {
 		hnp.Logger().Info("Node IP validation skipped")
 		return nil
@@ -200,7 +221,7 @@ func (hnp *HybridNodeProvider) ValidateIP() error {
 		if hnp.nodeConfig.IsIAMRolesAnywhere() {
 			iamNodeName = hnp.nodeConfig.Status.Hybrid.NodeName
 		}
-		nodeIp, err := getNodeIP(kubeletArgs, iamNodeName)
+		nodeIp, err := getNodeIP(kubeletArgs, iamNodeName, hnp.networkUtils)
 		if err != nil {
 			return err
 		}

@@ -23,15 +23,17 @@ type HybridNodeProvider struct {
 	logger        *zap.Logger
 	cluster       *eks.Cluster
 	skipPhases    []string
+	networkUtils  IPValidationNetworkUtils
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
 
 func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logger *zap.Logger, opts ...NodeProviderOpt) (nodeprovider.NodeProvider, error) {
 	np := &HybridNodeProvider{
-		nodeConfig: nodeConfig,
-		logger:     logger,
-		skipPhases: skipPhases,
+		nodeConfig:   nodeConfig,
+		logger:       logger,
+		skipPhases:   skipPhases,
+		networkUtils: &defaultIPValidationNetworkUtils{},
 	}
 	np.withHybridValidators()
 	if err := np.withDaemonManager(); err != nil {
@@ -58,6 +60,13 @@ func WithCluster(cluster *eks.Cluster) NodeProviderOpt {
 	}
 }
 
+// WithNetworkUtils adds network util functions to the HybridNodeProvider for testing purposes.
+func WithNetworkUtils(networkUtils IPValidationNetworkUtils) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.networkUtils = networkUtils
+	}
+}
+
 func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
@@ -68,7 +77,7 @@ func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 
 func (hnp *HybridNodeProvider) Validate() error {
 	if !slices.Contains(hnp.skipPhases, nodeIpValidation) {
-		if err := hnp.ValidateIP(); err != nil {
+		if err := hnp.ValidateNodeIP(); err != nil {
 			return err
 		}
 	}
