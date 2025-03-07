@@ -86,6 +86,27 @@ function assert::file-not-contains() {
   fi
 }
 
+function assert::checksum-match() {
+    if [ "$#" -ne 1 ]; then
+      echo "Usage: assert::checksum-match FILE"
+      exit 1
+    fi
+    local INPUT_PATH=$1
+    if sha256sum -c $INPUT_PATH.sha256; then
+      echo "Checksums should not match, bu they do!"
+      exit 1
+    fi
+}
+
+function generate::checksum-file() {
+    if [ "$#" -ne 1 ]; then
+      echo "Usage: generate::checksum-file INPUT_PATH"
+      exit 1
+    fi
+    local INPUT_PATH=$1
+    echo $(sha256sum $INPUT_PATH) > $INPUT_PATH.sha256
+}
+
 function assert::is-substring() {
   if [ "$#" -ne 2 ]; then
     echo "Usage: assert::is-substring STRING PATTERN"

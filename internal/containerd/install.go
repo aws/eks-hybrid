@@ -13,6 +13,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
+	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
 type SourceName string
@@ -42,7 +43,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source, conta
 		// Sometimes install fails due to conflicts with other processes
 		// updating packages, specially when automating at machine startup.
 		// We assume errors are transient and just retry for a bit.
-		if err := artifact.InstallPackageWithRetries(ctx, containerd, 5*time.Second); err != nil {
+		if err := cmd.Retry(ctx, containerd.InstallCmd, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to install containerd")
 		}
 		tracker.MarkContainerd(string(containerdSource))
@@ -53,13 +54,21 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source, conta
 func Uninstall(ctx context.Context, source Source) error {
 	if isContainerdInstalled() {
 		containerd := source.GetContainerd(ContainerdVersion)
-		if err := artifact.UninstallPackageWithRetries(ctx, containerd, 5*time.Second); err != nil {
+		if err := cmd.Retry(ctx, containerd.UninstallCmd, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to uninstall containerd")
 		}
 
 		if err := os.RemoveAll(containerdConfigDir); err != nil {
 			return errors.Wrap(err, "failed to uninstall containerd config files")
 		}
+	}
+	return nil
+}
+
+func Upgrade(ctx context.Context, source Source) error {
+	containerd := source.GetContainerd(ContainerdVersion)
+	if err := cmd.Retry(ctx, containerd.UpgradeCmd, 5*time.Second); err != nil {
+		return errors.Wrap(err, "upgrading containerd")
 	}
 	return nil
 }

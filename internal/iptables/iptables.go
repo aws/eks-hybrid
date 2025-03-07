@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
+	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
 const iptablesBinName = "iptables"
@@ -25,7 +26,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 		// Sometimes install fails due to conflicts with other processes
 		// updating packages, specially when automating at machine startup.
 		// We assume errors are transient and just retry for a bit.
-		if err := artifact.InstallPackageWithRetries(ctx, iptablesSrc, 5*time.Second); err != nil {
+		if err := cmd.Retry(ctx, iptablesSrc.InstallCmd, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to install iptables")
 		}
 		return tracker.Add(artifact.Iptables)
@@ -37,8 +38,18 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 func Uninstall(ctx context.Context, source Source) error {
 	if isIptablesInstalled() {
 		iptablesSrc := source.GetIptables()
-		if err := artifact.UninstallPackageWithRetries(ctx, iptablesSrc, 5*time.Second); err != nil {
+		if err := cmd.Retry(ctx, iptablesSrc.UninstallCmd, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to uninstall iptables")
+		}
+	}
+	return nil
+}
+
+func Upgrade(ctx context.Context, source Source) error {
+	if isIptablesInstalled() {
+		iptablesSrc := source.GetIptables()
+		if err := cmd.Retry(ctx, iptablesSrc.UpgradeCmd, 5*time.Second); err != nil {
+			return errors.Wrap(err, "failed to upgrade iptables")
 		}
 	}
 	return nil

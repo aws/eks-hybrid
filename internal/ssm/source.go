@@ -132,6 +132,10 @@ func (s ssmInstallerSource) PublicKey() string {
 	return s.publicKey
 }
 
+func (s ssmInstallerSource) Region() string {
+	return s.region
+}
+
 // Rename existing buildSSMURL to defaultBuildSSMURL
 func (s ssmInstallerSource) defaultBuildSSMURL() (string, error) {
 	variant, err := detectPlatformVariant()
