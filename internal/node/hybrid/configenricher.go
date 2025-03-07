@@ -14,31 +14,28 @@ import (
 	"github.com/aws/eks-hybrid/internal/aws/eks"
 )
 
-func (p *HybridNodeProvider) Enrich(ctx context.Context) error {
-	p.logger.Info("Enriching configuration...")
-	eksRegistry, err := ecr.GetEKSHybridRegistry(p.nodeConfig.Spec.Cluster.Region)
+func (hnp *HybridNodeProvider) Enrich(ctx context.Context) error {
+	hnp.logger.Info("Enriching configuration...")
+	eksRegistry, err := ecr.GetEKSHybridRegistry(hnp.nodeConfig.Spec.Cluster.Region)
 	if err != nil {
 		return err
 	}
-	p.nodeConfig.Status.Defaults.SandboxImage = eksRegistry.GetSandboxImage()
+	hnp.nodeConfig.Status.Defaults.SandboxImage = eksRegistry.GetSandboxImage()
 
-	p.logger.Info("Default options populated", zap.Reflect("defaults", p.nodeConfig.Status.Defaults))
+	hnp.logger.Info("Default options populated", zap.Reflect("defaults", hnp.nodeConfig.Status.Defaults))
 
-	if needsClusterDetails(p.nodeConfig) {
-		if err := ensureClusterDetails(ctx, *p.awsConfig, p.nodeConfig); err != nil {
+	if needsClusterDetails(hnp.nodeConfig) {
+		if err := hnp.ensureClusterDetails(ctx); err != nil {
 			return err
 		}
 
-		p.logger.Info("Cluster details populated", zap.Reflect("cluster", p.nodeConfig.Spec.Cluster))
+		hnp.logger.Info("Cluster details populated", zap.Reflect("cluster", hnp.nodeConfig.Spec.Cluster))
 	}
 
 	return nil
 }
 
-func needsClusterDetails(nodeConfig *api.NodeConfig) bool {
-	return nodeConfig.Spec.Cluster.APIServerEndpoint == "" || nodeConfig.Spec.Cluster.CertificateAuthority == nil || nodeConfig.Spec.Cluster.CIDR == ""
-}
-
+// readCluster calls eks.DescribeCluster and returns the cluster
 func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*eks.Cluster, error) {
 	cluster, err := eks.DescribeCluster(ctx, eks.NewClient(awsConfig), nodeConfig.Spec.Cluster.Name)
 	if err != nil {
@@ -48,8 +45,12 @@ func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.Node
 	return cluster.Cluster, nil
 }
 
-func ensureClusterDetails(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) error {
-	cluster, err := readCluster(ctx, awsConfig, nodeConfig)
+func needsClusterDetails(nodeConfig *api.NodeConfig) bool {
+	return nodeConfig.Spec.Cluster.APIServerEndpoint == "" || nodeConfig.Spec.Cluster.CertificateAuthority == nil || nodeConfig.Spec.Cluster.CIDR == ""
+}
+
+func (hnp *HybridNodeProvider) ensureClusterDetails(ctx context.Context) error {
+	cluster, err := hnp.getCluster(ctx)
 	if err != nil {
 		return err
 	}
@@ -62,22 +63,22 @@ func ensureClusterDetails(ctx context.Context, awsConfig aws.Config, nodeConfig 
 		return errors.New("eks cluster does not have remoteNetworkConfig enabled, which is required for Hybrid Nodes")
 	}
 
-	if nodeConfig.Spec.Cluster.APIServerEndpoint == "" {
-		nodeConfig.Spec.Cluster.APIServerEndpoint = *cluster.Endpoint
+	if hnp.nodeConfig.Spec.Cluster.APIServerEndpoint == "" {
+		hnp.nodeConfig.Spec.Cluster.APIServerEndpoint = *cluster.Endpoint
 	}
 
-	if nodeConfig.Spec.Cluster.CertificateAuthority == nil {
+	if hnp.nodeConfig.Spec.Cluster.CertificateAuthority == nil {
 		// CertificateAuthority from describeCluster api call returns base64 encoded data as a string
 		// Decoding the string to byte array ensures the proper data format when writing to file
 		decoded, err := base64.StdEncoding.DecodeString(*cluster.CertificateAuthority.Data)
 		if err != nil {
 			return err
 		}
-		nodeConfig.Spec.Cluster.CertificateAuthority = decoded
+		hnp.nodeConfig.Spec.Cluster.CertificateAuthority = decoded
 	}
 
-	if nodeConfig.Spec.Cluster.CIDR == "" {
-		nodeConfig.Spec.Cluster.CIDR = *cluster.KubernetesNetworkConfig.ServiceIpv4Cidr
+	if hnp.nodeConfig.Spec.Cluster.CIDR == "" {
+		hnp.nodeConfig.Spec.Cluster.CIDR = *cluster.KubernetesNetworkConfig.ServiceIpv4Cidr
 	}
 
 	return nil

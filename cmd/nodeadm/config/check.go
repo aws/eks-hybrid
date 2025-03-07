@@ -37,7 +37,7 @@ func (c *fileCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	nodeProvider, err := node.NewNodeProvider(c.configSource, log)
+	nodeProvider, err := node.NewNodeProvider(c.configSource, []string{}, log)
 	if err != nil {
 		return err
 	}

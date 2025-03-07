@@ -15,12 +15,14 @@ type ec2NodeProvider struct {
 	daemonManager daemon.DaemonManager
 	logger        *zap.Logger
 	validator     func(config *api.NodeConfig) error
+	skipPhases    []string
 }
 
-func NewEc2NodeProvider(nodeConfig *api.NodeConfig, logger *zap.Logger) (nodeprovider.NodeProvider, error) {
+func NewEc2NodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logger *zap.Logger) (nodeprovider.NodeProvider, error) {
 	np := &ec2NodeProvider{
 		nodeConfig: nodeConfig,
 		logger:     logger,
+		skipPhases: skipPhases,
 	}
 	np.withEc2NodeValidators()
 	if err := np.withDaemonManager(); err != nil {
@@ -36,6 +38,8 @@ func (enp *ec2NodeProvider) GetNodeConfig() *api.NodeConfig {
 func (enp *ec2NodeProvider) Logger() *zap.Logger {
 	return enp.logger
 }
+
+func (enp *ec2NodeProvider) Validate() error { return nil }
 
 func (enp *ec2NodeProvider) Cleanup() error {
 	enp.daemonManager.Close()
