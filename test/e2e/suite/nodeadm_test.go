@@ -31,7 +31,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
@@ -238,6 +237,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(provider).NotTo(BeNil())
 
 							instanceName := test.instanceName("init", nodeOS, provider)
+							nodeName := "simpleflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
 
 							k8sVersion := test.cluster.KubernetesVersion
 							if test.overrideNodeK8sVersion != "" {
@@ -257,12 +257,15 @@ var _ = Describe("Hybrid Nodes", func() {
 								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
 									InstanceName:   instanceName,
 									NodeK8sVersion: k8sVersion,
-									NodeNamePrefix: "simpleflow",
+									NodeName:       nodeName,
 									OS:             nodeOS,
 									Provider:       provider,
 								})
 								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 								flakeRun.DeferCleanup(func(ctx context.Context) {
+									if credentials.IsSsm(provider.Name()) {
+										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName)).To(Succeed())
+									}
 									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 								}, NodeTimeout(deferCleanupTimeout))
 
@@ -351,6 +354,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							}
 
 							instanceName := test.instanceName("upgrade", os, provider)
+							nodeName := "upgradeflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
 
 							nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
@@ -368,12 +372,15 @@ var _ = Describe("Hybrid Nodes", func() {
 								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
 									InstanceName:   instanceName,
 									NodeK8sVersion: nodeKubernetesVersion,
-									NodeNamePrefix: "upgradeflow",
+									NodeName:       nodeName,
 									OS:             os,
 									Provider:       provider,
 								})
 								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 								DeferCleanup(func(ctx context.Context) {
+									if credentials.IsSsm(provider.Name()) {
+										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName)).To(Succeed())
+									}
 									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 								}, NodeTimeout(deferCleanupTimeout))
 
@@ -495,7 +502,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 	}
 	test.nodeadmURLs = *urls
 
-	test.podIdentityS3Bucket, err = getPodIdentityS3Bucket(ctx, test.cluster.Name, test.s3Client)
+	test.podIdentityS3Bucket, err = peered.PodIdentityBucket(ctx, test.s3Client, test.cluster.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -588,38 +595,4 @@ func newLoggerForTests() e2e.PausableLogger {
 		cfg.NoColor = true
 	}
 	return e2e.NewPausableLogger(cfg)
-}
-
-func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3v2.Client) (string, error) {
-	listBucketsOutput, err := client.ListBuckets(ctx, &s3v2.ListBucketsInput{
-		Prefix: aws.String(addon.PodIdentityS3BucketPrefix),
-	})
-	if err != nil {
-		return "", err
-	}
-
-	for _, bucket := range listBucketsOutput.Buckets {
-		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3v2.GetBucketTaggingInput{
-			Bucket: bucket.Name,
-		})
-		if err != nil {
-			return "", err
-		}
-
-		var foundClusterTag, foundPodIdentityTag bool
-		for _, tag := range getBucketTaggingOutput.TagSet {
-			if *tag.Key == constants.TestClusterTagKey && *tag.Value == cluster {
-				foundClusterTag = true
-			}
-
-			if *tag.Key == addon.PodIdentityS3BucketPrefix && *tag.Value == "true" {
-				foundPodIdentityTag = true
-			}
-
-			if foundClusterTag && foundPodIdentityTag {
-				return *bucket.Name, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("S3 bucket for pod identity not found")
 }
