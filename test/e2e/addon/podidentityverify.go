@@ -62,17 +62,17 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	defer cancel()
 
 	if err := podIdentityAddon.WaitUtilActive(timeoutCtx, v.EKSClient, v.Logger); err != nil {
-		return err
+		return fmt.Errorf("failed to wait for pod identity add-on to be active: %w", err)
 	}
 
 	v.Logger.Info("Check if daemon set exists", "daemonSet", podIdentityDaemonSet)
 	if _, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet); err != nil {
-		return err
+		return fmt.Errorf("failed to get daemon set %s: %w", podIdentityDaemonSet, err)
 	}
 
 	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeIP, v.Logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to wait for node %s to be ready: %w", v.NodeIP, err)
 	}
 
 	podName := fmt.Sprintf("awscli-%s", node.Name)
@@ -104,7 +104,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 
 	// Deploy a pod with service account then run aws cli to access aws resources
 	if err = kubernetes.CreatePod(ctx, v.K8S, pod, v.Logger); err != nil {
-		return err
+		return fmt.Errorf("failed to create the awscli pod %s: %w", podName, err)
 	}
 
 	execCommand := []string{
@@ -112,7 +112,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	}
 	stdout, _, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, podName, namespace, execCommand...)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to exec aws s3 cp command on pod %s: %w", podName, err)
 	}
 
 	if stdout != bucketObjectContent {
