@@ -3,4 +3,4 @@ version: 0.2
 phases:
   build:
     commands:
-    - ./hack/e2e-cleanup.sh
+    - ./_bin/amd64/e2e-test sweeper --all

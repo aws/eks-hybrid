@@ -139,7 +139,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	instance, err := node.Create(ctx, &peered.NodeSpec{
 		InstanceName:   c.instanceName,
 		NodeK8sVersion: cluster.KubernetesVersion,
-		NodeNamePrefix: c.instanceName,
+		NodeName:       c.instanceName,
 		OS:             nodeOS,
 		Provider:       credsProvider,
 	})

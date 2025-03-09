@@ -281,20 +281,11 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 	stackName := stackName(clusterName)
 	s.logger.Info("Deleting E2E test cluster stack", "stackName", stackName)
 
-	output, err := s.cfn.DescribeStackResource(ctx, &cloudformation.DescribeStackResourceInput{
-		LogicalResourceId: aws.String(addon.PodIdentityS3Bucket),
-		StackName:         aws.String(stackName),
-	})
-	if err != nil {
-		return err
+	if err := s.deletePodIdentityS3Bucket(ctx, clusterName); err != nil {
+		return fmt.Errorf("deleting pod identity s3 bucket: %w", err)
 	}
 
-	s.logger.Info("Empty pod identity s3 bucket", "bucket", output.StackResourceDetail.PhysicalResourceId)
-	if err = emptyS3Bucket(ctx, s.s3Client, output.StackResourceDetail.PhysicalResourceId); err != nil {
-		return err
-	}
-
-	_, err = s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String(stackName),
 	})
 	if err != nil {
@@ -307,6 +298,23 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 	}
 
 	s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
+	return nil
+}
+
+func (s *stack) deletePodIdentityS3Bucket(ctx context.Context, clusterName string) error {
+	podIdentityBucket, err := peered.PodIdentityBucket(ctx, s.s3Client, clusterName)
+	if err != nil {
+		if err.Error() == "Not Found" {
+			return nil
+		}
+		return fmt.Errorf("getting pod identity s3 bucket: %w", err)
+	}
+
+	s.logger.Info("Empty pod identity s3 bucket", "bucket", podIdentityBucket)
+	if err = emptyS3Bucket(ctx, s.s3Client, &podIdentityBucket); err != nil {
+		return fmt.Errorf("emptying pod identity s3 bucket: %w", err)
+	}
+
 	return nil
 }
 
