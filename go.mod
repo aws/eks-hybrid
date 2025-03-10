@@ -5,38 +5,38 @@ go 1.23.0
 require (
 	github.com/ProtonMail/gopenpgp/v3 v3.1.3
 	github.com/aws/aws-sdk-go v1.55.6
-	github.com/aws/aws-sdk-go-v2/config v1.29.8
+	github.com/aws/aws-sdk-go-v2/config v1.29.9
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30
-	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.58.0
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.206.0
-	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.28.0
-	github.com/aws/aws-sdk-go-v2/service/ecr v1.42.0
-	github.com/aws/aws-sdk-go-v2/service/eks v1.59.0
-	github.com/aws/aws-sdk-go-v2/service/iam v1.40.0
-	github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.0
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.78.0
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.57.0
-	github.com/aws/aws-sdk-go-v2/service/sts v1.33.16
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.58.1
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.208.0
+	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.28.1
+	github.com/aws/aws-sdk-go-v2/service/ecr v1.42.1
+	github.com/aws/aws-sdk-go-v2/service/eks v1.60.1
+	github.com/aws/aws-sdk-go-v2/service/iam v1.40.1
+	github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.78.1
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.57.2
+	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17
 	github.com/aws/smithy-go v1.22.3
 	github.com/containerd/containerd v1.7.26
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/go-ini/ini v1.67.0
 	github.com/go-logr/zapr v1.3.0
 	github.com/integrii/flaggy v1.5.2
-	github.com/onsi/ginkgo/v2 v2.22.2
+	github.com/onsi/ginkgo/v2 v2.23.0
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.10.0
 	github.com/tredoe/osutil v1.5.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.35.0
-	golang.org/x/mod v0.23.0
+	golang.org/x/crypto v0.36.0
+	golang.org/x/mod v0.24.0
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.2
 	k8s.io/cri-api v0.32.2
 	k8s.io/kubectl v0.32.2
 	k8s.io/kubelet v0.32.2
-	sigs.k8s.io/controller-runtime v0.20.2
+	sigs.k8s.io/controller-runtime v0.20.3
 )
 
 require (
@@ -79,14 +79,14 @@ require (
 	dario.cat/mergo v1.0.1 // direct
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.36.3
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.61 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.62 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.25.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.25.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -124,10 +124,10 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.10.0 // indirect
 	golang.org/x/tools v0.30.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250227231956-55c901821b1e // indirect
