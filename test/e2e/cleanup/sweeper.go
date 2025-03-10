@@ -91,6 +91,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		return fmt.Errorf("cleaning up credential stacks: %w", err)
 	}
 
+	if err := c.cleanupEKSClusters(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up EKS clusters: %w", err)
+	}
+
 	if err := c.emptyS3PodIdentityBuckets(ctx, filterInput); err != nil {
 		return fmt.Errorf("emptying S3 pod identity buckets: %w", err)
 	}
@@ -287,5 +291,25 @@ func (c *Sweeper) cleanupIAMInstanceProfiles(ctx context.Context, filterInput Fi
 		}
 	}
 
+	return nil
+}
+
+func (c *Sweeper) cleanupEKSClusters(ctx context.Context, filterInput FilterInput) error {
+	eksCleaner := NewEKSClusterCleanup(c.eks, c.logger)
+	clusterNames, err := eksCleaner.ListEKSClusters(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing EKS hybrid clusters: %w", err)
+	}
+
+	c.logger.Info("Deleting EKS hybrid clusters", "clusterNames", clusterNames)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, clusterName := range clusterNames {
+		if err := eksCleaner.DeleteCluster(ctx, clusterName); err != nil {
+			return fmt.Errorf("deleting EKS hybrid cluster %s: %w", clusterName, err)
+		}
+	}
 	return nil
 }
