@@ -75,8 +75,16 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 	//   - remove roles from instance profile first
 	// - test credential cfn statck (creates the ssm/iam-ra roles/ec2role)
 	// - eks clusters
+	// - empty s3 pod identity buckets, infra cfn stack deletes the bucket
 	// - infra cfn stack (creates vpcs/eks cluster)
 	// - remaining leaking items which should only exist in the case where the cfn deletion is incomplete
+
+	if err := c.emptyS3PodIdentityBuckets(ctx, filterInput); err != nil {
+		return fmt.Errorf("emptying S3 pod identity buckets: %w", err)
+	}
+	if err := c.cleanupS3PodIdentityBuckets(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up S3 pod identity buckets: %w", err)
+	}
 
 	if err := c.cleanupSSMManagedInstances(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up SSM managed instances: %w", err)
@@ -125,6 +133,47 @@ func (c *Sweeper) cleanupSSMHybridActivations(ctx context.Context, filterInput F
 	for _, activationID := range activationIDs {
 		if err := cleaner.DeleteActivation(ctx, activationID); err != nil {
 			return fmt.Errorf("deleting activation: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Sweeper) emptyS3PodIdentityBuckets(ctx context.Context, filterInput FilterInput) error {
+	cleaner := NewS3Cleaner(c.s3Client, c.logger)
+	bucketNames, err := cleaner.ListBuckets(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing buckets: %w", err)
+	}
+
+	c.logger.Info("Emptying S3 Pod Identity Buckets", "bucketNames", bucketNames)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, bucketName := range bucketNames {
+		if err := cleaner.EmptyS3Bucket(ctx, bucketName); err != nil {
+			return fmt.Errorf("emptying bucket %s: %w", bucketName, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Sweeper) cleanupS3PodIdentityBuckets(ctx context.Context, filterInput FilterInput) error {
+	cleaner := NewS3Cleaner(c.s3Client, c.logger)
+	bucketNames, err := cleaner.ListBuckets(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing buckets: %w", err)
+	}
+
+	c.logger.Info("Deleting S3 Pod Identity Buckets", "bucketNames", bucketNames)
+	if filterInput.DryRun {
+		return nil
+	}
+	for _, bucketName := range bucketNames {
+		if err := cleaner.DeleteBucket(ctx, bucketName); err != nil {
+			return fmt.Errorf("deleting bucket %s: %w", bucketName, err)
 		}
 	}
 

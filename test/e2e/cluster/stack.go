@@ -13,13 +13,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/aws/eks-hybrid/test/e2e/addon"
+	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
@@ -311,45 +311,10 @@ func (s *stack) emptyPodIdentityS3Bucket(ctx context.Context, clusterName string
 		return fmt.Errorf("getting pod identity s3 bucket: %w", err)
 	}
 
+	s3cleaner := cleanup.NewS3Cleaner(s.s3Client, s.logger)
 	s.logger.Info("Empty pod identity s3 bucket", "bucket", podIdentityBucket)
-	if err = emptyS3Bucket(ctx, s.s3Client, &podIdentityBucket); err != nil {
+	if err = s3cleaner.EmptyS3Bucket(ctx, podIdentityBucket); err != nil {
 		return fmt.Errorf("emptying pod identity s3 bucket: %w", err)
-	}
-
-	return nil
-}
-
-func emptyS3Bucket(ctx context.Context, client *s3.Client, bucket *string) error {
-	if bucket == nil {
-		return nil
-	}
-
-	output, err := client.ListObjects(ctx, &s3.ListObjectsInput{
-		Bucket: bucket,
-	})
-	if err != nil {
-		return err
-	}
-
-	if len(output.Contents) == 0 {
-		// no S3 objects to delete
-		return nil
-	}
-
-	var s3Objects []s3types.ObjectIdentifier
-	for _, content := range output.Contents {
-		s3Objects = append(s3Objects, s3types.ObjectIdentifier{
-			Key: content.Key,
-		})
-	}
-
-	if _, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
-		Bucket: bucket,
-		Delete: &s3types.Delete{
-			Objects: s3Objects,
-		},
-	}); err != nil {
-		return err
 	}
 
 	return nil
