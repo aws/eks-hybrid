@@ -2,6 +2,7 @@ package cleanup
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -76,6 +77,56 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 	// - eks clusters
 	// - infra cfn stack (creates vpcs/eks cluster)
 	// - remaining leaking items which should only exist in the case where the cfn deletion is incomplete
+
+	if err := c.cleanupSSMManagedInstances(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up SSM managed instances: %w", err)
+	}
+
+	if err := c.cleanupSSMHybridActivations(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up SSM hybrid activations: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Sweeper) cleanupSSMManagedInstances(ctx context.Context, filterInput FilterInput) error {
+	cleaner := NewSSMCleaner(c.ssm, c.logger)
+	instanceIds, err := cleaner.ListManagedInstances(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing managed instances: %w", err)
+	}
+
+	c.logger.Info("Deleting managed instances", "instanceIds", instanceIds)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, instanceID := range instanceIds {
+		if err := cleaner.DeleteManagedInstance(ctx, instanceID); err != nil {
+			return fmt.Errorf("deleting managed instance: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Sweeper) cleanupSSMHybridActivations(ctx context.Context, filterInput FilterInput) error {
+	cleaner := NewSSMCleaner(c.ssm, c.logger)
+	activationIDs, err := cleaner.ListActivations(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing activations: %w", err)
+	}
+
+	c.logger.Info("Deleting activations", "activationIDs", activationIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, activationID := range activationIDs {
+		if err := cleaner.DeleteActivation(ctx, activationID); err != nil {
+			return fmt.Errorf("deleting activation: %w", err)
+		}
+	}
 
 	return nil
 }
