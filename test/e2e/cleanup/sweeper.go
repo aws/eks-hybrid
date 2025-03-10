@@ -79,6 +79,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 	// - infra cfn stack (creates vpcs/eks cluster)
 	// - remaining leaking items which should only exist in the case where the cfn deletion is incomplete
 
+	if err := c.cleanupEC2Instances(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up EC2 instances: %w", err)
+	}
+
 	if err := c.cleanupCredentialStacks(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up credential stacks: %w", err)
 	}
@@ -204,5 +208,23 @@ func (c *Sweeper) cleanupCredentialStacks(ctx context.Context, filterInput Filte
 		}
 	}
 
+	return nil
+}
+
+func (c *Sweeper) cleanupEC2Instances(ctx context.Context, filterInput FilterInput) error {
+	ec2Cleaner := NewEC2Cleaner(c.ec2Client, c.logger)
+	instanceIDs, err := ec2Cleaner.ListTaggedInstances(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing tagged EC2 instances: %w", err)
+	}
+
+	c.logger.Info("Deleting tagged EC2 instances", "instanceIDs", instanceIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	if err := ec2Cleaner.DeleteInstances(ctx, instanceIDs); err != nil {
+		return fmt.Errorf("deleting EC2 instances: %w", err)
+	}
 	return nil
 }
