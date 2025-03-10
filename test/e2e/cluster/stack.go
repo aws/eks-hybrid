@@ -12,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
@@ -58,6 +60,7 @@ type stack struct {
 	ssmClient *ssm.Client
 	ec2Client *ec2.Client
 	s3Client  *s3.Client
+	iamClient *iam.Client
 }
 
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
@@ -225,6 +228,20 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	jumpbox, err := peered.JumpboxInstance(ctx, s.ec2Client, test.ClusterName)
 	if err != nil {
 		return nil, err
+	}
+
+	instanceProfileName := strings.Split(*jumpbox.IamInstanceProfile.Arn, "/")[1]
+	_, err = s.iamClient.TagInstanceProfile(ctx, &iam.TagInstanceProfileInput{
+		InstanceProfileName: aws.String(instanceProfileName),
+		Tags: []iamTypes.Tag{
+			{
+				Key:   aws.String(constants.TestClusterTagKey),
+				Value: aws.String(test.ClusterName),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("tagging jumpbox instance profile: %w", err)
 	}
 
 	if err := e2eSSM.WaitForInstance(ctx, s.ssmClient, *jumpbox.InstanceId, s.logger); err != nil {

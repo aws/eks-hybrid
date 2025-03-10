@@ -83,6 +83,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		return fmt.Errorf("cleaning up EC2 instances: %w", err)
 	}
 
+	if err := c.cleanupIAMInstanceProfiles(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up IAM instance profiles: %w", err)
+	}
+
 	if err := c.cleanupCredentialStacks(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up credential stacks: %w", err)
 	}
@@ -90,6 +94,11 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 	if err := c.emptyS3PodIdentityBuckets(ctx, filterInput); err != nil {
 		return fmt.Errorf("emptying S3 pod identity buckets: %w", err)
 	}
+
+	if err := c.cleanupIAMRoles(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up IAM roles: %w", err)
+	}
+
 	if err := c.cleanupS3PodIdentityBuckets(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up S3 pod identity buckets: %w", err)
 	}
@@ -226,5 +235,57 @@ func (c *Sweeper) cleanupEC2Instances(ctx context.Context, filterInput FilterInp
 	if err := ec2Cleaner.DeleteInstances(ctx, instanceIDs); err != nil {
 		return fmt.Errorf("deleting EC2 instances: %w", err)
 	}
+	return nil
+}
+
+func (c *Sweeper) cleanupIAMRoles(ctx context.Context, filterInput FilterInput) error {
+	iamCleaner := NewIAMCleaner(c.iam, c.logger)
+	roles, err := iamCleaner.ListRoles(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing IAM roles: %w", err)
+	}
+
+	c.logger.Info("Deleting IAM roles", "roles", roles)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, role := range roles {
+		if err := iamCleaner.DeleteRole(ctx, role); err != nil {
+			return fmt.Errorf("deleting IAM role %s: %w", role, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Sweeper) cleanupIAMInstanceProfiles(ctx context.Context, filterInput FilterInput) error {
+	iamCleaner := NewIAMCleaner(c.iam, c.logger)
+	instanceProfiles, err := iamCleaner.ListInstanceProfiles(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing IAM instance profiles: %w", err)
+	}
+
+	profileRoles := map[string][]string{}
+	for _, instanceProfile := range instanceProfiles {
+		roles, err := iamCleaner.ListRolesForInstanceProfile(ctx, instanceProfile)
+		if err != nil {
+			return fmt.Errorf("listing roles for instance profile %s: %w", instanceProfile, err)
+		}
+		profileRoles[instanceProfile] = roles
+	}
+	c.logger.Info("Deleting IAM instance profiles", "instanceProfilesToRoles", profileRoles)
+	if filterInput.DryRun {
+		return nil
+	}
+	for instanceProfile, roles := range profileRoles {
+		if err := iamCleaner.RemoveRolesFromInstanceProfile(ctx, roles, instanceProfile); err != nil {
+			return fmt.Errorf("removing roles from instance profile %s: %w", instanceProfile, err)
+		}
+		if err := iamCleaner.DeleteInstanceProfile(ctx, instanceProfile); err != nil {
+			return fmt.Errorf("deleting IAM instance profile %s: %w", instanceProfile, err)
+		}
+	}
+
 	return nil
 }

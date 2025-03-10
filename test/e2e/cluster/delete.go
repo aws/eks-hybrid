@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-logr/logr"
 
@@ -42,6 +43,7 @@ func NewDelete(aws aws.Config, logger logr.Logger, endpoint string) Delete {
 			}
 		}),
 		stack: &stack{
+			iamClient: iam.NewFromConfig(aws),
 			cfn:       cloudformation.NewFromConfig(aws),
 			ec2Client: ec2.NewFromConfig(aws),
 			logger:    logger,
