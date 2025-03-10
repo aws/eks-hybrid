@@ -424,7 +424,7 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 				HTTPClient:   server.Client(),
 			}
 
-			p, err := hybrid.NewHybridNodeProvider(tc.node, zap.NewNop(),
+			p, err := hybrid.NewHybridNodeProvider(tc.node, []string{}, zap.NewNop(),
 				hybrid.WithAWSConfig(config),
 			)
 			g.Expect(err).To(Succeed())

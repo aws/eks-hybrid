@@ -2,10 +2,25 @@ package hybrid
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/util/file"
 )
+
+func extractFlagValue(args []string, flag string) string {
+	flagPrefix := "--" + flag + "="
+	var flagValue string
+
+	// get last instance of flag value if it exists
+	for _, arg := range args {
+		if strings.HasPrefix(arg, flagPrefix) {
+			flagValue = strings.TrimPrefix(arg, flagPrefix)
+		}
+	}
+
+	return flagValue
+}
 
 func (hnp *HybridNodeProvider) withHybridValidators() {
 	hnp.validator = func(cfg *api.NodeConfig) error {
@@ -14,6 +29,9 @@ func (hnp *HybridNodeProvider) withHybridValidators() {
 		}
 		if cfg.Spec.Cluster.Region == "" {
 			return fmt.Errorf("Region is missing in cluster configuration")
+		}
+		if hostnameOverride := extractFlagValue(cfg.Spec.Kubelet.Flags, hostnameOverrideFlag); hostnameOverride != "" {
+			return fmt.Errorf("hostname-override kubelet flag is not supported for hybrid nodes but found override: %s", hostnameOverride)
 		}
 		if !cfg.IsIAMRolesAnywhere() && !cfg.IsSSM() {
 			return fmt.Errorf("Either IAMRolesAnywhere or SSM must be provided for hybrid node configuration")
