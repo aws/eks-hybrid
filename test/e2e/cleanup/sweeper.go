@@ -103,6 +103,15 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		return fmt.Errorf("cleaning up architecture stacks: %w", err)
 	}
 
+	// TODO: do we still need ot support skipping these on a region basis
+	if err := c.cleanupRolesAnywhereProfiles(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up Roles Anywhere resources: %w", err)
+	}
+
+	if err := c.cleanupRolesAnywhereTrustAnchors(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up Roles Anywhere trust anchors: %w", err)
+	}
+
 	if err := c.cleanupIAMRoles(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up IAM roles: %w", err)
 	}
@@ -332,5 +341,49 @@ func (c *Sweeper) cleanupEKSClusters(ctx context.Context, filterInput FilterInpu
 			return fmt.Errorf("deleting EKS hybrid cluster %s: %w", clusterName, err)
 		}
 	}
+	return nil
+}
+
+func (c *Sweeper) cleanupRolesAnywhereProfiles(ctx context.Context, filterInput FilterInput) error {
+	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.logger)
+
+	profiles, err := rolesAnywhereCleaner.ListProfiles(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing Roles Anywhere profiles: %w", err)
+	}
+
+	c.logger.Info("Deleting Roles Anywhere profiles", "profiles", profiles)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, profile := range profiles {
+		if err := rolesAnywhereCleaner.DeleteProfile(ctx, profile); err != nil {
+			return fmt.Errorf("deleting Roles Anywhere profile %s: %w", profile, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Sweeper) cleanupRolesAnywhereTrustAnchors(ctx context.Context, filterInput FilterInput) error {
+	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.logger)
+
+	anchors, err := rolesAnywhereCleaner.ListTrustAnchors(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing Roles Anywhere trust anchors: %w", err)
+	}
+
+	c.logger.Info("Deleting Roles Anywhere trust anchors", "anchors", anchors)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, anchor := range anchors {
+		if err := rolesAnywhereCleaner.DeleteTrustAnchor(ctx, anchor); err != nil {
+			return fmt.Errorf("deleting Roles Anywhere trust anchor %s: %w", anchor, err)
+		}
+	}
+
 	return nil
 }
