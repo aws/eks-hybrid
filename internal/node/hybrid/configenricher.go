@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
@@ -39,7 +39,7 @@ func needsClusterDetails(nodeConfig *api.NodeConfig) bool {
 	return nodeConfig.Spec.Cluster.APIServerEndpoint == "" || nodeConfig.Spec.Cluster.CertificateAuthority == nil || nodeConfig.Spec.Cluster.CIDR == ""
 }
 
-func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*eks_sdk.Cluster, error) {
+func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*types.Cluster, error) {
 	client := eks.NewClient(awsConfig)
 	cluster, err := eks.DescribeCluster(ctx, client, nodeConfig.Spec.Cluster.Name)
 	if err != nil {
@@ -55,7 +55,7 @@ func ensureClusterDetails(ctx context.Context, awsConfig aws.Config, nodeConfig 
 		return err
 	}
 
-	if cluster.Status != eks_sdk.ClusterStatusActive {
+	if cluster.Status != types.ClusterStatusActive {
 		return errors.New("eks cluster is not active")
 	}
 

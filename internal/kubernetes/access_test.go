@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	. "github.com/onsi/gomega"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -61,7 +61,7 @@ func TestAccessValidatorRunFailReadingClusterDetails(t *testing.T) {
 		Code:    403,
 	}
 
-	cluster := &eks_sdk.DescribeClusterOutput{}
+	cluster := &eks.DescribeClusterOutput{}
 
 	eksAPI := test.NewHTTPSServerForJSON(t, http.StatusForbidden, cluster)
 	server := test.NewHTTPSServerForJSON(t, http.StatusForbidden, unauthResponse)

@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	aws_sdk "github.com/aws/aws-sdk-go-v2/aws"
-	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks"
-	eks_sdk_types "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,7 +20,7 @@ import (
 func Test_hybridNodeProvider_Enrich(t *testing.T) {
 	testCases := []struct {
 		name               string
-		cluster            *eks_sdk_types.Cluster
+		cluster            *types.Cluster
 		node               *api.NodeConfig
 		wantClusterDetails api.ClusterDetails
 		wantStatus         api.NodeConfigStatus
@@ -28,18 +28,18 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 	}{
 		{
 			name: "needs all cluster details",
-			cluster: &eks_sdk_types.Cluster{
+			cluster: &types.Cluster{
 				Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 				Name:     aws_sdk.String("my-cluster"),
-				Status:   eks_sdk_types.ClusterStatusActive,
-				CertificateAuthority: &eks_sdk_types.Certificate{
+				Status:   types.ClusterStatusActive,
+				CertificateAuthority: &types.Certificate{
 					Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 				},
-				KubernetesNetworkConfig: &eks_sdk_types.KubernetesNetworkConfigResponse{
+				KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 					ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 				},
-				RemoteNetworkConfig: &eks_sdk_types.RemoteNetworkConfigResponse{
-					RemoteNodeNetworks: []eks_sdk_types.RemoteNodeNetwork{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
 						{
 							Cidrs: []string{"10.1.0.0/16"},
 						},
@@ -86,18 +86,18 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 		},
 		{
 			name: "cluster is not active",
-			cluster: &eks_sdk_types.Cluster{
+			cluster: &types.Cluster{
 				Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 				Name:     aws_sdk.String("my-cluster"),
-				Status:   eks_sdk_types.ClusterStatusCreating,
-				CertificateAuthority: &eks_sdk_types.Certificate{
+				Status:   types.ClusterStatusCreating,
+				CertificateAuthority: &types.Certificate{
 					Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 				},
-				KubernetesNetworkConfig: &eks_sdk_types.KubernetesNetworkConfigResponse{
+				KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 					ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 				},
-				RemoteNetworkConfig: &eks_sdk_types.RemoteNetworkConfigResponse{
-					RemoteNodeNetworks: []eks_sdk_types.RemoteNodeNetwork{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
 						{
 							Cidrs: []string{"10.1.0.0/16"},
 						},
@@ -132,14 +132,14 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 		},
 		{
 			name: "cluster is not active",
-			cluster: &eks_sdk_types.Cluster{
+			cluster: &types.Cluster{
 				Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 				Name:     aws_sdk.String("my-cluster"),
-				Status:   eks_sdk_types.ClusterStatusActive,
-				CertificateAuthority: &eks_sdk_types.Certificate{
+				Status:   types.ClusterStatusActive,
+				CertificateAuthority: &types.Certificate{
 					Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 				},
-				KubernetesNetworkConfig: &eks_sdk_types.KubernetesNetworkConfigResponse{
+				KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 					ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 				},
 			},
@@ -171,18 +171,18 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 		},
 		{
 			name: "endpoint is configured",
-			cluster: &eks_sdk_types.Cluster{
+			cluster: &types.Cluster{
 				Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 				Name:     aws_sdk.String("my-cluster"),
-				Status:   eks_sdk_types.ClusterStatusActive,
-				CertificateAuthority: &eks_sdk_types.Certificate{
+				Status:   types.ClusterStatusActive,
+				CertificateAuthority: &types.Certificate{
 					Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 				},
-				KubernetesNetworkConfig: &eks_sdk_types.KubernetesNetworkConfigResponse{
+				KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 					ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 				},
-				RemoteNetworkConfig: &eks_sdk_types.RemoteNetworkConfigResponse{
-					RemoteNodeNetworks: []eks_sdk_types.RemoteNodeNetwork{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
 						{
 							Cidrs: []string{"10.1.0.0/16"},
 						},
@@ -230,18 +230,18 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 		},
 		{
 			name: "CA is configured",
-			cluster: &eks_sdk_types.Cluster{
+			cluster: &types.Cluster{
 				Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 				Name:     aws_sdk.String("my-cluster"),
-				Status:   eks_sdk_types.ClusterStatusActive,
-				CertificateAuthority: &eks_sdk_types.Certificate{
+				Status:   types.ClusterStatusActive,
+				CertificateAuthority: &types.Certificate{
 					Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 				},
-				KubernetesNetworkConfig: &eks_sdk_types.KubernetesNetworkConfigResponse{
+				KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 					ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 				},
-				RemoteNetworkConfig: &eks_sdk_types.RemoteNetworkConfigResponse{
-					RemoteNodeNetworks: []eks_sdk_types.RemoteNodeNetwork{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
 						{
 							Cidrs: []string{"10.1.0.0/16"},
 						},
@@ -289,18 +289,18 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 		},
 		{
 			name: "service CIDR is configured",
-			cluster: &eks_sdk_types.Cluster{
+			cluster: &types.Cluster{
 				Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 				Name:     aws_sdk.String("my-cluster"),
-				Status:   eks_sdk_types.ClusterStatusActive,
-				CertificateAuthority: &eks_sdk_types.Certificate{
+				Status:   types.ClusterStatusActive,
+				CertificateAuthority: &types.Certificate{
 					Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 				},
-				KubernetesNetworkConfig: &eks_sdk_types.KubernetesNetworkConfigResponse{
+				KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 					ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 				},
-				RemoteNetworkConfig: &eks_sdk_types.RemoteNetworkConfigResponse{
-					RemoteNodeNetworks: []eks_sdk_types.RemoteNodeNetwork{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
 						{
 							Cidrs: []string{"10.1.0.0/16"},
 						},
@@ -348,18 +348,18 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 		},
 		{
 			name: "node config has all cluster details",
-			cluster: &eks_sdk_types.Cluster{
+			cluster: &types.Cluster{
 				Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 				Name:     aws_sdk.String("my-cluster"),
-				Status:   eks_sdk_types.ClusterStatusActive,
-				CertificateAuthority: &eks_sdk_types.Certificate{
+				Status:   types.ClusterStatusActive,
+				CertificateAuthority: &types.Certificate{
 					Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 				},
-				KubernetesNetworkConfig: &eks_sdk_types.KubernetesNetworkConfigResponse{
+				KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 					ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 				},
-				RemoteNetworkConfig: &eks_sdk_types.RemoteNetworkConfigResponse{
-					RemoteNodeNetworks: []eks_sdk_types.RemoteNodeNetwork{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
 						{
 							Cidrs: []string{"10.1.0.0/16"},
 						},
@@ -413,7 +413,7 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 			g := NewWithT(t)
 			ctx := context.Background()
 
-			resp := &eks_sdk.DescribeClusterOutput{
+			resp := &eks.DescribeClusterOutput{
 				Cluster: tc.cluster,
 			}
 
