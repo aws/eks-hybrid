@@ -62,10 +62,10 @@ type HybridEC2Node struct {
 
 // NodeSpec is a specification for a node.
 type NodeSpec struct {
-	Cluster    *Cluster
-	NamePrefix string
-	OS         CredsOS
-	Provider   NodeadmCredentialsProvider
+	Cluster  *Cluster
+	Name     string
+	OS       CredsOS
+	Provider NodeadmCredentialsProvider
 }
 
 type Cluster struct {

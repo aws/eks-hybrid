@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
@@ -44,7 +45,7 @@ type NodeSpec struct {
 	InstanceName       string
 	InstanceProfileARN string
 	NodeK8sVersion     string
-	NodeNamePrefix     string
+	NodeName           string
 	OS                 e2e.NodeadmOS
 	Provider           e2e.NodeadmCredentialsProvider
 }
@@ -64,8 +65,8 @@ type NodeCreate struct {
 // Create spins up an EC2 instance with the proper user data to join as a Hybrid node to the cluster.
 func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) {
 	nodeSpec := e2e.NodeSpec{
-		OS:         spec.OS,
-		NamePrefix: spec.NodeNamePrefix,
+		OS:   spec.OS,
+		Name: spec.NodeName,
 		Cluster: &e2e.Cluster{
 			Name:   c.Cluster.Name,
 			Region: c.Cluster.Region,
@@ -199,6 +200,7 @@ func generateKeyPair() ([]byte, []byte, error) {
 }
 
 type NodeCleanup struct {
+	SSM                 *ssm.Client
 	S3                  *s3sdk.Client
 	EC2                 *ec2sdk.Client
 	K8s                 *clientgo.Clientset
@@ -208,6 +210,40 @@ type NodeCleanup struct {
 	LogsBucket  string
 	ClusterName string
 	SkipDelete  bool
+}
+
+func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName string) error {
+	if c.SkipDelete {
+		c.Logger.Info("Skipping SSM activation cleanup", "nodeName", nodeName)
+		return nil
+	}
+	cleaner := cleanup.NewSSMCleaner(c.SSM, c.Logger)
+	activationIDs, err := cleaner.ListActivationsForNode(ctx, nodeName)
+	if err != nil {
+		return fmt.Errorf("listing activations: %w", err)
+	}
+	if len(activationIDs) == 0 {
+		return fmt.Errorf("no activation found for node %s", nodeName)
+	}
+
+	instanceIDs, err := cleaner.ListManagedInstancesByActivationID(ctx, activationIDs...)
+	if err != nil {
+		return fmt.Errorf("listing managed instances: %w", err)
+	}
+
+	for _, instanceID := range instanceIDs {
+		if err := cleaner.DeleteManagedInstance(ctx, instanceID); err != nil {
+			return fmt.Errorf("deleting managed instance: %w", err)
+		}
+	}
+
+	for _, activationID := range activationIDs {
+		if err := cleaner.DeleteActivation(ctx, activationID); err != nil {
+			return fmt.Errorf("deleting activation: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // Cleanup collects logs and deletes the EC2 instance and Node object.

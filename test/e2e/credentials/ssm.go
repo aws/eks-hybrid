@@ -16,8 +16,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
-const ssmActivationName = "eks-hybrid-ssm-provider"
-
 type SsmProvider struct {
 	SSM  *ssm.Client
 	Role string
@@ -28,9 +26,9 @@ func (s *SsmProvider) Name() creds.CredentialProvider {
 }
 
 func (s *SsmProvider) NodeadmConfig(ctx context.Context, node e2e.NodeSpec) (*api.NodeConfig, error) {
-	ssmActivationDetails, err := createSSMActivation(ctx, s.SSM, s.Role, ssmActivationName, node.Cluster.Name)
+	ssmActivationDetails, err := s.createSSMActivation(ctx, node.Cluster.Name, node.Name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create SSM activation for node %s: %w", node.Name, err)
 	}
 	return &api.NodeConfig{
 		TypeMeta: metav1.TypeMeta{
@@ -61,12 +59,12 @@ func (s *SsmProvider) FilesForNode(_ e2e.NodeSpec) ([]e2e.File, error) {
 	return nil, nil
 }
 
-func createSSMActivation(ctx context.Context, client *ssm.Client, iamRole, ssmActivationName, clusterName string) (*ssm.CreateActivationOutput, error) {
+func (s *SsmProvider) createSSMActivation(ctx context.Context, clusterName, nodeName string) (*ssm.CreateActivationOutput, error) {
 	// Define the input for the CreateActivation API
 	input := &ssm.CreateActivationInput{
-		IamRole:             aws.String(iamRole),
+		DefaultInstanceName: aws.String(nodeName),
+		IamRole:             aws.String(s.Role),
 		RegistrationLimit:   aws.Int32(2),
-		DefaultInstanceName: aws.String(ssmActivationName),
 		Tags: []types.Tag{
 			{
 				Key:   aws.String(constants.TestClusterTagKey),
@@ -76,7 +74,7 @@ func createSSMActivation(ctx context.Context, client *ssm.Client, iamRole, ssmAc
 	}
 
 	// Call CreateActivation to create the SSM activation
-	result, err := client.CreateActivation(ctx, input, func(o *ssm.Options) {
+	result, err := s.SSM.CreateActivation(ctx, input, func(o *ssm.Options) {
 		o.RetryMaxAttempts = 20
 		o.RetryMode = aws.RetryModeAdaptive
 	})
@@ -132,4 +130,9 @@ func waitForManagedInstanceUnregistered(ctx context.Context, ssmClient *ssm.Clie
 	case <-ctx.Done():
 		return fmt.Errorf("timed out waiting for instance to unregister: %s", instanceId)
 	}
+}
+
+// IsSsm returns true if the given CredentialProvider is SSM.
+func IsSsm(name creds.CredentialProvider) bool {
+	return name == creds.SsmCredentialProvider
 }
