@@ -2,6 +2,7 @@ package cleanup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 )
 
@@ -63,9 +65,24 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	delete := cluster.NewDelete(aws, logger, deleteCluster.Endpoint)
 
+	// run the standard cluster cleanup as well as the sweeper fallback
 	logger.Info("Cleaning up E2E cluster resources...")
-	if err = delete.Run(ctx, deleteCluster); err != nil {
-		return fmt.Errorf("error cleaning up e2e resources: %w", err)
+
+	if deleteErr := delete.Run(ctx, deleteCluster); deleteErr != nil {
+		err = fmt.Errorf("running cluster cleanup: %w", deleteErr)
+		logger.Error(deleteErr, "running cluster cleanup")
+	}
+
+	logger.Info("Cleaning up E2E cluster resources with Sweeper...")
+	sweeper := cleanup.NewSweeper(aws, logger)
+	if sweeperErr := sweeper.Run(ctx, cleanup.SweeperInput{
+		ClusterName: deleteCluster.ClusterName,
+	}); sweeperErr != nil {
+		err = errors.Join(err, fmt.Errorf("running sweeper cleanup: %w", sweeperErr))
+	}
+
+	if err != nil {
+		return err
 	}
 
 	logger.Info("Cleanup completed successfully!")

@@ -3,4 +3,5 @@ version: 0.2
 phases:
   build:
     commands:
-    - ./hack/e2e-cleanup.sh
+    - ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
+    - ./_bin/$ARCH/e2e-test sweeper --all

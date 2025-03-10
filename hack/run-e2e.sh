@@ -57,7 +57,7 @@ EOF
 
 function cleanup(){
   if [ -f $RESOURCES_YAML ]; then
-    $BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML || true
+    $BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML
   fi
   $REPO_ROOT/hack/e2e-cleanup.sh $CLUSTER_NAME
 }
