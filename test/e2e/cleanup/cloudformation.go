@@ -21,8 +21,15 @@ const (
 )
 
 type CFNStackCleanup struct {
-	CFN    *cloudformation.Client
-	Logger logr.Logger
+	cfnClient *cloudformation.Client
+	logger    logr.Logger
+}
+
+func NewCFNStackCleanup(cfnClient *cloudformation.Client, logger logr.Logger) *CFNStackCleanup {
+	return &CFNStackCleanup{
+		cfnClient: cfnClient,
+		logger:    logger,
+	}
 }
 
 // ListCredentialStacks lists all the credential stacks for a given cluster
@@ -49,9 +56,9 @@ func (c *CFNStackCleanup) DeleteStack(ctx context.Context, stackName string) err
 		describeStackInput := &cloudformation.DescribeStacksInput{
 			StackName: aws.String(stackName),
 		}
-		stackOutput, err := c.CFN.DescribeStacks(ctx, describeStackInput)
+		stackOutput, err := c.cfnClient.DescribeStacks(ctx, describeStackInput)
 		if err != nil && errors.IsCFNStackNotFound(err) {
-			c.Logger.Info("Stack already deleted", "stack", stackName)
+			c.logger.Info("Stack already deleted", "stack", stackName)
 			return nil
 		}
 		if err != nil {
@@ -67,30 +74,30 @@ func (c *CFNStackCleanup) DeleteStack(ctx context.Context, stackName string) err
 			input.DeletionMode = types.DeletionModeForceDeleteStack
 		}
 
-		c.Logger.Info("Deleting hybrid nodes cfn stack with deletion mode", "stackName", stackName, "deletionMode", input.DeletionMode)
-		_, err = c.CFN.DeleteStack(ctx, input)
+		c.logger.Info("Deleting hybrid nodes cfn stack with deletion mode", "stackName", stackName, "deletionMode", input.DeletionMode)
+		_, err = c.cfnClient.DeleteStack(ctx, input)
 		if err != nil && errors.IsCFNStackNotFound(err) {
-			c.Logger.Info("Stack already deleted", "stack", stackName)
+			c.logger.Info("Stack already deleted", "stack", stackName)
 			return nil
 		}
 		if err != nil {
 			return fmt.Errorf("deleting hybrid nodes cfn stack: %w", err)
 		}
 
-		waiter := cloudformation.NewStackDeleteCompleteWaiter(c.CFN, func(opts *cloudformation.StackDeleteCompleteWaiterOptions) {
+		waiter := cloudformation.NewStackDeleteCompleteWaiter(c.cfnClient, func(opts *cloudformation.StackDeleteCompleteWaiterOptions) {
 			opts.MinDelay = stackRetryDelay
 			opts.MaxDelay = stackRetryDelay
 		})
 		if err = waiter.Wait(ctx, describeStackInput, stackDeletionTimeout); err != nil {
-			failureReason, err := GetStackFailureReason(ctx, c.CFN, stackName)
+			failureReason, err := GetStackFailureReason(ctx, c.cfnClient, stackName)
 			if err != nil {
-				c.Logger.Info("Retrying delete of cfn stack, failure reason not found", "stackName", stackName)
+				c.logger.Info("Retrying delete of cfn stack, failure reason not found", "stackName", stackName)
 			} else {
-				c.Logger.Info("Retrying delete of cfn stack", "stackName", stackName, "failureReason", failureReason)
+				c.logger.Info("Retrying delete of cfn stack", "stackName", stackName, "failureReason", failureReason)
 			}
 			continue
 		}
-		c.Logger.Info("E2E resources stack deleted successfully", "stackName", stackName)
+		c.logger.Info("E2E resources stack deleted successfully", "stackName", stackName)
 		return nil
 	}
 	return fmt.Errorf("failed to delete hybrid nodes cfn stack: %s", stackName)
@@ -98,7 +105,7 @@ func (c *CFNStackCleanup) DeleteStack(ctx context.Context, stackName string) err
 
 func (c *CFNStackCleanup) listStacks(ctx context.Context, input FilterInput, wantName func(string) bool) ([]string, error) {
 	// all status except for StackStatusDeleteComplete
-	paginator := cloudformation.NewListStacksPaginator(c.CFN, &cloudformation.ListStacksInput{
+	paginator := cloudformation.NewListStacksPaginator(c.cfnClient, &cloudformation.ListStacksInput{
 		StackStatusFilter: []types.StackStatus{
 			types.StackStatusCreateInProgress,
 			types.StackStatusCreateFailed,
@@ -143,9 +150,9 @@ func (c *CFNStackCleanup) listStacks(ctx context.Context, input FilterInput, wan
 			describeStackInput := &cloudformation.DescribeStacksInput{
 				StackName: stack.StackName,
 			}
-			stackOutput, err := c.CFN.DescribeStacks(ctx, describeStackInput)
+			stackOutput, err := c.cfnClient.DescribeStacks(ctx, describeStackInput)
 			if err != nil && errors.IsCFNStackNotFound(err) {
-				c.Logger.Info("Stack already deleted", "stack", *stack.StackName)
+				c.logger.Info("Stack already deleted", "stack", *stack.StackName)
 				continue
 			}
 

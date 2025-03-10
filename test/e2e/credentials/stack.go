@@ -333,10 +333,7 @@ func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOut
 		return fmt.Errorf("deleting iam-ra access entry: %w", err)
 	}
 
-	cfnCleaner := cleanup.CFNStackCleanup{
-		CFN:    s.CFN,
-		Logger: logger,
-	}
+	cfnCleaner := cleanup.NewCFNStackCleanup(s.CFN, logger)
 	err = cfnCleaner.DeleteStack(ctx, s.Name)
 	if err != nil {
 		return fmt.Errorf("deleting hybrid nodes cfn stack: %w", err)

@@ -99,6 +99,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		return fmt.Errorf("emptying S3 pod identity buckets: %w", err)
 	}
 
+	if err := c.cleanupArchitectureStacks(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up architecture stacks: %w", err)
+	}
+
 	if err := c.cleanupIAMRoles(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up IAM roles: %w", err)
 	}
@@ -202,10 +206,7 @@ func (c *Sweeper) cleanupS3PodIdentityBuckets(ctx context.Context, filterInput F
 }
 
 func (c *Sweeper) cleanupCredentialStacks(ctx context.Context, filterInput FilterInput) error {
-	cfnCleaner := &CFNStackCleanup{
-		CFN:    c.cfn,
-		Logger: c.logger,
-	}
+	cfnCleaner := NewCFNStackCleanup(c.cfn, c.logger)
 	credStacks, err := cfnCleaner.ListCredentialStacks(ctx, filterInput)
 	if err != nil {
 		return fmt.Errorf("listing credential stacks: %w", err)
@@ -221,6 +222,26 @@ func (c *Sweeper) cleanupCredentialStacks(ctx context.Context, filterInput Filte
 		}
 	}
 
+	return nil
+}
+
+func (c *Sweeper) cleanupArchitectureStacks(ctx context.Context, filterInput FilterInput) error {
+	cfnCleaner := NewCFNStackCleanup(c.cfn, c.logger)
+	archStacks, err := cfnCleaner.ListArchitectureStacks(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing architecture stacks: %w", err)
+	}
+
+	c.logger.Info("Deleting architecture stacks", "architectureStacks", archStacks)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, stack := range archStacks {
+		if err := cfnCleaner.DeleteStack(ctx, stack); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

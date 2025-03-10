@@ -303,11 +303,7 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 		return fmt.Errorf("deleting pod identity s3 bucket: %w", err)
 	}
 
-	cfnCleaner := cleanup.CFNStackCleanup{
-		CFN:    s.cfn,
-		Logger: s.logger,
-	}
-
+	cfnCleaner := cleanup.NewCFNStackCleanup(s.cfn, s.logger)
 	if err := cfnCleaner.DeleteStack(ctx, stackName); err != nil {
 		return fmt.Errorf("deleting hybrid nodes setup cfn stack: %w", err)
 	}
