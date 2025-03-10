@@ -9,7 +9,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 )
 
-func NewNodeProvider(configSource string, logger *zap.Logger) (nodeprovider.NodeProvider, error) {
+func NewNodeProvider(configSource string, skipPhases []string, logger *zap.Logger) (nodeprovider.NodeProvider, error) {
 	logger.Info("Loading configuration..", zap.String("configSource", configSource))
 	provider, err := configprovider.BuildConfigProvider(configSource)
 	if err != nil {
@@ -21,7 +21,7 @@ func NewNodeProvider(configSource string, logger *zap.Logger) (nodeprovider.Node
 	}
 	if nodeConfig.IsHybridNode() {
 		logger.Info("Setting up hybrid node provider...")
-		return hybrid.NewHybridNodeProvider(nodeConfig, logger)
+		return hybrid.NewHybridNodeProvider(nodeConfig, skipPhases, logger)
 	}
 	logger.Info("Setting up EC2 node provider...")
 	return ec2.NewEc2NodeProvider(nodeConfig, logger)

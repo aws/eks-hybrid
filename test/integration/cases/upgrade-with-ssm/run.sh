@@ -45,7 +45,7 @@ assert::file-permission-matches /usr/local/bin/aws-iam-authenticator 755
 assert::file-permission-matches /opt/ssm/ssm-setup-cli 755
 
 mock::ssm
-nodeadm init --skip run,preprocess --config-source file://config.yaml
+nodeadm init --skip run,preprocess,node-ip-validation --config-source file://config.yaml
 
 # The memory reserved by kubelet is dynamic depending on the host that builts the docker image
 # Remove kubeReserved field before checking its content
@@ -58,7 +58,7 @@ validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644
 
-nodeadm upgrade $TARGET_VERSION --skip run,preprocess,pod-validation,node-validation,init-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,preprocess,pod-validation,node-validation,init-validation,node-ip-validation --config-source file://config.yaml
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables
 assert::path-exists /usr/local/bin/kubectl

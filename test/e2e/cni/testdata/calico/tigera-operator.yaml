@@ -84,7 +84,8 @@ spec:
                           description: The key of the secret to select from.  Must be a valid secret key.
                           type: string
                         name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                          default: ""
+                          description: 'Name of the referent. This field is effectively required, but due to backwards compatibility is allowed to be empty. Instances of this type with an empty value here are almost certainly wrong. TODO: Add other useful fields. apiVersion, kind, uid? More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Drop `kubebuilder:default` when controller-gen doesn''t need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.'
                           type: string
                         optional:
                           description: Specify whether the Secret or its key must be defined
@@ -385,7 +386,8 @@ spec:
                           description: The key of the secret to select from.  Must be a valid secret key.
                           type: string
                         name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                          default: ""
+                          description: 'Name of the referent. This field is effectively required, but due to backwards compatibility is allowed to be empty. Instances of this type with an empty value here are almost certainly wrong. TODO: Add other useful fields. apiVersion, kind, uid? More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Drop `kubebuilder:default` when controller-gen doesn''t need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.'
                           type: string
                         optional:
                           description: Specify whether the Secret or its key must be defined
@@ -5523,6 +5525,21 @@ spec:
             spec:
               description: Specification of the desired state for the Calico or Calico Enterprise installation.
               properties:
+                azure:
+                  description: Azure is used to configure azure provider specific options.
+                  properties:
+                    policyMode:
+                      default: Default
+                      description: |-
+                        PolicyMode determines whether the "control-plane" label is applied to namespaces. It offers two options: Default and Manual.
+                        The Default option adds the "control-plane" label to the required namespaces.
+                        The Manual option does not apply the "control-plane" label to any namespace.
+                        Default: Default
+                      enum:
+                        - Default
+                        - Manual
+                      type: string
+                  type: object
                 calicoKubeControllersDeployment:
                   description: |-
                     CalicoKubeControllersDeployment configures the calico-kube-controllers Deployment. If used in
@@ -12389,6 +12406,21 @@ spec:
                 computed:
                   description: Computed is the final installation including overlaid resources.
                   properties:
+                    azure:
+                      description: Azure is used to configure azure provider specific options.
+                      properties:
+                        policyMode:
+                          default: Default
+                          description: |-
+                            PolicyMode determines whether the "control-plane" label is applied to namespaces. It offers two options: Default and Manual.
+                            The Default option adds the "control-plane" label to the required namespaces.
+                            The Manual option does not apply the "control-plane" label to any namespace.
+                            Default: Default
+                          enum:
+                            - Default
+                            - Manual
+                          type: string
+                      type: object
                     calicoKubeControllersDeployment:
                       description: |-
                         CalicoKubeControllersDeployment configures the calico-kube-controllers Deployment. If used in
@@ -19809,7 +19841,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: {{.ContainerRegistry}}/tigera/operator:v1.36.2
+          image: {{.ContainerRegistry}}/tigera/operator:v1.36.5
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -19827,7 +19859,7 @@ spec:
             - name: OPERATOR_NAME
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
-              value: v1.36.2
+              value: v1.36.5
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint

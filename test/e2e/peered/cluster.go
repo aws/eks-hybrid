@@ -57,7 +57,10 @@ func getClusterDetails(ctx context.Context, client *eks.Client, clusterName stri
 	input := &eks.DescribeClusterInput{
 		Name: aws.String(clusterName),
 	}
-	result, err := client.DescribeCluster(ctx, input)
+	result, err := client.DescribeCluster(ctx, input, func(o *eks.Options) {
+		o.RetryMaxAttempts = 20
+		o.RetryMode = aws.RetryModeAdaptive
+	})
 	if err != nil {
 		return ekstypes.Cluster{}, fmt.Errorf("getting cluster details: %w", err)
 	}

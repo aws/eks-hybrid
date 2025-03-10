@@ -10,9 +10,9 @@ affinity:
 operator:
   image:
     repository: "{{.ContainerRegistry}}/cilium/operator"
-    tag: "v1.16.5"
+    tag: "v1.16.7"
     imagePullPolicy: "IfNotPresent"
-    digest: "sha256:f7884848483bbcd7b1e0ccfd34ba4546f258b460cb4b7e2f06a1bcc96ef88039"
+    digest: "sha256:25a41ac50bcebfb780ed2970e55a5ba1a5f26996850ed5a694dc69b312e0b5a0"
   replicas: 1
   unmanagedPodWatcher:
     restart: false
@@ -32,12 +32,12 @@ envoy:
   enabled: false
 image:
   repository: "{{.ContainerRegistry}}/cilium/cilium"
-  tag: "v1.16.5"
+  tag: "v1.16.7"
   imagePullPolicy: "IfNotPresent"
-  digest: "sha256:758ca0793f5995bb938a2fa219dcce63dc0b3fa7fc4ce5cc851125281fb7361d"
+  digest: "sha256:294d2432507fed393b26e9fbfacb25c2e37095578cb34dabac7312b66ed0782e"
 preflight:
   image:
     repository: "{{.ContainerRegistry}}/cilium/cilium"
-    tag: "v1.16.5"
+    tag: "v1.16.7"
     imagePullPolicy: "IfNotPresent"
-    digest: "sha256:758ca0793f5995bb938a2fa219dcce63dc0b3fa7fc4ce5cc851125281fb7361d"
+    digest: "sha256:294d2432507fed393b26e9fbfacb25c2e37095578cb34dabac7312b66ed0782e"

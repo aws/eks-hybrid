@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
-	"github.com/aws/eks-hybrid/test/e2e/errors"
+	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	e2eSSM "github.com/aws/eks-hybrid/test/e2e/ssm"
 )
@@ -64,7 +65,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	resp, err := s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	if err != nil && !errors.IsType(err, &types.StackInstanceNotFoundException{}) {
+	if err != nil && !e2eErrors.IsCFNStackNotFound(err) {
 		return nil, fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
 	}
 
@@ -253,7 +254,7 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 			StackName: aws.String(stackName),
 		})
 		if err != nil {
-			if errors.IsType(err, &types.StackInstanceNotFoundException{}) {
+			if e2eErrors.IsCFNStackNotFound(err) {
 				return true, nil
 			}
 			return false, err
@@ -281,20 +282,11 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 	stackName := stackName(clusterName)
 	s.logger.Info("Deleting E2E test cluster stack", "stackName", stackName)
 
-	output, err := s.cfn.DescribeStackResource(ctx, &cloudformation.DescribeStackResourceInput{
-		LogicalResourceId: aws.String(addon.PodIdentityS3Bucket),
-		StackName:         aws.String(stackName),
-	})
-	if err != nil {
-		return err
+	if err := s.emptyPodIdentityS3Bucket(ctx, clusterName); err != nil {
+		return fmt.Errorf("deleting pod identity s3 bucket: %w", err)
 	}
 
-	s.logger.Info("Empty pod identity s3 bucket", "bucket", output.StackResourceDetail.PhysicalResourceId)
-	if err = emptyS3Bucket(ctx, s.s3Client, output.StackResourceDetail.PhysicalResourceId); err != nil {
-		return err
-	}
-
-	_, err = s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
+	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String(stackName),
 	})
 	if err != nil {
@@ -307,6 +299,23 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 	}
 
 	s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
+	return nil
+}
+
+func (s *stack) emptyPodIdentityS3Bucket(ctx context.Context, clusterName string) error {
+	podIdentityBucket, err := addon.PodIdentityBucket(ctx, s.s3Client, clusterName)
+	if err != nil {
+		if errors.Is(err, addon.PodIdentityBucketNotFound) {
+			return nil
+		}
+		return fmt.Errorf("getting pod identity s3 bucket: %w", err)
+	}
+
+	s.logger.Info("Empty pod identity s3 bucket", "bucket", podIdentityBucket)
+	if err = emptyS3Bucket(ctx, s.s3Client, &podIdentityBucket); err != nil {
+		return fmt.Errorf("emptying pod identity s3 bucket: %w", err)
+	}
+
 	return nil
 }
 
@@ -353,16 +362,22 @@ func getStackFailureReason(ctx context.Context, client *cloudformation.Client, s
 	if err != nil {
 		return "", fmt.Errorf("describing events for stack %s: %w", stackName, err)
 	}
-
+	firstFailedEventTimestamp := time.Now()
+	var firstFailedEventReason string
 	for _, event := range resp.StackEvents {
 		if event.ResourceStatus == types.ResourceStatusCreateFailed ||
 			event.ResourceStatus == types.ResourceStatusUpdateFailed ||
 			event.ResourceStatus == types.ResourceStatusDeleteFailed {
-			if event.ResourceStatusReason != nil {
-				return *event.ResourceStatusReason, nil
+			if event.ResourceStatusReason == nil {
+				continue
+			}
+			timestamp := aws.ToTime(event.Timestamp)
+			if timestamp.Before(firstFailedEventTimestamp) {
+				firstFailedEventTimestamp = timestamp
+				firstFailedEventReason = *event.ResourceStatusReason
 			}
 		}
 	}
 
-	return "", nil
+	return firstFailedEventReason, nil
 }

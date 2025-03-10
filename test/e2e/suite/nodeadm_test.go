@@ -31,7 +31,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
@@ -243,40 +242,66 @@ var _ = Describe("Hybrid Nodes", func() {
 							if test.overrideNodeK8sVersion != "" {
 								k8sVersion = suite.TestConfig.NodeK8sVersion
 							}
-
 							peeredNode := test.newPeeredNode()
-							instance, err := peeredNode.Create(ctx, &peered.NodeSpec{
-								InstanceName:   instanceName,
-								NodeK8sVersion: k8sVersion,
-								NodeNamePrefix: "simpleflow",
-								OS:             nodeOS,
-								Provider:       provider,
-							})
-							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
-							DeferCleanup(func(ctx context.Context) {
-								Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
-							}, NodeTimeout(deferCleanupTimeout))
 
-							verifyNode := test.newVerifyNode(instance.IP)
+							var verifyNode *kubernetes.VerifyNode
+							var serialOutput peered.ItBlockCloser
+							var instance ec2.Instance
 
-							serialOutput := peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
-								PeeredNode:   peeredNode,
-								Instance:     instance,
-								TestLogger:   test.loggerControl,
-								OutputFolder: test.artifactsPath,
-							})
-							Expect(err).NotTo(HaveOccurred(), "should prepare serial output")
-							DeferCleanup(func() {
-								serialOutput.Close()
-							})
+							flakyCode := &FlakyCode{
+								Logger: test.logger,
+							}
+							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
+								var err error
+								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
+									InstanceName:   instanceName,
+									NodeK8sVersion: k8sVersion,
+									NodeNamePrefix: "simpleflow",
+									OS:             nodeOS,
+									Provider:       provider,
+								})
+								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
+								flakeRun.DeferCleanup(func(ctx context.Context) {
+									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
+								}, NodeTimeout(deferCleanupTimeout))
 
-							serialOutput.It("joins the cluster", func() {
-								test.logger.Info("Waiting for EC2 Instance to be Running...")
-								Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
-								Expect(verifyNode.WaitForNodeReady(ctx)).Error().To(
-									Succeed(), "node should have joined the cluster successfully"+
-										". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
-								)
+								verifyNode = test.newVerifyNode(instance.IP)
+
+								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
+									PeeredNode:   peeredNode,
+									Instance:     instance,
+									TestLogger:   test.loggerControl,
+									OutputFolder: test.artifactsPath,
+								})
+								flakeRun.DeferCleanup(func(ctx context.Context) {
+									serialOutput.Close()
+								}, NodeTimeout(deferCleanupTimeout))
+
+								serialOutput.It("joins the cluster", func() {
+									test.logger.Info("Waiting for EC2 Instance to be Running...")
+									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+									_, err := verifyNode.WaitForNodeReady(ctx)
+									if err != nil {
+										// an ec2 node is considered impaired if the reachability health check fails
+										// in these cases we want to retry by deleting the instance and recreating it
+										// to avoid failing tests due to instance boot issues that are not related
+										// to nodeadm or the test itself
+										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, instance.ID)
+										if oErr != nil {
+											Expect(oErr).NotTo(HaveOccurred(), "should describe instance status")
+										}
+										expect := Expect
+										if isImpaired {
+											expect = flakeRun.RetryableExpect
+										}
+
+										expect(err).To(
+											Succeed(), "node should have joined the cluster successfully"+
+												". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
+										)
+
+									}
+								})
 							})
 
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
@@ -330,40 +355,66 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
 
 							peeredNode := test.newPeeredNode()
-							instance, err := peeredNode.Create(ctx, &peered.NodeSpec{
-								InstanceName:   instanceName,
-								NodeK8sVersion: nodeKubernetesVersion,
-								NodeNamePrefix: "upgradeflow",
-								OS:             os,
-								Provider:       provider,
-							})
-							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
-							DeferCleanup(func(ctx context.Context) {
-								Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
-							}, NodeTimeout(deferCleanupTimeout))
+							var verifyNode *kubernetes.VerifyNode
+							var serialOutput peered.ItBlockCloser
+							var instance ec2.Instance
 
-							verifyNode := test.newVerifyNode(instance.IP)
+							flakyCode := &FlakyCode{
+								Logger: test.logger,
+							}
+							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
+								var err error
+								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
+									InstanceName:   instanceName,
+									NodeK8sVersion: nodeKubernetesVersion,
+									NodeNamePrefix: "upgradeflow",
+									OS:             os,
+									Provider:       provider,
+								})
+								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
+								DeferCleanup(func(ctx context.Context) {
+									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
+								}, NodeTimeout(deferCleanupTimeout))
 
-							serialOutput := peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
-								PeeredNode:   peeredNode,
-								Instance:     instance,
-								TestLogger:   test.loggerControl,
-								OutputFolder: test.artifactsPath,
-							})
-							Expect(err).NotTo(HaveOccurred(), "should prepare serial output")
-							DeferCleanup(func() {
-								serialOutput.Close()
-							})
+								verifyNode = test.newVerifyNode(instance.IP)
 
-							serialOutput.It("joins the cluster", func() {
-								test.logger.Info("Waiting for EC2 Instance to be Running...")
-								Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
-								Expect(verifyNode.WaitForNodeReady(ctx)).Error().To(
-									Succeed(), "node should have joined the cluster successfully"+
-										". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
-								)
-							})
+								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
+									PeeredNode:   peeredNode,
+									Instance:     instance,
+									TestLogger:   test.loggerControl,
+									OutputFolder: test.artifactsPath,
+								})
+								Expect(err).NotTo(HaveOccurred(), "should prepare serial output")
+								DeferCleanup(func() {
+									serialOutput.Close()
+								})
 
+								serialOutput.It("joins the cluster", func() {
+									test.logger.Info("Waiting for EC2 Instance to be Running...")
+									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+									_, err := verifyNode.WaitForNodeReady(ctx)
+									if err != nil {
+										// an ec2 node is considered impaired if the reachability health check fails
+										// in these cases we want to retry by deleting the instance and recreating it
+										// to avoid failing tests due to instance boot issues that are not related
+										// to nodeadm or the test itself
+										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, instance.ID)
+										if oErr != nil {
+											Expect(err).NotTo(HaveOccurred(), "should describe instance status")
+										}
+										expect := Expect
+										if isImpaired {
+											expect = flakeRun.RetryableExpect
+										}
+
+										expect(err).To(
+											Succeed(), "node should have joined the cluster successfully"+
+												". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
+										)
+
+									}
+								})
+							})
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
 							Expect(test.newUpgradeNode(instance.IP).Run(ctx)).To(
@@ -443,7 +494,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 	}
 	test.nodeadmURLs = *urls
 
-	test.podIdentityS3Bucket, err = getPodIdentityS3Bucket(ctx, test.cluster.Name, test.s3Client)
+	test.podIdentityS3Bucket, err = addon.PodIdentityBucket(ctx, test.s3Client, test.cluster.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -536,38 +587,4 @@ func newLoggerForTests() e2e.PausableLogger {
 		cfg.NoColor = true
 	}
 	return e2e.NewPausableLogger(cfg)
-}
-
-func getPodIdentityS3Bucket(ctx context.Context, cluster string, client *s3v2.Client) (string, error) {
-	listBucketsOutput, err := client.ListBuckets(ctx, &s3v2.ListBucketsInput{
-		Prefix: aws.String(addon.PodIdentityS3BucketPrefix),
-	})
-	if err != nil {
-		return "", err
-	}
-
-	for _, bucket := range listBucketsOutput.Buckets {
-		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3v2.GetBucketTaggingInput{
-			Bucket: bucket.Name,
-		})
-		if err != nil {
-			return "", err
-		}
-
-		var foundClusterTag, foundPodIdentityTag bool
-		for _, tag := range getBucketTaggingOutput.TagSet {
-			if *tag.Key == constants.TestClusterTagKey && *tag.Value == cluster {
-				foundClusterTag = true
-			}
-
-			if *tag.Key == addon.PodIdentityS3BucketPrefix && *tag.Value == "true" {
-				foundPodIdentityTag = true
-			}
-
-			if foundClusterTag && foundPodIdentityTag {
-				return *bucket.Name, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("S3 bucket for pod identity not found")
 }

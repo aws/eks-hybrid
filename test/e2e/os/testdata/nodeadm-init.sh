@@ -7,7 +7,8 @@ set -o pipefail
 NODEADM_URL="$1"
 KUBERNETES_VERSION="$2"
 PROVDER="$3"
-NODEADM_ADDITIONAL_ARGS="${4-}"
+REGION="$4"
+NODEADM_ADDITIONAL_ARGS="${5-}"
 
 function run_debug(){
     /tmp/nodeadm debug -c file:///nodeadm-config.yaml || true
@@ -28,7 +29,7 @@ for i in {1..5}; do curl --fail -s --retry 5 -L "$NODEADM_URL" -o /tmp/nodeadm &
 chmod +x /tmp/nodeadm
 
 echo "Installing kubernetes components"
-/tmp/nodeadm install $KUBERNETES_VERSION $NODEADM_ADDITIONAL_ARGS --credential-provider $PROVDER
+/tmp/nodeadm install $KUBERNETES_VERSION $NODEADM_ADDITIONAL_ARGS --credential-provider $PROVDER --region $REGION
 
 echo "Initializing the node"
 /tmp/nodeadm init -c file:///nodeadm-config.yaml

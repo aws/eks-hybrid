@@ -104,6 +104,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, e
 		NodeadmConfigYaml: string(nodeadmConfigYaml),
 		Provider:          string(spec.Provider.Name()),
 		RootPasswordHash:  rootPasswordHash,
+		Region:            c.Cluster.Region,
 		Files:             files,
 		PublicKey:         c.PublicKey,
 	})

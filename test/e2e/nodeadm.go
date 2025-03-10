@@ -26,6 +26,7 @@ type UserDataInput struct {
 	NodeadmConfigYaml string
 	Provider          string
 	PublicKey         string
+	Region            string
 	RootPasswordHash  string
 	Files             []File
 }

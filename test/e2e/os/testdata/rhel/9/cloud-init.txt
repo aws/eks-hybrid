@@ -25,6 +25,6 @@ write_files:
 {{- end }}
 
 runcmd:
-  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "--containerd-source docker"
+  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source docker"
 
 final_message: "The system is prepped, after $UPTIME seconds"

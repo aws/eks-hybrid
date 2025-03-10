@@ -62,17 +62,21 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	defer cancel()
 
 	if err := podIdentityAddon.WaitUtilActive(timeoutCtx, v.EKSClient, v.Logger); err != nil {
-		return err
+		return fmt.Errorf("waiting for pod identity add-on to be active: %w", err)
 	}
 
 	v.Logger.Info("Check if daemon set exists", "daemonSet", podIdentityDaemonSet)
 	if _, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet); err != nil {
-		return err
+		return fmt.Errorf("getting daemon set %s: %w", podIdentityDaemonSet, err)
 	}
 
 	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeIP, v.Logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("waiting for node %s to be ready: %w", v.NodeIP, err)
+	}
+
+	if err := kubernetes.WaitForDaemonSetPodToBeRunning(ctx, v.K8S, "kube-system", podIdentityDaemonSet, node.Name, v.Logger); err != nil {
+		return fmt.Errorf("waiting for pod identity daemon set to be running on pod: %w", err)
 	}
 
 	podName := fmt.Sprintf("awscli-%s", node.Name)
@@ -104,19 +108,31 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 
 	// Deploy a pod with service account then run aws cli to access aws resources
 	if err = kubernetes.CreatePod(ctx, v.K8S, pod, v.Logger); err != nil {
-		return err
+		return fmt.Errorf("creating the awscli pod %s: %w", podName, err)
+	}
+
+	stsCommand := []string{
+		"bash", "-c", "aws sts get-caller-identity",
+	}
+	stdOut, stdErr, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, podName, namespace, stsCommand...)
+	if err != nil {
+		return fmt.Errorf("exec aws sts get-caller-identity command on pod %s: err: %w, stdout: %s, stderr: %s", podName, err, stdOut, stdErr)
 	}
 
 	execCommand := []string{
 		"bash", "-c", fmt.Sprintf("aws s3 cp s3://%s/%s . > /dev/null && cat ./%s", v.PodIdentityS3Bucket, bucketObjectKey, bucketObjectKey),
 	}
-	stdout, _, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, podName, namespace, execCommand...)
+	stdout, stdErr, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, podName, namespace, execCommand...)
 	if err != nil {
-		return err
+		return fmt.Errorf("exec aws s3 cp command on pod %s: err: %w, stdout: %s, stderr: %s", podName, err, stdout, stdErr)
 	}
 
 	if stdout != bucketObjectContent {
-		return fmt.Errorf("failed to get object %s from S3 bucket %s", bucketObjectKey, v.PodIdentityS3Bucket)
+		return fmt.Errorf("getting object %s from S3 bucket %s", bucketObjectKey, v.PodIdentityS3Bucket)
+	}
+
+	if err := kubernetes.DeletePod(ctx, v.K8S, podName, namespace); err != nil {
+		return fmt.Errorf("deleting the awscli pod %s: %w", podName, err)
 	}
 
 	return nil

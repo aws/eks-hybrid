@@ -37,6 +37,10 @@ func (i *Initer) Run(ctx context.Context) error {
 		return err
 	}
 
+	if err := i.NodeProvider.Validate(); err != nil {
+		return err
+	}
+
 	aspects := i.NodeProvider.GetAspects()
 	i.Logger.Info("Setting up system aspects...")
 	for _, aspect := range aspects {

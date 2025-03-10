@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -96,6 +97,24 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+
+	signalCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig)
+	go func(sig chan os.Signal, cmd *exec.Cmd) {
+		for {
+			select {
+			case triggeredSignal := <-sig:
+				if err := cmd.Process.Signal(triggeredSignal); err != nil {
+					log.Error(fmt.Sprintf("failed to signal ssm start-session command: %s", err))
+				}
+			case <-signalCtx.Done():
+				return
+			}
+		}
+	}(sig, cmd)
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("running ssm start-session command: %w", err)

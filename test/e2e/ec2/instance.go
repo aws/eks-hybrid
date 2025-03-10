@@ -163,6 +163,37 @@ func WaitForEC2InstanceRunning(ctx context.Context, ec2Client *ec2.Client, insta
 	return waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instanceID}}, nodeRunningTimeout)
 }
 
+func IsEC2InstanceImpaired(ctx context.Context, ec2Client *ec2.Client, instanceID string) (bool, error) {
+	describeStatusOutput, err := ec2Client.DescribeInstanceStatus(ctx, &ec2.DescribeInstanceStatusInput{
+		InstanceIds:         []string{instanceID},
+		IncludeAllInstances: aws.Bool(true),
+	})
+	if err != nil {
+		return false, fmt.Errorf("describing instance status %s: %w", instanceID, err)
+	}
+
+	if len(describeStatusOutput.InstanceStatuses) == 0 {
+		return false, fmt.Errorf("no instance status found with ID %s", instanceID)
+	}
+
+	instanceStatus := describeStatusOutput.InstanceStatuses[0]
+	if instanceStatus.SystemStatus.Status == types.SummaryStatusOk && instanceStatus.InstanceStatus.Status == types.SummaryStatusOk {
+		return false, nil
+	}
+
+	for _, status := range instanceStatus.SystemStatus.Details {
+		if status.Name == types.StatusNameReachability && status.Status != types.StatusTypePassed {
+			return true, nil
+		}
+	}
+	for _, status := range instanceStatus.InstanceStatus.Details {
+		if status.Name == types.StatusNameReachability && status.Status != types.StatusTypePassed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instanceID string, logger logr.Logger) error {
 	instances, ec2Err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		InstanceIds: []string{instanceID},

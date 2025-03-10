@@ -20,6 +20,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	e2errors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 const (
@@ -118,8 +119,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 	resp, err := s.CFN.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(s.Name),
 	})
-	var apiErr smithy.APIError
-	if ok := errors.As(err, &apiErr); ok && apiErr.ErrorCode() != "ValidationError" {
+	if err != nil && !e2errors.IsCFNStackNotFound(err) {
 		return fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
 	}
 	params := []cfnTypes.Parameter{

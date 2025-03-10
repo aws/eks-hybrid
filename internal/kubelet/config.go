@@ -272,7 +272,7 @@ func (ksc *kubeletConfig) withHybridCloudProvider(cfg *api.NodeConfig, flags map
 	flags["cloud-provider"] = ""
 	// provider ID needs to be specified when the cloud provider is external or empty string
 	ksc.ProviderID = ptr.String(getHybridProviderId(cfg))
-	// hostname is overriden to the node name provided in the spec
+	// hostname is overridden to the node name provided in the spec
 	flags["hostname-override"] = cfg.Status.Hybrid.NodeName
 }
 

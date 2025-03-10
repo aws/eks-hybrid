@@ -226,26 +226,39 @@ func CreatePod(ctx context.Context, k8s *kubernetes.Clientset, pod *corev1.Pod, 
 		return fmt.Errorf("creating the test pod: %w", err)
 	}
 
-	err = waitForPodToBeRunning(ctx, k8s, podName, namespace, logger)
+	podListOptions := metav1.ListOptions{
+		FieldSelector: "metadata.name=" + podName,
+	}
+	err = waitForPodToBeRunning(ctx, k8s, podListOptions, namespace, logger)
 	if err != nil {
 		return fmt.Errorf("waiting for test pod to be running: %w", err)
 	}
 	return nil
 }
 
-func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string, logger logr.Logger) error {
+func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, listOptions metav1.ListOptions, namespace string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		pod, err := k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		pods, err := k8s.CoreV1().Pods(namespace).List(ctx, listOptions)
 		if err != nil {
 			consecutiveErrors += 1
 			if consecutiveErrors > 3 {
 				return false, fmt.Errorf("getting test pod: %w", err)
 			}
-			logger.Info("Retryable error getting test pod. Continuing to poll", "name", name, "error", err)
+			logger.Info("Retryable error getting pod. Continuing to poll", "selector", listOptions.FieldSelector, "error", err)
 			return false, nil // continue polling
 		}
 		consecutiveErrors = 0
+
+		if len(pods.Items) == 0 {
+			return false, nil // continue polling
+		}
+
+		if len(pods.Items) > 1 {
+			return false, fmt.Errorf("found multiple pods for selector %s: %v", listOptions.FieldSelector, pods.Items)
+		}
+
+		pod := pods.Items[0]
 
 		if pod.Status.Phase == corev1.PodSucceeded {
 			return false, fmt.Errorf("test pod exited before containers ready")
@@ -494,6 +507,7 @@ func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kub
 	return stdout, stderr, err
 }
 
+// execPod returns the stdout and stderr even if the command fails and the err is non-nil
 func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
 	req := k8s.CoreV1().RESTClient().Post().Resource("pods").Name(name).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(
@@ -516,11 +530,16 @@ func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Cli
 		Stdout: &stdoutBuf,
 		Stderr: &stderrBuf,
 	})
-	if err != nil {
-		return "", "", err
-	}
 
-	return stdoutBuf.String(), stderrBuf.String(), nil
+	return stdoutBuf.String(), stderrBuf.String(), err
+}
+
+func WaitForDaemonSetPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, namespace, daemonSetName, nodeName string, logger logr.Logger) error {
+	listOptions := metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/name", daemonSetName),
+		FieldSelector: fmt.Sprintf("%s=%s", "spec.nodeName", nodeName),
+	}
+	return waitForPodToBeRunning(ctx, k8s, listOptions, namespace, logger)
 }
 
 func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) (*appsv1.DaemonSet, error) {

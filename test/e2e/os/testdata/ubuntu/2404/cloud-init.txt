@@ -22,6 +22,6 @@ write_files:
 {{- end }}
 
 runcmd:
-  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .NodeadmAdditionalArgs }}"
+  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "{{ .NodeadmAdditionalArgs }}"
 
 final_message: "The system is prepped, after $UPTIME seconds"

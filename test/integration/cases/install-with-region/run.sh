@@ -53,3 +53,10 @@ if nodeadm install $VERSION --credential-provider ssm --region "bad-region-name"
     echo "Install unexpectedly succeeded with --region 'bad-region-name'"
     exit 1
 fi
+nodeadm uninstall --skip node-validation,pod-validation
+
+# Check that the default region us-west-2 does not succeed
+if nodeadm install $VERSION --credential-provider ssm  >/dev/null 2>&1; then
+    echo "Install unexpectedly succeeded with default region us-west-2"
+    exit 1
+fi
