@@ -19,6 +19,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/go-logr/logr"
 
+	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2errors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
@@ -332,22 +333,15 @@ func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOut
 		return fmt.Errorf("deleting iam-ra access entry: %w", err)
 	}
 
-	_, err = s.CFN.DeleteStack(ctx, &cloudformation.DeleteStackInput{
-		StackName: aws.String(s.Name),
-	})
+	cfnCleaner := cleanup.CFNStackCleanup{
+		CFN:    s.CFN,
+		Logger: logger,
+	}
+	err = cfnCleaner.DeleteStack(ctx, s.Name)
 	if err != nil {
 		return fmt.Errorf("deleting hybrid nodes cfn stack: %w", err)
 	}
-	waiter := cloudformation.NewStackDeleteCompleteWaiter(s.CFN, func(opts *cloudformation.StackDeleteCompleteWaiterOptions) {
-		opts.MinDelay = stackRetryDelay
-		opts.MaxDelay = stackRetryDelay
-	})
-	err = waiter.Wait(ctx,
-		&cloudformation.DescribeStacksInput{StackName: aws.String(s.Name)},
-		stackDeletionTimeout)
-	if err != nil {
-		return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
-	}
+
 	logger.Info("E2E resources stack deleted successfully", "stackName", s.Name)
 	return nil
 }

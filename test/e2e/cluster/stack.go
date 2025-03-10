@@ -245,7 +245,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 }
 
 func stackName(clusterName string) string {
-	return fmt.Sprintf("EKSHybridCI-Arch-%s", clusterName)
+	return fmt.Sprintf("%s-%s", constants.TestArchitectureStackNamePrefix, clusterName)
 }
 
 func waitForStackOperation(ctx context.Context, client *cloudformation.Client, stackName string) error {
@@ -267,7 +267,7 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 		case types.StackStatusCreateInProgress, types.StackStatusUpdateInProgress, types.StackStatusDeleteInProgress, types.StackStatusUpdateCompleteCleanupInProgress:
 			return false, nil
 		default:
-			failureReason, err := getStackFailureReason(ctx, client, stackName)
+			failureReason, err := cleanup.GetStackFailureReason(ctx, client, stackName)
 			if err != nil {
 				return false, fmt.Errorf("stack %s failed with status %s. Failed getting failure reason: %w", stackName, stackStatus, err)
 			}
@@ -286,16 +286,13 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 		return fmt.Errorf("deleting pod identity s3 bucket: %w", err)
 	}
 
-	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
-		StackName: aws.String(stackName),
-	})
-	if err != nil {
-		return fmt.Errorf("deleting hybrid nodes setup cfn stack: %w", err)
+	cfnCleaner := cleanup.CFNStackCleanup{
+		CFN:    s.cfn,
+		Logger: s.logger,
 	}
 
-	s.logger.Info("Waiting for stack to be deleted", "stackName", stackName)
-	if err := waitForStackOperation(ctx, s.cfn, stackName); err != nil {
-		return fmt.Errorf("waiting for hybrid nodes setup cfn stack to be deleted: %w", err)
+	if err := cfnCleaner.DeleteStack(ctx, stackName); err != nil {
+		return fmt.Errorf("deleting hybrid nodes setup cfn stack: %w", err)
 	}
 
 	s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
@@ -318,31 +315,4 @@ func (s *stack) emptyPodIdentityS3Bucket(ctx context.Context, clusterName string
 	}
 
 	return nil
-}
-
-func getStackFailureReason(ctx context.Context, client *cloudformation.Client, stackName string) (string, error) {
-	resp, err := client.DescribeStackEvents(ctx, &cloudformation.DescribeStackEventsInput{
-		StackName: &stackName,
-	})
-	if err != nil {
-		return "", fmt.Errorf("describing events for stack %s: %w", stackName, err)
-	}
-	firstFailedEventTimestamp := time.Now()
-	var firstFailedEventReason string
-	for _, event := range resp.StackEvents {
-		if event.ResourceStatus == types.ResourceStatusCreateFailed ||
-			event.ResourceStatus == types.ResourceStatusUpdateFailed ||
-			event.ResourceStatus == types.ResourceStatusDeleteFailed {
-			if event.ResourceStatusReason == nil {
-				continue
-			}
-			timestamp := aws.ToTime(event.Timestamp)
-			if timestamp.Before(firstFailedEventTimestamp) {
-				firstFailedEventTimestamp = timestamp
-				firstFailedEventReason = *event.ResourceStatusReason
-			}
-		}
-	}
-
-	return firstFailedEventReason, nil
 }

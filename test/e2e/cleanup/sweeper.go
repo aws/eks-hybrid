@@ -79,6 +79,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 	// - infra cfn stack (creates vpcs/eks cluster)
 	// - remaining leaking items which should only exist in the case where the cfn deletion is incomplete
 
+	if err := c.cleanupCredentialStacks(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up credential stacks: %w", err)
+	}
+
 	if err := c.emptyS3PodIdentityBuckets(ctx, filterInput); err != nil {
 		return fmt.Errorf("emptying S3 pod identity buckets: %w", err)
 	}
@@ -174,6 +178,29 @@ func (c *Sweeper) cleanupS3PodIdentityBuckets(ctx context.Context, filterInput F
 	for _, bucketName := range bucketNames {
 		if err := cleaner.DeleteBucket(ctx, bucketName); err != nil {
 			return fmt.Errorf("deleting bucket %s: %w", bucketName, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Sweeper) cleanupCredentialStacks(ctx context.Context, filterInput FilterInput) error {
+	cfnCleaner := &CFNStackCleanup{
+		CFN:    c.cfn,
+		Logger: c.logger,
+	}
+	credStacks, err := cfnCleaner.ListCredentialStacks(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing credential stacks: %w", err)
+	}
+
+	c.logger.Info("Deleting credential stacks", "credentialStacks", credStacks)
+	if filterInput.DryRun {
+		return nil
+	}
+	for _, stack := range credStacks {
+		if err := cfnCleaner.DeleteStack(ctx, stack); err != nil {
+			return fmt.Errorf("deleting credential stack %s: %w", stack, err)
 		}
 	}
 
