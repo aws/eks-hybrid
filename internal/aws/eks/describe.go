@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 )
 
-var NewClient = eks_sdk.NewFromConfig
+var NewClient = eks.NewFromConfig
 
 // DescribeCluster wraps the EKS DescribeCluster API call
-func DescribeCluster(ctx context.Context, c *eks_sdk.Client, name string) (*eks_sdk.DescribeClusterOutput, error) {
-	input := &eks_sdk.DescribeClusterInput{
+func DescribeCluster(ctx context.Context, c *eks.Client, name string) (*eks.DescribeClusterOutput, error) {
+	input := &eks.DescribeClusterInput{
 		Name: &name,
 	}
 
