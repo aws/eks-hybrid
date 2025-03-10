@@ -5,12 +5,20 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pkg/errors"
+	"go.uber.org/zap"
+
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
 // IAMAuthenticatorBinPath is the path the IAM Authenticator is installed to.
-const IAMAuthenticatorBinPath = "/usr/local/bin/aws-iam-authenticator"
+const (
+	IAMAuthenticatorBinPath = "/usr/local/bin/aws-iam-authenticator"
+
+	artifactName      = "aws-iam-authenticator"
+	artifactFilePerms = 0o755
+)
 
 // IAMAuthenticatorSource retrieves the aws-iam-authenticator binary.
 type IAMAuthenticatorSource interface {
@@ -42,4 +50,14 @@ func Install(ctx context.Context, tracker *tracker.Tracker, iamAuthSrc IAMAuthen
 
 func Uninstall() error {
 	return os.RemoveAll(IAMAuthenticatorBinPath)
+}
+
+func Upgrade(ctx context.Context, src IAMAuthenticatorSource, log *zap.Logger) error {
+	authenticator, err := src.GetIAMAuthenticator(ctx)
+	if err != nil {
+		return errors.Wrap(err, "getting aws-iam-authenticator source")
+	}
+	defer authenticator.Close()
+
+	return artifact.Upgrade(artifactName, IAMAuthenticatorBinPath, authenticator, artifactFilePerms, log)
 }

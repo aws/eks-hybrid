@@ -24,6 +24,7 @@ import (
 const (
 	defaultInstallerPath = "/opt/ssm/ssm-setup-cli"
 	configRoot           = "/etc/amazon"
+	artifactName         = "ssm"
 )
 
 // Source serves an SSM installer binary for the target platform.
@@ -47,26 +48,42 @@ type InstallOptions struct {
 }
 
 func Install(ctx context.Context, opts InstallOptions) error {
-	if opts.InstallerPath == "" {
-		opts.InstallerPath = defaultInstallerPath
-	}
-
-	if err := downloadFileWithRetries(ctx, opts.Source, opts.Logger, opts.InstallerPath, opts.Region); err != nil {
-		return errors.Wrap(err, "failed to install ssm installer")
-	}
-	if err := runInstallWithRetries(ctx, opts.InstallerPath, opts.Region); err != nil {
-		return errors.Wrapf(err, "failed to install ssm agent")
+	if err := installFromSource(ctx, opts); err != nil {
+		return err
 	}
 
 	return opts.Tracker.Add(artifact.Ssm)
 }
 
-func downloadFileWithRetries(ctx context.Context, source Source, logger *zap.Logger, installerPath, region string) error {
+func installFromSource(ctx context.Context, opts InstallOptions) error {
+	if opts.InstallerPath == "" {
+		opts.InstallerPath = defaultInstallerPath
+	}
+
+	if err := downloadFileWithRetries(ctx, opts.Source, opts.Logger, opts.InstallerPath); err != nil {
+		return errors.Wrap(err, "failed to install ssm installer")
+	}
+
+	if err := runInstallWithRetries(ctx, opts.InstallerPath, opts.Region); err != nil {
+		return errors.Wrapf(err, "failed to install ssm agent")
+	}
+	return nil
+}
+
+func Upgrade(ctx context.Context, opts InstallOptions) error {
+	if err := installFromSource(ctx, opts); err != nil {
+		return err
+	}
+	opts.Logger.Info("Upgraded", zap.String("artifact", artifactName))
+	return nil
+}
+
+func downloadFileWithRetries(ctx context.Context, source Source, logger *zap.Logger, installerPath string) error {
 	// Retry up to 3 times to download and validate the signature of
 	// the SSM setup cli.
 	var err error
 	for range 3 {
-		err = downloadFileTo(ctx, source, installerPath, region)
+		err = downloadFileTo(ctx, source, installerPath)
 		if err == nil {
 			break
 		}
@@ -76,7 +93,7 @@ func downloadFileWithRetries(ctx context.Context, source Source, logger *zap.Log
 }
 
 // Update other functions that use InstallerPath to use the parameter instead
-func downloadFileTo(ctx context.Context, source Source, installerPath, region string) error {
+func downloadFileTo(ctx context.Context, source Source, installerPath string) error {
 	installer, err := source.GetSSMInstaller(ctx)
 	if err != nil {
 		return fmt.Errorf("getting ssm-setup-cli: %w", err)
@@ -187,8 +204,8 @@ func Uninstall(ctx context.Context, logger *zap.Logger, pkgSource PkgSource) err
 
 func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) error {
 	ssmPkg := pkgSource.GetSSMPackage()
-	if err := artifact.UninstallPackageWithRetries(ctx, ssmPkg, 5*time.Second); err != nil {
-		return errors.Wrapf(err, "failed to uninstall ssm")
+	if err := cmd.Retry(ctx, ssmPkg.UninstallCmd, 5*time.Second); err != nil {
+		return errors.Wrapf(err, "uninstalling ssm")
 	}
 	return os.RemoveAll(defaultInstallerPath)
 }
@@ -198,7 +215,7 @@ func runInstallWithRetries(ctx context.Context, installerPath, region string) er
 	// updating packages, specially when automating at machine startup.
 	// We assume errors are transient and just retry for a bit.
 	installCmdBuilder := func(ctx context.Context) *exec.Cmd {
-		return exec.CommandContext(ctx, installerPath, "-install", "-region", region)
+		return exec.CommandContext(ctx, installerPath, "-install", "-region", region, "-version", "latest")
 	}
 	return cmd.Retry(ctx, installCmdBuilder, 5*time.Second)
 }

@@ -24,7 +24,9 @@ const (
 	snapPackageManager = "snap"
 	yumPackageManager  = "yum"
 
-	snapRemoveVerb = "remove"
+	snapInstallVerb = "install"
+	snapUpdateVerb  = "refresh"
+	snapRemoveVerb  = "remove"
 
 	yumUtilsManager             = "yum-config-manager"
 	yumUtilsManagerPkg          = "yum-utils"
@@ -50,12 +52,13 @@ var aptDockerRepoConfig = fmt.Sprintf("deb [arch=%s signed-by=%s] %s %s stable\n
 
 // DistroPackageManager defines a new package manager using apt or yum
 type DistroPackageManager struct {
-	manager     string
-	installVerb string
-	updateVerb  string
-	deleteVerb  string
-	dockerRepo  string
-	logger      *zap.Logger
+	manager             string
+	installVerb         string
+	updateVerb          string
+	deleteVerb          string
+	refreshMetadataVerb string
+	dockerRepo          string
+	logger              *zap.Logger
 }
 
 func New(containerdSource containerd.SourceName, logger *zap.Logger) (*DistroPackageManager, error) {
@@ -65,11 +68,12 @@ func New(containerdSource containerd.SourceName, logger *zap.Logger) (*DistroPac
 	}
 
 	pm := &DistroPackageManager{
-		manager:     manager,
-		logger:      logger,
-		installVerb: packageManagerInstallCmd[manager],
-		updateVerb:  packageManagerUpdateCmd[manager],
-		deleteVerb:  packageManagerDeleteCmd[manager],
+		manager:             manager,
+		logger:              logger,
+		installVerb:         packageManagerInstallCmd[manager],
+		updateVerb:          packageManagerUpdateCmd[manager],
+		deleteVerb:          packageManagerDeleteCmd[manager],
+		refreshMetadataVerb: packageManagerMetadataRefreshCmd[manager],
 	}
 	if containerdSource == containerd.ContainerdSourceDocker {
 		pm.dockerRepo = managerToDockerRepoMap[manager]
@@ -96,7 +100,7 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 	// Check and remove runc if installed, as it conflicts with docker repo
 	if _, errNotFound := exec.LookPath(runcPkgName); errNotFound == nil {
 		pm.logger.Info("Removing runc to avoid package conflicts from docker repos...")
-		if err := artifact.UninstallPackageWithRetries(ctx, pm.runcPackage(), 5*time.Second); err != nil {
+		if err := cmd.Retry(ctx, pm.runcPackage().UninstallCmd, 5*time.Second); err != nil {
 			return errors.Wrapf(err, "failed to remove runc using package manager")
 		}
 	}
@@ -104,7 +108,7 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 	// Sometimes install fails due to conflicts with other processes
 	// updating packages, specially when automating at machine startup.
 	// We assume errors are transient and just retry for a bit.
-	if err := artifact.InstallPackageWithRetries(ctx, pm.yumUtilsPackage(), 5*time.Second); err != nil {
+	if err := cmd.Retry(ctx, pm.yumUtilsPackage().InstallCmd, 5*time.Second); err != nil {
 		return errors.Wrapf(err, "failed to install %s using package manager", yumUtilsManagerPkg)
 	}
 
@@ -128,7 +132,7 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	// Sometimes install fails due to conflicts with other processes
 	// updating packages, specially when automating at machine startup.
 	// We assume errors are transient and just retry for a bit.
-	if err := artifact.InstallPackageWithRetries(ctx, pm.caCertsPackage(), 5*time.Second); err != nil {
+	if err := cmd.Retry(ctx, pm.caCertsPackage().InstallCmd, 5*time.Second); err != nil {
 		return errors.Wrapf(err, "failed running commands to configure package manager")
 	}
 
@@ -225,6 +229,15 @@ func (pm *DistroPackageManager) getContainerdPackageNameWithVersion(version stri
 	return pm.appendPackageVersion(containerdPkgName, version)
 }
 
+// RefreshMetadataCache refreshes the package managers metadata cache
+func (pm *DistroPackageManager) RefreshMetadataCache(ctx context.Context) error {
+	return cmd.Retry(ctx, pm.refreshMetadataCacheCommand, 5*time.Second)
+}
+
+func (pm *DistroPackageManager) refreshMetadataCacheCommand(ctx context.Context) *exec.Cmd {
+	return exec.CommandContext(ctx, pm.manager, pm.refreshMetadataVerb)
+}
+
 // GetContainerd gets the Package
 // Satisfies the containerd source interface
 func (pm *DistroPackageManager) GetContainerd(version string) artifact.Package {
@@ -232,6 +245,7 @@ func (pm *DistroPackageManager) GetContainerd(version string) artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, packageName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, packageName, "-y"),
+		artifact.NewCmd(pm.manager, pm.updateVerb, packageName, "-y"),
 	)
 }
 
@@ -240,6 +254,7 @@ func (pm *DistroPackageManager) GetIptables() artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, iptablesPkgName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, iptablesPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.updateVerb, iptablesPkgName, "-y"),
 	)
 }
 
@@ -249,13 +264,15 @@ func (pm *DistroPackageManager) GetSSMPackage() artifact.Package {
 	// is detected, use snap to install/uninstall SSM.
 	if pm.manager == aptPackageManager {
 		return artifact.NewPackageSource(
+			artifact.NewCmd(snapPackageManager, snapInstallVerb, ssmPkgName),
 			artifact.NewCmd(snapPackageManager, snapRemoveVerb, ssmPkgName),
-			artifact.NewCmd(snapPackageManager, snapRemoveVerb, ssmPkgName),
+			artifact.NewCmd(snapPackageManager, snapUpdateVerb, ssmPkgName),
 		)
 	}
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, ssmPkgName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, ssmPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.updateVerb, ssmPkgName, "-y"),
 	)
 }
 
@@ -263,6 +280,7 @@ func (pm *DistroPackageManager) caCertsPackage() artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, caCertsPkgName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, caCertsPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.updateVerb, caCertsPkgName, "-y"),
 	)
 }
 
@@ -270,6 +288,7 @@ func (pm *DistroPackageManager) yumUtilsPackage() artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, yumUtilsManagerPkg, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, yumUtilsManagerPkg, "-y"),
+		artifact.NewCmd(pm.manager, pm.updateVerb, yumUtilsManagerPkg, "-y"),
 	)
 }
 
@@ -277,6 +296,7 @@ func (pm *DistroPackageManager) runcPackage() artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, runcPkgName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, runcPkgName, "-y"),
+		artifact.NewCmd(pm.manager, pm.updateVerb, runcPkgName, "-y"),
 	)
 }
 
@@ -308,13 +328,18 @@ var packageManagerInstallCmd = map[string]string{
 }
 
 var packageManagerUpdateCmd = map[string]string{
-	aptPackageManager: "update",
+	aptPackageManager: "upgrade",
 	yumPackageManager: "update",
 }
 
 var packageManagerDeleteCmd = map[string]string{
 	aptPackageManager: "autoremove",
 	yumPackageManager: "remove",
+}
+
+var packageManagerMetadataRefreshCmd = map[string]string{
+	aptPackageManager: "update",
+	yumPackageManager: "makecache",
 }
 
 var managerToDockerRepoMap = map[string]string{
