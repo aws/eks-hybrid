@@ -24,5 +24,5 @@ func NewNodeProvider(configSource string, skipPhases []string, logger *zap.Logge
 		return hybrid.NewHybridNodeProvider(nodeConfig, skipPhases, logger)
 	}
 	logger.Info("Setting up EC2 node provider...")
-	return ec2.NewEc2NodeProvider(nodeConfig, skipPhases, logger)
+	return ec2.NewEc2NodeProvider(nodeConfig, logger)
 }

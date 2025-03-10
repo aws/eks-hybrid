@@ -16,11 +16,11 @@ import (
 
 func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 	tests := []struct {
-		name         string
-		nodeConfig   *api.NodeConfig
-		cluster      *eks.Cluster
-		networkUtils hybrid.IPValidationNetworkUtils
-		expectedErr  string
+		name        string
+		nodeConfig  *api.NodeConfig
+		cluster     *eks.Cluster
+		network     hybrid.Network
+		expectedErr string
 	}{
 		{
 			name: "valid node-ip flag in remote node network",
@@ -45,7 +45,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords:       map[string][]net.IP{},
 				ResolvedBindAddr: net.ParseIP("192.1.1.1"),
 				BindAddrErr:      nil,
@@ -85,7 +85,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords:       map[string][]net.IP{},
 				ResolvedBindAddr: net.ParseIP("192.1.1.1"),
 				BindAddrErr:      nil,
@@ -118,7 +118,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords:       map[string][]net.IP{},
 				ResolvedBindAddr: net.ParseIP("192.1.1.1"),
 				BindAddrErr:      nil,
@@ -151,7 +151,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords:       map[string][]net.IP{},
 				ResolvedBindAddr: net.ParseIP("10.1.0.0"),
 				BindAddrErr:      nil,
@@ -184,7 +184,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords:       map[string][]net.IP{},
 				ResolvedBindAddr: nil,
 				BindAddrErr:      nil,
@@ -229,7 +229,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords: map[string][]net.IP{
 					"node1.example.com": {net.ParseIP("10.0.0.5")},
 				},
@@ -276,7 +276,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords: map[string][]net.IP{
 					"node1.example.com": {net.ParseIP("192.168.1.1")},
 				},
@@ -323,7 +323,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords:       map[string][]net.IP{},
 				ResolvedBindAddr: net.ParseIP("192.168.0.10"),
 				BindAddrErr:      nil,
@@ -368,7 +368,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords:       map[string][]net.IP{},
 				ResolvedBindAddr: net.ParseIP("192.168.1.1"),
 				BindAddrErr:      nil,
@@ -417,7 +417,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			networkUtils: &MockIPValidationNetworkUtils{
+			network: &mockNetwork{
 				DNSRecords:        map[string][]net.IP{},
 				ResolvedBindAddr:  nil,
 				BindAddrErr:       fmt.Errorf("failed to resolve bind address"),
@@ -436,7 +436,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 				[]string{},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),
-				hybrid.WithNetworkUtils(tt.networkUtils),
+				hybrid.WithNetwork(tt.network),
 			)
 			g.Expect(err).To(Succeed())
 
@@ -455,7 +455,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 				[]string{"node-ip-validation"},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),
-				hybrid.WithNetworkUtils(tt.networkUtils),
+				hybrid.WithNetwork(tt.network),
 			)
 			g.Expect(err).To(Succeed())
 			err = hnp.Validate()
@@ -464,8 +464,8 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 	}
 }
 
-// MockIPValidationNetworkUtils mocks the network utilities for testing
-type MockIPValidationNetworkUtils struct {
+// mockNetwork mocks the network utilities for testing
+type mockNetwork struct {
 	// For DNS resolution
 	DNSRecords map[string][]net.IP
 
@@ -478,7 +478,7 @@ type MockIPValidationNetworkUtils struct {
 	InterfacesErr     error
 }
 
-func (m *MockIPValidationNetworkUtils) LookupIP(host string) ([]net.IP, error) {
+func (m *mockNetwork) LookupIP(host string) ([]net.IP, error) {
 	if ips, exists := m.DNSRecords[host]; exists {
 		return ips, nil
 	}
@@ -489,10 +489,10 @@ func (m *MockIPValidationNetworkUtils) LookupIP(host string) ([]net.IP, error) {
 	}
 }
 
-func (m *MockIPValidationNetworkUtils) ResolveBindAddress(bindAddress net.IP) (net.IP, error) {
+func (m *mockNetwork) ResolveBindAddress(bindAddress net.IP) (net.IP, error) {
 	return m.ResolvedBindAddr, m.BindAddrErr
 }
 
-func (m *MockIPValidationNetworkUtils) InterfaceAddrs() ([]net.Addr, error) {
+func (m *mockNetwork) InterfaceAddrs() ([]net.Addr, error) {
 	return m.NetworkInterfaces, m.InterfacesErr
 }

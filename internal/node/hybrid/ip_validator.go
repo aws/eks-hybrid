@@ -14,24 +14,25 @@ const (
 	hostnameOverrideFlag = "hostname-override"
 )
 
-type IPValidationNetworkUtils interface {
+// Network interfaces with the host's network stack.
+type Network interface {
 	LookupIP(host string) ([]net.IP, error)
 	ResolveBindAddress(bindAddress net.IP) (net.IP, error)
 	InterfaceAddrs() ([]net.Addr, error)
 }
 
-// Implements the network util functions used by kubelet
-type defaultIPValidationNetworkUtils struct{}
+// defaultKubeletNetwork provides the network util functions used by kubelet.
+type defaultKubeletNetwork struct{}
 
-func (u *defaultIPValidationNetworkUtils) LookupIP(host string) ([]net.IP, error) {
+func (u defaultKubeletNetwork) LookupIP(host string) ([]net.IP, error) {
 	return net.LookupIP(host)
 }
 
-func (u *defaultIPValidationNetworkUtils) ResolveBindAddress(bindAddress net.IP) (net.IP, error) {
+func (u defaultKubeletNetwork) ResolveBindAddress(bindAddress net.IP) (net.IP, error) {
 	return apimachinerynet.ResolveBindAddress(bindAddress)
 }
 
-func (u *defaultIPValidationNetworkUtils) InterfaceAddrs() ([]net.Addr, error) {
+func (u defaultKubeletNetwork) InterfaceAddrs() ([]net.Addr, error) {
 	return net.InterfaceAddrs()
 }
 
@@ -144,7 +145,7 @@ func validateNodeIP(nodeIP net.IP, interfaceAddrs func() ([]net.Addr, error)) er
 }
 
 // getNodeIP determines the node's IP address based on kubelet configuration and system information.
-func getNodeIP(kubeletArgs []string, nodeName string, utils IPValidationNetworkUtils) (net.IP, error) {
+func getNodeIP(kubeletArgs []string, nodeName string, network Network) (net.IP, error) {
 	// Follows algorithm used by kubelet to assign nodeIP
 	// Implementation adapted for hybrid nodes
 	// 1) Use nodeIP if set (and not "0.0.0.0"/"::")
@@ -168,9 +169,9 @@ func getNodeIP(kubeletArgs []string, nodeName string, utils IPValidationNetworkU
 		// If using SSM, the node name will be set at initialization to the SSM instance ID,
 		// so it won't resolve to anything via DNS, hence we're only checking in the case of IAM-RA
 		if nodeName != "" {
-			addrs, _ := utils.LookupIP(nodeName)
+			addrs, _ := network.LookupIP(nodeName)
 			for _, addr := range addrs {
-				if err = validateNodeIP(addr, utils.InterfaceAddrs); addr.To4() != nil && err == nil {
+				if err = validateNodeIP(addr, network.InterfaceAddrs); addr.To4() != nil && err == nil {
 					ipAddr = addr
 					break
 				}
@@ -178,8 +179,7 @@ func getNodeIP(kubeletArgs []string, nodeName string, utils IPValidationNetworkU
 		}
 
 		if ipAddr == nil {
-			// current standard function for resolving bind address: https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_node_status.go#L768
-			ipAddr, err = utils.ResolveBindAddress(nodeIP)
+			ipAddr, err = network.ResolveBindAddress(nodeIP)
 		}
 
 		if err != nil || ipAddr == nil {
@@ -214,14 +214,16 @@ func (hnp *HybridNodeProvider) ValidateNodeIP() error {
 	} else {
 		hnp.logger.Info("Validating Node IP...")
 
-		// Only check flags set by user in config file since hybrid nodes do not set --node-ip flag
-		// and we want to prevent hostname-override by user
+		// Only check flags set by user in the config file to help determine IP:
+		// - node-ip and hostname-override are only available as flags and cannot be set via spec.kubelet.config
+		// - Hybrid nodes does not set --node-ip
+		// - Hybrid nodes sets --hostname-override to either the IAM-RA Node name or the SSM instance ID, which is checked separately for DNS
 		kubeletArgs := hnp.nodeConfig.Spec.Kubelet.Flags
 		var iamNodeName string
 		if hnp.nodeConfig.IsIAMRolesAnywhere() {
 			iamNodeName = hnp.nodeConfig.Status.Hybrid.NodeName
 		}
-		nodeIp, err := getNodeIP(kubeletArgs, iamNodeName, hnp.networkUtils)
+		nodeIp, err := getNodeIP(kubeletArgs, iamNodeName, hnp.network)
 		if err != nil {
 			return err
 		}
