@@ -7,7 +7,8 @@ import (
 	"testing"
 
 	aws_sdk "github.com/aws/aws-sdk-go-v2/aws"
-	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	ekssdk "github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	. "github.com/onsi/gomega"
 
 	"github.com/aws/eks-hybrid/internal/aws/eks"
@@ -18,15 +19,15 @@ func TestDescribeClusterSuccess(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
 
-	resp := &eks.DescribeClusterOutput{
-		Cluster: &eks.Cluster{
+	resp := &ekssdk.DescribeClusterOutput{
+		Cluster: &types.Cluster{
 			Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 			Name:     aws_sdk.String("my-cluster"),
-			Status:   eks_sdk.ClusterStatusActive,
-			CertificateAuthority: &eks_sdk.Certificate{
+			Status:   types.ClusterStatusActive,
+			CertificateAuthority: &types.Certificate{
 				Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 			},
-			KubernetesNetworkConfig: &eks_sdk.KubernetesNetworkConfigResponse{
+			KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 				ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 			},
 		},
@@ -49,15 +50,15 @@ func TestDescribeClusterError(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
 
-	resp := &eks.DescribeClusterOutput{
-		Cluster: &eks.Cluster{
+	resp := &ekssdk.DescribeClusterOutput{
+		Cluster: &types.Cluster{
 			Endpoint: aws_sdk.String("https://my-endpoint.example.com"),
 			Name:     aws_sdk.String("my-cluster"),
-			Status:   eks_sdk.ClusterStatusActive,
-			CertificateAuthority: &eks_sdk.Certificate{
+			Status:   types.ClusterStatusActive,
+			CertificateAuthority: &types.Certificate{
 				Data: aws_sdk.String(base64.StdEncoding.EncodeToString([]byte("my-ca-cert"))),
 			},
-			KubernetesNetworkConfig: &eks_sdk.KubernetesNetworkConfigResponse{
+			KubernetesNetworkConfig: &types.KubernetesNetworkConfigResponse{
 				ServiceIpv4Cidr: aws_sdk.String("172.0.0.0/16"),
 			},
 		},

@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	. "github.com/onsi/gomega"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/test"
 	"github.com/aws/eks-hybrid/internal/validation"
