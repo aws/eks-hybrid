@@ -237,6 +237,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(provider).NotTo(BeNil())
 
 							instanceName := test.instanceName("init", nodeOS, provider)
+							nodeName := "simpleflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
 
 							k8sVersion := test.cluster.KubernetesVersion
 							if test.overrideNodeK8sVersion != "" {
@@ -256,12 +257,15 @@ var _ = Describe("Hybrid Nodes", func() {
 								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
 									InstanceName:   instanceName,
 									NodeK8sVersion: k8sVersion,
-									NodeNamePrefix: "simpleflow",
+									NodeName:       nodeName,
 									OS:             nodeOS,
 									Provider:       provider,
 								})
 								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 								flakeRun.DeferCleanup(func(ctx context.Context) {
+									if credentials.IsSsm(provider.Name()) {
+										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName)).To(Succeed())
+									}
 									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 								}, NodeTimeout(deferCleanupTimeout))
 
@@ -350,6 +354,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							}
 
 							instanceName := test.instanceName("upgrade", os, provider)
+							nodeName := "upgradeflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
 
 							nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
@@ -367,12 +372,15 @@ var _ = Describe("Hybrid Nodes", func() {
 								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
 									InstanceName:   instanceName,
 									NodeK8sVersion: nodeKubernetesVersion,
-									NodeNamePrefix: "upgradeflow",
+									NodeName:       nodeName,
 									OS:             os,
 									Provider:       provider,
 								})
 								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 								DeferCleanup(func(ctx context.Context) {
+									if credentials.IsSsm(provider.Name()) {
+										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName)).To(Succeed())
+									}
 									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 								}, NodeTimeout(deferCleanupTimeout))
 
@@ -517,6 +525,7 @@ func (t *peeredVPCTest) newPeeredNode() *peered.Node {
 		NodeCleanup: peered.NodeCleanup{
 			RemoteCommandRunner: t.remoteCommandRunner,
 			EC2:                 t.ec2Client,
+			SSM:                 t.ssmClient,
 			S3:                  t.s3Client,
 			K8s:                 t.k8sClient,
 			Logger:              t.logger,

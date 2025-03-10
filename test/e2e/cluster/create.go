@@ -60,6 +60,7 @@ func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 			o.EndpointResolverV2 = &e2e.EksResolverV2{Endpoint: endpoint}
 		}),
 		stack: &stack{
+			iamClient: iam.NewFromConfig(aws),
 			cfn:       cloudformation.NewFromConfig(aws),
 			ec2Client: ec2.NewFromConfig(aws),
 			logger:    logger,

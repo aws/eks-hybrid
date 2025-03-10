@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"context"
+	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -26,7 +27,7 @@ func (i *IamRolesAnywhereProvider) Name() creds.CredentialProvider {
 	return creds.IamRolesAnywhereCredentialProvider
 }
 
-func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec e2e.NodeSpec) (*api.NodeConfig, error) {
+func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, node e2e.NodeSpec) (*api.NodeConfig, error) {
 	return &api.NodeConfig{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "node.eks.aws/v1alpha1",
@@ -34,12 +35,12 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec e2e.N
 		},
 		Spec: api.NodeConfigSpec{
 			Cluster: api.ClusterDetails{
-				Name:   spec.Cluster.Name,
-				Region: spec.Cluster.Region,
+				Name:   node.Cluster.Name,
+				Region: node.Cluster.Region,
 			},
 			Hybrid: &api.HybridOptions{
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
-					NodeName:        i.nodeName(spec),
+					NodeName:        node.Name,
 					RoleARN:         i.RoleARN,
 					TrustAnchorARN:  i.TrustAnchorARN,
 					ProfileARN:      i.ProfileARN,
@@ -52,18 +53,14 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec e2e.N
 	}, nil
 }
 
-func (i *IamRolesAnywhereProvider) nodeName(node e2e.NodeSpec) string {
-	return node.NamePrefix + "-node-" + string(i.Name()) + "-" + node.OS.Name()
-}
-
 func (i *IamRolesAnywhereProvider) VerifyUninstall(ctx context.Context, instanceId string) error {
 	return nil
 }
 
-func (i *IamRolesAnywhereProvider) FilesForNode(spec e2e.NodeSpec) ([]e2e.File, error) {
-	nodeCertificate, err := CreateCertificateForNode(i.CA.Cert, i.CA.Key, i.nodeName(spec))
+func (i *IamRolesAnywhereProvider) FilesForNode(node e2e.NodeSpec) ([]e2e.File, error) {
+	nodeCertificate, err := CreateCertificateForNode(i.CA.Cert, i.CA.Key, node.Name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create certificate for node %s: %w", node.Name, err)
 	}
 	return []e2e.File{
 		{

@@ -8,8 +8,11 @@ env:
 phases:
   build:
     commands:
-    - SANITIZED_CODEBUILD_BUILD_ID=$(echo $CODEBUILD_BUILD_ID | tr ':' '-')
-    - ./hack/run-e2e.sh $SANITIZED_CODEBUILD_BUILD_ID $AWS_REGION $KUBERNETES_VERSION $CNI s3://$ARTIFACTS_BUCKET/latest-pre/linux/amd64/nodeadm s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/nodeadm $LOGS_BUCKET e2e-artifacts $ENDPOINT
+    - CLUSTER_NAME_PREFIX="${KUBERNETES_VERSION}-${CNI}-"
+    - CLUSTER_NAME="${CLUSTER_NAME_PREFIX}$(echo $CODEBUILD_BUILD_ID | tr ':' '-')"
+    - ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
+    - ./_bin/$ARCH/e2e-test sweeper --cluster-prefix $CLUSTER_NAME_PREFIX
+    - ./hack/run-e2e.sh $CLUSTER_NAME $AWS_REGION $KUBERNETES_VERSION $CNI s3://$ARTIFACTS_BUCKET/latest-pre/linux/amd64/nodeadm s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/nodeadm $LOGS_BUCKET e2e-artifacts $ENDPOINT
 
 reports:
   e2e-reports:

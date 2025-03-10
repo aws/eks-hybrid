@@ -8,6 +8,7 @@ import (
 	"github.com/aws/eks-hybrid/cmd/e2e-test/node"
 	"github.com/aws/eks-hybrid/cmd/e2e-test/setup"
 	"github.com/aws/eks-hybrid/cmd/e2e-test/ssh"
+	"github.com/aws/eks-hybrid/cmd/e2e-test/sweeper"
 	"github.com/aws/eks-hybrid/internal/cli"
 )
 
@@ -25,6 +26,7 @@ func main() {
 		cleanup.NewCommand(),
 		ssh.NewCommand(),
 		node.NewCommand(),
+		sweeper.NewSweeperCommand(),
 	}
 
 	for _, cmd := range cmds {

@@ -12,14 +12,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/aws/eks-hybrid/test/e2e/addon"
+	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
@@ -58,6 +60,7 @@ type stack struct {
 	ssmClient *ssm.Client
 	ec2Client *ec2.Client
 	s3Client  *s3.Client
+	iamClient *iam.Client
 }
 
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
@@ -227,6 +230,20 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		return nil, err
 	}
 
+	instanceProfileName := strings.Split(*jumpbox.IamInstanceProfile.Arn, "/")[1]
+	_, err = s.iamClient.TagInstanceProfile(ctx, &iam.TagInstanceProfileInput{
+		InstanceProfileName: aws.String(instanceProfileName),
+		Tags: []iamTypes.Tag{
+			{
+				Key:   aws.String(constants.TestClusterTagKey),
+				Value: aws.String(test.ClusterName),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("tagging jumpbox instance profile: %w", err)
+	}
+
 	if err := e2eSSM.WaitForInstance(ctx, s.ssmClient, *jumpbox.InstanceId, s.logger); err != nil {
 		return nil, err
 	}
@@ -245,7 +262,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 }
 
 func stackName(clusterName string) string {
-	return fmt.Sprintf("EKSHybridCI-Arch-%s", clusterName)
+	return fmt.Sprintf("%s-%s", constants.TestArchitectureStackNamePrefix, clusterName)
 }
 
 func waitForStackOperation(ctx context.Context, client *cloudformation.Client, stackName string) error {
@@ -267,7 +284,7 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 		case types.StackStatusCreateInProgress, types.StackStatusUpdateInProgress, types.StackStatusDeleteInProgress, types.StackStatusUpdateCompleteCleanupInProgress:
 			return false, nil
 		default:
-			failureReason, err := getStackFailureReason(ctx, client, stackName)
+			failureReason, err := cleanup.GetStackFailureReason(ctx, client, stackName)
 			if err != nil {
 				return false, fmt.Errorf("stack %s failed with status %s. Failed getting failure reason: %w", stackName, stackStatus, err)
 			}
@@ -286,16 +303,9 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 		return fmt.Errorf("deleting pod identity s3 bucket: %w", err)
 	}
 
-	_, err := s.cfn.DeleteStack(ctx, &cloudformation.DeleteStackInput{
-		StackName: aws.String(stackName),
-	})
-	if err != nil {
+	cfnCleaner := cleanup.NewCFNStackCleanup(s.cfn, s.logger)
+	if err := cfnCleaner.DeleteStack(ctx, stackName); err != nil {
 		return fmt.Errorf("deleting hybrid nodes setup cfn stack: %w", err)
-	}
-
-	s.logger.Info("Waiting for stack to be deleted", "stackName", stackName)
-	if err := waitForStackOperation(ctx, s.cfn, stackName); err != nil {
-		return fmt.Errorf("waiting for hybrid nodes setup cfn stack to be deleted: %w", err)
 	}
 
 	s.logger.Info("E2E test cluster stack deleted successfully", "stackName", stackName)
@@ -311,73 +321,11 @@ func (s *stack) emptyPodIdentityS3Bucket(ctx context.Context, clusterName string
 		return fmt.Errorf("getting pod identity s3 bucket: %w", err)
 	}
 
+	s3cleaner := cleanup.NewS3Cleaner(s.s3Client, s.logger)
 	s.logger.Info("Empty pod identity s3 bucket", "bucket", podIdentityBucket)
-	if err = emptyS3Bucket(ctx, s.s3Client, &podIdentityBucket); err != nil {
+	if err = s3cleaner.EmptyS3Bucket(ctx, podIdentityBucket); err != nil {
 		return fmt.Errorf("emptying pod identity s3 bucket: %w", err)
 	}
 
 	return nil
-}
-
-func emptyS3Bucket(ctx context.Context, client *s3.Client, bucket *string) error {
-	if bucket == nil {
-		return nil
-	}
-
-	output, err := client.ListObjects(ctx, &s3.ListObjectsInput{
-		Bucket: bucket,
-	})
-	if err != nil {
-		return err
-	}
-
-	if len(output.Contents) == 0 {
-		// no S3 objects to delete
-		return nil
-	}
-
-	var s3Objects []s3types.ObjectIdentifier
-	for _, content := range output.Contents {
-		s3Objects = append(s3Objects, s3types.ObjectIdentifier{
-			Key: content.Key,
-		})
-	}
-
-	if _, err := client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
-		Bucket: bucket,
-		Delete: &s3types.Delete{
-			Objects: s3Objects,
-		},
-	}); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getStackFailureReason(ctx context.Context, client *cloudformation.Client, stackName string) (string, error) {
-	resp, err := client.DescribeStackEvents(ctx, &cloudformation.DescribeStackEventsInput{
-		StackName: &stackName,
-	})
-	if err != nil {
-		return "", fmt.Errorf("describing events for stack %s: %w", stackName, err)
-	}
-	firstFailedEventTimestamp := time.Now()
-	var firstFailedEventReason string
-	for _, event := range resp.StackEvents {
-		if event.ResourceStatus == types.ResourceStatusCreateFailed ||
-			event.ResourceStatus == types.ResourceStatusUpdateFailed ||
-			event.ResourceStatus == types.ResourceStatusDeleteFailed {
-			if event.ResourceStatusReason == nil {
-				continue
-			}
-			timestamp := aws.ToTime(event.Timestamp)
-			if timestamp.Before(firstFailedEventTimestamp) {
-				firstFailedEventTimestamp = timestamp
-				firstFailedEventReason = *event.ResourceStatusReason
-			}
-		}
-	}
-
-	return firstFailedEventReason, nil
 }
