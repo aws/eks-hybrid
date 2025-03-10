@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -18,11 +19,15 @@ func ReadClusterDetails(ctx context.Context, config aws.Config, node *api.NodeCo
 		return node.Spec.Cluster.DeepCopy(), nil
 	}
 
-	client := NewClient(config)
-	cluster, err := DescribeCluster(ctx, client, node.Spec.Cluster.Name)
+	client := eks.NewFromConfig(config)
+	input := &eks.DescribeClusterInput{
+		Name: &node.Spec.Cluster.Name,
+	}
+	cluster, err := client.DescribeCluster(ctx, input)
 	if err != nil {
 		return nil, err
 	}
+
 	if cluster.Cluster.Status != types.ClusterStatusActive {
 		return nil, fmt.Errorf("eks cluster %s is not active", *cluster.Cluster.Name)
 	}

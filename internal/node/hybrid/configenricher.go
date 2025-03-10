@@ -5,13 +5,13 @@ import (
 	"encoding/base64"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/ecr"
-	"github.com/aws/eks-hybrid/internal/aws/eks"
 )
 
 func (hnp *HybridNodeProvider) Enrich(ctx context.Context) error {
@@ -37,8 +37,11 @@ func (hnp *HybridNodeProvider) Enrich(ctx context.Context) error {
 
 // readCluster calls eks.DescribeCluster and returns the cluster
 func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*types.Cluster, error) {
-	client := eks.NewClient(awsConfig)
-	cluster, err := eks.DescribeCluster(ctx, client, nodeConfig.Spec.Cluster.Name)
+	client := eks.NewFromConfig(awsConfig)
+	input := &eks.DescribeClusterInput{
+		Name: &nodeConfig.Spec.Cluster.Name,
+	}
+	cluster, err := client.DescribeCluster(ctx, input)
 	if err != nil {
 		return nil, err
 	}

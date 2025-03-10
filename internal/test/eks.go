@@ -12,21 +12,21 @@ import (
 
 // NewEKSDescribeClusterAPI creates a new TestServer that behaves like the EKS DescribeCluster API.
 func NewEKSDescribeClusterAPI(tb testing.TB, resp *eks.DescribeClusterOutput) TestServer {
-	wrappedResp := CamelCaseDescribeClusterOutput{
+	wrappedResp := camelCaseDescribeClusterOutput{
 		DescribeClusterOutput: resp,
 	}
 	return NewHTTPSServerForJSON(tb, http.StatusOK, wrappedResp)
 }
 
-// CamelCaseDescribeClusterOutput wraps DescribeClusterOutput to provide custom JSON marshalling for mock server responses during unit testing.
+// camelCaseDescribeClusterOutput wraps DescribeClusterOutput to provide custom JSON marshalling for mock server responses during unit testing.
 // Fulfills json Marshaller interface.
-type CamelCaseDescribeClusterOutput struct {
+type camelCaseDescribeClusterOutput struct {
 	*eks.DescribeClusterOutput
 }
 
 // MarshalJSON Converts the struct to a map with camelCase keys before marshalling to JSON,
 // as required by the AWS API format. Called during json.Marshal().
-func (c CamelCaseDescribeClusterOutput) MarshalJSON() ([]byte, error) {
+func (c camelCaseDescribeClusterOutput) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toCamelCaseMap(c.DescribeClusterOutput))
 }
 
