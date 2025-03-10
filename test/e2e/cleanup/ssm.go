@@ -169,6 +169,56 @@ func (s *SSMCleaner) DeleteManagedInstance(ctx context.Context, instanceID strin
 	return nil
 }
 
+func (s *SSMCleaner) ListParameters(ctx context.Context, filterInput FilterInput) ([]string, error) {
+	paginator := ssm.NewDescribeParametersPaginator(s.ssm, &ssm.DescribeParametersInput{})
+
+	var parameterNames []string
+	for paginator.HasMorePages() {
+		output, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("listing SSM parameters: %w", err)
+		}
+
+		for _, parameter := range output.Parameters {
+			tags, err := s.ssm.ListTagsForResource(ctx, &ssm.ListTagsForResourceInput{
+				ResourceId:   aws.String(*parameter.Name),
+				ResourceType: types.ResourceTypeForTaggingParameter,
+			})
+
+			if errors.Is(err, &types.InvalidResourceId{}) {
+				s.logger.Info("SSM parameter already deleted", "parameterName", *parameter.Name)
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("getting tags for SSM parameter %s: %w", *parameter.Name, err)
+			}
+
+			if shouldDeleteParameter(parameter, tags.TagList, filterInput) {
+				parameterNames = append(parameterNames, *parameter.Name)
+			}
+		}
+	}
+
+	return parameterNames, nil
+}
+
+func (s *SSMCleaner) DeleteParameter(ctx context.Context, parameterName string) error {
+	s.logger.Info("Deleting SSM parameter", "parameterName", parameterName)
+
+	_, err := s.ssm.DeleteParameter(ctx, &ssm.DeleteParameterInput{
+		Name: aws.String(parameterName),
+	})
+	if err != nil && errors.Is(err, &types.ParameterNotFound{}) {
+		s.logger.Info("SSM parameter already deleted", "parameterName", parameterName)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("deleting SSM parameter %s: %w", parameterName, err)
+	}
+
+	return nil
+}
+
 func shouldDeleteManagedInstance(instance *types.InstanceInformation, tags []types.Tag, input FilterInput) bool {
 	var customTags []Tag
 	for _, tag := range tags {
@@ -201,5 +251,23 @@ func shouldDeleteActivation(activation *types.Activation, input FilterInput) boo
 		CreationTime: aws.ToTime(activation.CreatedDate),
 		Tags:         tags,
 	}
+	return shouldDeleteResource(resource, input)
+}
+
+func shouldDeleteParameter(parameter types.ParameterMetadata, tags []types.Tag, input FilterInput) bool {
+	customTags := []Tag{}
+	for _, tag := range tags {
+		customTags = append(customTags, Tag{
+			Key:   *tag.Key,
+			Value: *tag.Value,
+		})
+	}
+
+	resource := ResourceWithTags{
+		ID:           *parameter.Name,
+		CreationTime: aws.ToTime(parameter.LastModifiedDate),
+		Tags:         customTags,
+	}
+
 	return shouldDeleteResource(resource, input)
 }

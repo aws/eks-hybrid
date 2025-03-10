@@ -120,6 +120,9 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		return fmt.Errorf("cleaning up S3 pod identity buckets: %w", err)
 	}
 
+	if err := c.cleanupSSMParameters(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up SSM parameters: %w", err)
+	}
 	if err := c.cleanupSSMManagedInstances(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up SSM managed instances: %w", err)
 	}
@@ -382,6 +385,27 @@ func (c *Sweeper) cleanupRolesAnywhereTrustAnchors(ctx context.Context, filterIn
 	for _, anchor := range anchors {
 		if err := rolesAnywhereCleaner.DeleteTrustAnchor(ctx, anchor); err != nil {
 			return fmt.Errorf("deleting Roles Anywhere trust anchor %s: %w", anchor, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Sweeper) cleanupSSMParameters(ctx context.Context, filterInput FilterInput) error {
+	cleaner := NewSSMCleaner(c.ssm, c.logger)
+
+	parameterNames, err := cleaner.ListParameters(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing SSM parameters: %w", err)
+	}
+
+	c.logger.Info("Deleting SSM parameters", "parameterNames", parameterNames)
+	if filterInput.DryRun {
+		return nil
+	}
+	for _, parameterName := range parameterNames {
+		if err := cleaner.DeleteParameter(ctx, parameterName); err != nil {
+			return fmt.Errorf("deleting SSM parameter %s: %w", parameterName, err)
 		}
 	}
 
