@@ -32,10 +32,14 @@ type TestResources struct {
 }
 
 type NetworkConfig struct {
-	VpcCidr           string `yaml:"vpcCidr"`
-	PublicSubnetCidr  string `yaml:"publicSubnetCidr"`
-	PrivateSubnetCidr string `yaml:"privateSubnetCidr"`
-	PodCidr           string `yaml:"podCidr"`
+	VpcCidr                  string `yaml:"vpcCidr"`
+	PublicSubnetCidr         string `yaml:"publicSubnetCidr"`
+	PrivateSubnetCidr        string `yaml:"privateSubnetCidr"`
+	PodCidr                  string `yaml:"podCidr"`
+	VSphereVpcCidr           string `yaml:"vsphereVpcCidr"`
+	VSpherePublicSubnetCidr  string `yaml:"vspherePublicSubnetCidr"`
+	VSpherePrivateSubnetCidr string `yaml:"vspherePrivateSubnetCidr"`
+	VSpherePodCidr           string `yaml:"vspherePodCidr"`
 }
 
 const (

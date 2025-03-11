@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudFormation template to create resources needed to run E2E tests
+Description: CloudFormation template to create resources needed to run Bottlerocket E2E tests
 
 Parameters:
   ClusterName:
@@ -30,14 +30,6 @@ Parameters:
     Type: String
     Description: EKS Hybrid Nodes Pod CIDR block
 
-  HybridNodePublicSubnetCidr:
-    Type: String
-    Description: EKS Hybrid Nodes public subnet VPC CIDR block
-
-  HybridNodePrivateSubnetCidr:
-    Type: String
-    Description: EKS Hybrid Nodes public subnet VPC CIDR block
-
   TestClusterTagKey:
     Type: String
     Description: Tag key of all the resources
@@ -45,6 +37,10 @@ Parameters:
   PodIdentityS3BucketPrefix:
     Type: String
     Description: Prefix for pod identity S3 bucket
+  
+  SharedTransitGatewayId:
+    Type: String
+    Description: Transit Gateway connecting the Cluster VPC to the lab network
 
 Resources:
   ClusterRole:
@@ -173,126 +169,6 @@ Resources:
       ToPort: 443
       CidrIp: !Ref HybridNodePodCidr
 
-  HybridNodeVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref HybridNodeVPCCidr
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      InstanceTenancy: default
-      Tags:
-        - Key: Name
-          Value: !Sub ${ClusterName}-hybrid-node-vpc
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-  
-  HybridNodeVPCPublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Ref HybridNodePublicSubnetCidr
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ClusterName}-public-subnet
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-      VpcId: !Ref HybridNodeVPC
-
-  HybridNodeVPCPrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Ref HybridNodePrivateSubnetCidr
-      Tags:
-        - Key: Name
-          Value: !Sub ${ClusterName}-private-subnet
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-      VpcId: !Ref HybridNodeVPC
-
-  HybridNodePublicSubnetInternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${ClusterName}-igw
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-
-  HybridNodeInternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref HybridNodeVPC
-      InternetGatewayId: !Ref HybridNodePublicSubnetInternetGateway
-
-  HybridNodeRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref HybridNodeVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ClusterName}-route-table
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-
-  HybridNodeRouteToInternet:
-    Type: AWS::EC2::Route
-    Properties:
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref HybridNodePublicSubnetInternetGateway
-      RouteTableId: !Ref HybridNodeRouteTable
-
-  HybridNodePublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref HybridNodeRouteTable
-      SubnetId: !Ref HybridNodeVPCPublicSubnet
-
-  HybridNodeDefaultSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
-      IpProtocol: tcp
-      FromPort: 10250
-      ToPort: 10250
-      CidrIp: !Ref ClusterVPCCidr
-
-  VPCPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      PeerVpcId: !Ref HybridNodeVPC
-      VpcId: !Ref ClusterVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ClusterName}-vpc-peering
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-    DependsOn:
-      - ClusterVPC
-      - HybridNodeVPC
-
-  ClusterRouteToHybridNode:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref ClusterRouteTable
-      DestinationCidrBlock: !Ref HybridNodeVPCCidr
-      VpcPeeringConnectionId: !Ref VPCPeeringConnection
-  
-  ClusterPrivateRouteToHybridNode:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref ClusterPrivateRouteTable
-      DestinationCidrBlock: !Ref HybridNodeVPCCidr
-      VpcPeeringConnectionId: !Ref VPCPeeringConnection
-
-  HybridNodeRouteToCluster:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref HybridNodeRouteTable
-      DestinationCidrBlock: !Ref ClusterVPCCidr
-      VpcPeeringConnectionId: !Ref VPCPeeringConnection
-
   JumpboxInstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -418,6 +294,30 @@ Resources:
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+
+  ClusterVPCLabTransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+        - !Ref ClusterVPCPrivateSubnet
+      TransitGatewayId: !Ref SharedTransitGatewayId
+      VpcId: !Ref ClusterVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-transit-gateway-attachment
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+    DependsOn:
+      - ClusterVPC
+
+  ClusterPrivateRouteToHybridNode:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref HybridNodeVPCCidr
+      RouteTableId: !Ref ClusterPrivateRouteTable
+      TransitGatewayId: !Ref SharedTransitGatewayId
+    DependsOn:
+      - ClusterVPCLabTransitGatewayAttachment
 
 Outputs:
   ClusterRole:
