@@ -35,67 +35,23 @@ CONFIG_DIR="$REPO_ROOT/e2e-config"
 ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
 BIN_DIR="$REPO_ROOT/_bin/$ARCH"
 
-mkdir -p $CONFIG_DIR
-
-RESOURCES_YAML=$CONFIG_DIR/e2e-setup-spec.yaml
-cat <<EOF > $RESOURCES_YAML
-clusterName: $CLUSTER_NAME
-clusterRegion: $REGION
-endpoint: "$ENDPOINT"
-kubernetesVersion: $KUBERNETES_VERSION
-cni: $CNI
-clusterNetwork:
-  vpcCidr: 10.0.0.0/16
-  publicSubnetCidr: 10.0.10.0/24
-  privateSubnetCidr: 10.0.20.0/24
-hybridNetwork:
-  vpcCidr: 10.1.0.0/16
-  publicSubnetCidr: 10.1.1.0/24
-  privateSubnetCidr: 10.1.2.0/24
-  podCidr: 10.2.0.0/16
-EOF
-
-function cleanup(){
-  local exit_code=$?
-  
-  # run all three cleanup steps, but return non-zero if any fail
-  if [ -f $RESOURCES_YAML ]; then
-    $BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML || ((exit_code++)) || true
-  fi
-  $BIN_DIR/e2e-test sweeper --cluster-name $CLUSTER_NAME || ((exit_code++)) || true
-
-  # TODO: remove this once the sweeper is fully implemented
-  $REPO_ROOT/hack/e2e-cleanup.sh $CLUSTER_NAME || ((exit_code++)) || true
-
-  exit $exit_code
-}
-
-trap "cleanup" EXIT
-
-$BIN_DIR/e2e-test setup -s $RESOURCES_YAML
-
-mkdir -p e2e-reports
-mkdir -p "$ARTIFACTS_FOLDER"
-ARTIFACTS_FOLDER=$(realpath "$ARTIFACTS_FOLDER")
-
-cat <<EOF > $CONFIG_DIR/e2e-param.yaml
-clusterName: "$CLUSTER_NAME"
-clusterRegion: "$REGION"
-nodeadmUrlAMD: "$NODEADM_AMD_URL"
-nodeadmUrlARM: "$NODEADM_ARM_URL"
-logsBucket: "$LOGS_BUCKET"
-endpoint: "$ENDPOINT"
-artifactsFolder: "$ARTIFACTS_FOLDER"
-EOF
-
-
 SKIP_FILE=$REPO_ROOT/hack/SKIPPED_TESTS.yaml
 # Extract skipped_tests field from SKIP_FILE file and join entries with ' || '
 skip=$(yq '.skipped_tests | join("|")' ${SKIP_FILE})
 
-# We explicitly specify procs instead of letting ginkgo decide (with -p) because in if not
-# ginkgo will use all available CPUs, which could be a small number depending
-# on how the CI runner has been configured. However, even if only one CPU is available,
-# there is still value in running the tests in multiple processes, since most of the work is
-# "waiting" for infra to be created and nodes to join the cluster.
-$BIN_DIR/ginkgo --procs 64 -v -tags=e2e --no-color --skip="${skip}" --label-filter="(simpleflow) || (upgradeflow && (ubuntu2204-amd64 || rhel8-amd64 || al23-amd64))" --junit-report=e2e-reports/junit-nodeadm.xml $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml
+build::common::echo_and_run $BIN_DIR/e2e-test run-e2e \
+  --name=$CLUSTER_NAME \
+  --region=$REGION \
+  --kubernetes-version=$KUBERNETES_VERSION \
+  --cni=$CNI \
+  --test-filter="(simpleflow) || (upgradeflow && (ubuntu2204-amd64 || rhel8-amd64 || al23-amd64))" \
+  --tests-binary=$BIN_DIR/e2e.test \
+  --skipped-tests="$skip" \
+  --nodeadm-amd-url=$NODEADM_AMD_URL \
+  --nodeadm-arm-url=$NODEADM_ARM_URL \
+  --logs-bucket=$LOGS_BUCKET \
+  --artifacts-dir=$ARTIFACTS_FOLDER \
+  --endpoint=$ENDPOINT \
+  --procs=64 \
+  --skip-cleanup=false \
+  --no-color
