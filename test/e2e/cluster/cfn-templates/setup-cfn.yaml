@@ -151,6 +151,8 @@ Resources:
 
   ClusterRouteToInternet:
     Type: AWS::EC2::Route
+    DependsOn: 
+      - ClusterInternetGatewayAttachment
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref ClusterPublicSubnetInternetGateway
@@ -274,6 +276,8 @@ Resources:
 
   HybridNodeRouteToInternet:
     Type: AWS::EC2::Route
+    DependsOn:
+      - HybridNodeInternetGatewayAttachment
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref HybridNodePublicSubnetInternetGateway
