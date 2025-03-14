@@ -72,7 +72,19 @@ func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 }
 
 func (c *Create) Run(ctx context.Context, test TestResources) error {
-	stackOut, err := c.stack.deploy(ctx, test)
+	// There are occasional race conditions when creating the cfn stack
+	// retrying once allows to potentially resolve them on the second attempt
+	// avoiding the need to retry the entire test suite.
+	var err error
+	var stackOut *resourcesStackOutput
+	for range 2 {
+		stackOut, err = c.stack.deploy(ctx, test)
+		if err == nil {
+			break
+		}
+		c.logger.Error(err, "Error deploying stack, retrying")
+	}
+
 	if err != nil {
 		return fmt.Errorf("creating stack for cluster infra: %w", err)
 	}

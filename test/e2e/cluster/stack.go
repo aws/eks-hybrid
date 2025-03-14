@@ -140,9 +140,10 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	if resp == nil || resp.Stacks == nil {
 		s.logger.Info("Creating hybrid nodes setup stack", "stackName", stackName)
 		_, err = s.cfn.CreateStack(ctx, &cloudformation.CreateStackInput{
-			StackName:    aws.String(stackName),
-			TemplateBody: aws.String(string(setupTemplateBody)),
-			Parameters:   params,
+			DisableRollback: aws.Bool(true),
+			StackName:       aws.String(stackName),
+			TemplateBody:    aws.String(string(setupTemplateBody)),
+			Parameters:      params,
 			Capabilities: []types.Capability{
 				types.CapabilityCapabilityIam,
 				types.CapabilityCapabilityNamedIam,
@@ -170,7 +171,8 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	} else {
 		s.logger.Info("Updating hybrid nodes setup stack", "stackName", stackName)
 		_, err = s.cfn.UpdateStack(ctx, &cloudformation.UpdateStackInput{
-			StackName: aws.String(stackName),
+			DisableRollback: aws.Bool(true),
+			StackName:       aws.String(stackName),
 			Capabilities: []types.Capability{
 				types.CapabilityCapabilityIam,
 				types.CapabilityCapabilityNamedIam,
