@@ -59,24 +59,23 @@ type StackOutput struct {
 }
 
 func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
-	// There is a race when creating the iam roles anywhere profile in cfn
-	// where the profile gets created, but cfn tries to get the tags before
-	// the resource has been fully created, attempt 1 retry
+	// There are occasional race conditions when creating the cfn stack
+	// retrying once allows to potentially resolve them on the second attempt
+	// avoiding the need to retry the entire test suite.
 	var err error
 	for range 2 {
 		if err = s.deployStack(ctx, logger); err == nil {
 			break
-		} else {
-			logger.Error(err, "Error deploying stack, retrying")
 		}
+		logger.Error(err, "Error deploying stack, retrying")
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deploying credentials stack: %w", err)
 	}
 
 	output, err := s.readStackOutput(ctx, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading stack output: %w", err)
 	}
 
 	logger.Info("Creating access entry", "ssmRoleArn", output.SSMNodeRoleARN)
