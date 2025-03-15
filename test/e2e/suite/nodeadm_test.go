@@ -31,6 +31,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
@@ -239,6 +240,8 @@ var _ = Describe("Hybrid Nodes", func() {
 							instanceName := test.instanceName("init", nodeOS, provider)
 							nodeName := "simpleflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
 
+							AddReportEntry(constants.TestInstanceName, instanceName)
+
 							k8sVersion := test.cluster.KubernetesVersion
 							if test.overrideNodeK8sVersion != "" {
 								k8sVersion = suite.TestConfig.NodeK8sVersion
@@ -355,6 +358,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							instanceName := test.instanceName("upgrade", os, provider)
 							nodeName := "upgradeflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
+							AddReportEntry(constants.TestInstanceName, instanceName)
 
 							nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
