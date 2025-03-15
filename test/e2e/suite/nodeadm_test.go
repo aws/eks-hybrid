@@ -459,7 +459,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		skipCleanup:            suite.SkipCleanup,
 	}
 
-	aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion))
+	aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion), awsconfig.WithRetryMaxAttempts(20), awsconfig.WithRetryMode(aws.RetryModeAdaptive))
 	if err != nil {
 		return nil, err
 	}

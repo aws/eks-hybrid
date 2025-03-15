@@ -57,7 +57,6 @@ func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command str
 		InstanceIds: []string{instanceId},
 	}
 	optsFn := func(opts *ssm.Options) {
-		opts.RetryMode = aws.RetryModeAdaptive
 		opts.RetryMaxAttempts = 60
 	}
 	output, err := client.SendCommand(ctx, input, optsFn)

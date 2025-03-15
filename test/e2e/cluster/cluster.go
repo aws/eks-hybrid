@@ -59,10 +59,7 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 			},
 		},
 	}
-	_, err := client.CreateCluster(ctx, hybridCluster, func(o *eks.Options) {
-		o.RetryMaxAttempts = 20
-		o.RetryMode = aws.RetryModeAdaptive
-	})
+	_, err := client.CreateCluster(ctx, hybridCluster)
 	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
 		return fmt.Errorf("creating EKS hybrid cluster: %w", err)
 	}
