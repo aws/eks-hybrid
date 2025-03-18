@@ -150,7 +150,7 @@ KUSTOMIZE_VERSION ?= v5.0.1
 CONTROLLER_TOOLS_VERSION ?= v0.16.3
 CODE_GENERATOR_VERSION ?= v0.30.6
 CRD_REF_DOCS_VERSION ?= v0.1.0
-GINKGO_VERSION ?= v2.22.2
+GINKGO_VERSION ?= v2.23.0
 
 tools: kustomize controller-gen conversion-gen crd-ref-docs ginkgo ## Install the toolchain.
 
