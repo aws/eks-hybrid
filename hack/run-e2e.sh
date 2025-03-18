@@ -48,11 +48,17 @@ clusterNetwork:
   vpcCidr: 10.0.0.0/16
   publicSubnetCidr: 10.0.10.0/24
   privateSubnetCidr: 10.0.20.0/24
+  vsphereVpcCidr: 10.20.0.0/16
+  vspherePublicSubnetCidr: 10.20.1.0/24
+  vspherePrivateSubnetCidr: 10.20.2.0/24
 hybridNetwork:
   vpcCidr: 10.1.0.0/16
   publicSubnetCidr: 10.1.1.0/24
   privateSubnetCidr: 10.1.2.0/24
   podCidr: 10.2.0.0/16
+  vsphereVpcCidr: 10.80.0.0/16
+  vspherePrivateSubnetCidr: 10.80.18.0/22
+  vspherePodCidr: 10.87.0.0/16
 EOF
 
 function cleanup(){
