@@ -45,14 +45,14 @@ endpoint: "$ENDPOINT"
 kubernetesVersion: $KUBERNETES_VERSION
 cni: $CNI
 clusterNetwork:
-  vpcCidr: 10.0.0.0/16
-  publicSubnetCidr: 10.0.10.0/24
-  privateSubnetCidr: 10.0.20.0/24
+  vpcCidr: 10.20.0.0/16
+  publicSubnetCidr: 10.20.1.0/24
+  privateSubnetCidr: 10.20.2.0/24
 hybridNetwork:
-  vpcCidr: 10.1.0.0/16
-  publicSubnetCidr: 10.1.1.0/24
-  privateSubnetCidr: 10.1.2.0/24
-  podCidr: 10.2.0.0/16
+  vpcCidr: 10.80.0.0/16
+  publicSubnetCidr: 10.80.1.0/24
+  privateSubnetCidr: 10.80.2.0/24
+  podCidr: 10.87.0.0/16
 EOF
 
 function cleanup(){
