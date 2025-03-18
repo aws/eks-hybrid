@@ -2,7 +2,6 @@ package iamauthenticator
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
@@ -12,9 +11,9 @@ import (
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
-// IAMAuthenticatorBinPath is the path the IAM Authenticator is installed to.
 const (
-	IAMAuthenticatorBinPath = "/usr/local/bin/aws-iam-authenticator"
+	// IAMAuthenticatorBinPath is the path the IAM Authenticator is installed to.
+	DefaultIAMAuthenticatorBinPath = "/usr/local/bin/aws-iam-authenticator"
 
 	artifactName      = "aws-iam-authenticator"
 	artifactFilePerms = 0o755
@@ -25,31 +24,71 @@ type IAMAuthenticatorSource interface {
 	GetIAMAuthenticator(context.Context) (artifact.Source, error)
 }
 
+type InstallOptions struct {
+	BinPath string
+	Tracker *tracker.Tracker
+	Source  IAMAuthenticatorSource
+	Logger  *zap.Logger
+}
+
 // Install installs the aws_signing_helper and aws-iam-authenticator on the system at
 // SigningHelperBinPath and IAMAuthenticatorBinPath respectively.
-func Install(ctx context.Context, tracker *tracker.Tracker, iamAuthSrc IAMAuthenticatorSource) error {
-	authenticator, err := iamAuthSrc.GetIAMAuthenticator(ctx)
+func Install(ctx context.Context, opts InstallOptions) error {
+	if opts.BinPath == "" {
+		opts.BinPath = DefaultIAMAuthenticatorBinPath
+	}
+	if err := installFromSource(ctx, opts); err != nil {
+		return errors.Wrap(err, "installing aws-iam-authenticator")
+	}
+
+	if err := opts.Tracker.Add(artifact.IamAuthenticator); err != nil {
+		return errors.Wrap(err, "adding aws-iam-authenticator to tracker")
+	}
+
+	return nil
+}
+
+func installFromSource(ctx context.Context, opts InstallOptions) error {
+	if err := downloadFileWithRetries(ctx, opts); err != nil {
+		return errors.Wrap(err, "downloading aws-iam-authenticator")
+	}
+
+	return nil
+}
+
+func downloadFileWithRetries(ctx context.Context, opts InstallOptions) error {
+	// Retry up to 3 times to download and validate the checksum
+	var err error
+	for range 3 {
+		err = downloadFileTo(ctx, opts)
+		if err == nil {
+			break
+		}
+		opts.Logger.Error("Downloading aws-iam-authenticator failed. Retrying...", zap.Error(err))
+	}
+	return err
+}
+
+func downloadFileTo(ctx context.Context, opts InstallOptions) error {
+	authenticator, err := opts.Source.GetIAMAuthenticator(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get aws-iam-authenticator source: %w", err)
+		return errors.Wrap(err, "getting aws-iam-authenticator source")
 	}
 	defer authenticator.Close()
 
-	if err := artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0o755); err != nil {
-		return fmt.Errorf("failed to install aws-iam-authenticator: %w", err)
+	if err := artifact.InstallFile(opts.BinPath, authenticator, artifactFilePerms); err != nil {
+		return errors.Wrap(err, "installing aws-iam-authenticator")
 	}
 
 	if !authenticator.VerifyChecksum() {
-		return fmt.Errorf("aws-iam-authenticator checksum mismatch: %w", artifact.NewChecksumError(authenticator))
-	}
-	if err = tracker.Add(artifact.IamAuthenticator); err != nil {
-		return err
+		return errors.Errorf("aws-iam-authenticator checksum mismatch: %v", artifact.NewChecksumError(authenticator))
 	}
 
 	return nil
 }
 
 func Uninstall() error {
-	return os.RemoveAll(IAMAuthenticatorBinPath)
+	return os.RemoveAll(DefaultIAMAuthenticatorBinPath)
 }
 
 func Upgrade(ctx context.Context, src IAMAuthenticatorSource, log *zap.Logger) error {
@@ -59,5 +98,5 @@ func Upgrade(ctx context.Context, src IAMAuthenticatorSource, log *zap.Logger) e
 	}
 	defer authenticator.Close()
 
-	return artifact.Upgrade(artifactName, IAMAuthenticatorBinPath, authenticator, artifactFilePerms, log)
+	return artifact.Upgrade(artifactName, DefaultIAMAuthenticatorBinPath, authenticator, artifactFilePerms, log)
 }
