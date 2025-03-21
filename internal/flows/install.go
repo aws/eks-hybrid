@@ -75,7 +75,11 @@ func (i *Installer) installCredentialProcess(ctx context.Context) error {
 	switch i.CredentialProvider {
 	case creds.IamRolesAnywhereCredentialProvider:
 		i.Logger.Info("Installing AWS signing helper...")
-		if err := iamrolesanywhere.Install(ctx, i.Tracker, i.AwsSource); err != nil {
+		if err := iamrolesanywhere.Install(ctx, iamrolesanywhere.InstallOptions{
+			Tracker: i.Tracker,
+			Source:  i.AwsSource,
+			Logger:  i.Logger,
+		}); err != nil {
 			return err
 		}
 	case creds.SsmCredentialProvider:
@@ -98,25 +102,45 @@ func (i *Installer) installCredentialProcess(ctx context.Context) error {
 
 func (i *Installer) installEksArtifacts(ctx context.Context) error {
 	i.Logger.Info("Installing kubelet...")
-	if err := kubelet.Install(ctx, i.Tracker, i.AwsSource); err != nil {
+	if err := kubelet.Install(ctx, kubelet.InstallOptions{
+		Tracker: i.Tracker,
+		Source:  i.AwsSource,
+		Logger:  i.Logger,
+	}); err != nil {
 		return err
 	}
 
 	i.Logger.Info("Installing kubectl...")
-	if err := kubectl.Install(ctx, i.Tracker, i.AwsSource); err != nil {
+	if err := kubectl.Install(ctx, kubectl.InstallOptions{
+		Tracker: i.Tracker,
+		Source:  i.AwsSource,
+		Logger:  i.Logger,
+	}); err != nil {
 		return err
 	}
 
 	i.Logger.Info("Installing cni-plugins...")
-	if err := cni.Install(ctx, i.Tracker, i.AwsSource); err != nil {
+	if err := cni.Install(ctx, cni.InstallOptions{
+		Tracker: i.Tracker,
+		Source:  i.AwsSource,
+		Logger:  i.Logger,
+	}); err != nil {
 		return err
 	}
 
 	i.Logger.Info("Installing image credential provider...")
-	if err := imagecredentialprovider.Install(ctx, i.Tracker, i.AwsSource); err != nil {
+	if err := imagecredentialprovider.Install(ctx, imagecredentialprovider.InstallOptions{
+		Tracker: i.Tracker,
+		Source:  i.AwsSource,
+		Logger:  i.Logger,
+	}); err != nil {
 		return err
 	}
 
 	i.Logger.Info("Installing IAM authenticator...")
-	return iamauthenticator.Install(ctx, i.Tracker, i.AwsSource)
+	return iamauthenticator.Install(ctx, iamauthenticator.InstallOptions{
+		Tracker: i.Tracker,
+		Source:  i.AwsSource,
+		Logger:  i.Logger,
+	})
 }
