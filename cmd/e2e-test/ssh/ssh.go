@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"syscall"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/integrii/flaggy"
@@ -102,8 +103,9 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	defer cancel()
 
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig)
+	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func(sig chan os.Signal, cmd *exec.Cmd) {
+		defer signal.Stop(sig)
 		for {
 			select {
 			case triggeredSignal := <-sig:

@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
@@ -245,6 +247,12 @@ var _ = Describe("Hybrid Nodes", func() {
 							}
 							peeredNode := test.newPeeredNode()
 
+							AddReportEntry(constants.TestInstanceName, instanceName)
+							if test.logsBucket != "" {
+								AddReportEntry(constants.TestArtifactsPath, peeredNode.S3LogsURL(instanceName))
+								AddReportEntry(constants.TestLogBundleFile, peeredNode.S3LogsURL(instanceName)+constants.LogCollectorBundleFileName)
+							}
+
 							var verifyNode *kubernetes.VerifyNode
 							var serialOutput peered.ItBlockCloser
 							var instance ec2.Instance
@@ -271,12 +279,14 @@ var _ = Describe("Hybrid Nodes", func() {
 
 								verifyNode = test.newVerifyNode(instance.IP)
 
+								outputFile := filepath.Join(test.artifactsPath, instanceName+"-"+constants.SerialOutputLogFile)
+								AddReportEntry(constants.TestSerialOutputLogFile, outputFile)
 								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
-									By:           By,
-									PeeredNode:   peeredNode,
-									Instance:     instance,
-									TestLogger:   test.loggerControl,
-									OutputFolder: test.artifactsPath,
+									By:         By,
+									PeeredNode: peeredNode,
+									Instance:   instance,
+									TestLogger: test.loggerControl,
+									OutputFile: outputFile,
 								})
 								flakeRun.DeferCleanup(func(ctx context.Context) {
 									serialOutput.Close()
@@ -300,10 +310,7 @@ var _ = Describe("Hybrid Nodes", func() {
 											expect = flakeRun.RetryableExpect
 										}
 
-										expect(err).To(
-											Succeed(), "node should have joined the cluster successfully"+
-												". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
-										)
+										expect(err).To(Succeed(), "node should have joined the cluster successfully")
 
 									}
 								})
@@ -324,10 +331,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							test.logger.Info("EC2 Instance rebooted successfully.")
 
 							serialOutput.It("re-joins the cluster after reboot", func() {
-								Expect(verifyNode.WaitForNodeReady(ctx)).Error().To(Succeed(),
-									"node should have re-joined, there must be a problem with uninstall"+
-										". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
-								)
+								Expect(verifyNode.WaitForNodeReady(ctx)).Error().To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
 							})
 
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
@@ -361,6 +365,13 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
 
 							peeredNode := test.newPeeredNode()
+
+							AddReportEntry(constants.TestInstanceName, instanceName)
+							if test.logsBucket != "" {
+								AddReportEntry(constants.TestArtifactsPath, peeredNode.S3LogsURL(instanceName))
+								AddReportEntry(constants.TestLogBundleFile, peeredNode.S3LogsURL(instanceName)+constants.LogCollectorBundleFileName)
+							}
+
 							var verifyNode *kubernetes.VerifyNode
 							var serialOutput peered.ItBlockCloser
 							var instance ec2.Instance
@@ -378,7 +389,7 @@ var _ = Describe("Hybrid Nodes", func() {
 									Provider:       provider,
 								})
 								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
-								DeferCleanup(func(ctx context.Context) {
+								flakeRun.DeferCleanup(func(ctx context.Context) {
 									if credentials.IsSsm(provider.Name()) {
 										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName, test.cluster.Name)).To(Succeed())
 									}
@@ -387,17 +398,19 @@ var _ = Describe("Hybrid Nodes", func() {
 
 								verifyNode = test.newVerifyNode(instance.IP)
 
+								outputFile := filepath.Join(test.artifactsPath, instanceName+"-"+constants.SerialOutputLogFile)
+								AddReportEntry(constants.TestSerialOutputLogFile, outputFile)
 								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
-									By:           By,
-									PeeredNode:   peeredNode,
-									Instance:     instance,
-									TestLogger:   test.loggerControl,
-									OutputFolder: test.artifactsPath,
+									By:         By,
+									PeeredNode: peeredNode,
+									Instance:   instance,
+									TestLogger: test.loggerControl,
+									OutputFile: outputFile,
 								})
 								Expect(err).NotTo(HaveOccurred(), "should prepare serial output")
-								DeferCleanup(func() {
+								flakeRun.DeferCleanup(func(ctx context.Context) {
 									serialOutput.Close()
-								})
+								}, NodeTimeout(deferCleanupTimeout))
 
 								serialOutput.It("joins the cluster", func() {
 									test.logger.Info("Waiting for EC2 Instance to be Running...")
@@ -417,20 +430,14 @@ var _ = Describe("Hybrid Nodes", func() {
 											expect = flakeRun.RetryableExpect
 										}
 
-										expect(err).To(
-											Succeed(), "node should have joined the cluster successfully"+
-												". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
-										)
+										expect(err).To(Succeed(), "node should have joined the cluster successfully")
 
 									}
 								})
 							})
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
-							Expect(test.newUpgradeNode(instance.IP).Run(ctx)).To(
-								Succeed(), "node should have upgraded successfully"+
-									". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
-							)
+							Expect(test.newUpgradeNode(instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
 
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
 

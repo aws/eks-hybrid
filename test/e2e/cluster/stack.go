@@ -207,7 +207,7 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
-	} else if resp.Stacks[0].StackStatus == types.StackStatusCreateInProgress {
+	} else if resp.Stacks[0].StackStatus == types.StackStatusCreateInProgress || resp.Stacks[0].StackStatus == types.StackStatusUpdateInProgress {
 		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
 		err = waitForStackOperation(ctx, s.cfn, stackName)
 		if err != nil {

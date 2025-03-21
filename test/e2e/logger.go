@@ -28,6 +28,32 @@ type LoggerOption interface {
 	Apply(*LoggerConfig)
 }
 
+// WithOutputFile returns a LoggerOption that configures the logger to write to both
+// the specified file and stdout.
+func WithOutputFile(filename string) LoggerOption {
+	return &withOutputFileOption{filename: filename}
+}
+
+type withOutputFileOption struct {
+	filename string
+}
+
+func (o *withOutputFileOption) Apply(cfg *LoggerConfig) {
+	file, err := os.OpenFile(o.filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		// Fall back to stdout only if file can't be opened
+		cfg.syncer = zapcore.AddSync(os.Stdout)
+		return
+	}
+
+	// Use MultiWriteSyncer to write to both stdout and the file
+	multiSyncer := zapcore.NewMultiWriteSyncer(
+		zapcore.AddSync(os.Stdout),
+		zapcore.AddSync(file),
+	)
+	cfg.syncer = multiSyncer
+}
+
 func NewLogger(opts ...LoggerOption) logr.Logger {
 	cfg := &LoggerConfig{}
 	for _, opt := range opts {

@@ -22,6 +22,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
@@ -250,7 +251,7 @@ func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, cluste
 func (c *NodeCleanup) Cleanup(ctx context.Context, instance ec2.Instance) error {
 	logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	err := c.collectLogs(logCtx, "bundle", instance)
+	err := c.collectLogs(logCtx, constants.LogCollectorBundleFileName, instance)
 	if err != nil {
 		c.Logger.Error(err, "issue collecting logs")
 		if err := ec2.LogEC2InstanceDescribe(ctx, c.EC2, instance.ID, c.Logger); err != nil {
@@ -278,14 +279,14 @@ func (c Node) S3LogsURL(instanceName string) string {
 }
 
 func (c NodeCleanup) logsPrefix(instanceName string) string {
-	return fmt.Sprintf("logs/%s/%s", c.ClusterName, instanceName)
+	return fmt.Sprintf("%s/%s/%s", constants.TestS3LogsFolder, c.ClusterName, instanceName)
 }
 
 func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instance ec2.Instance) error {
 	if c.LogsBucket == "" {
 		return nil
 	}
-	key := fmt.Sprintf("%s/%s.tar.gz", c.logsPrefix(instance.Name), bundleName)
+	key := fmt.Sprintf("%s/%s", c.logsPrefix(instance.Name), bundleName)
 	url, err := s3.GeneratePutLogsPreSignedURL(ctx, c.S3, c.LogsBucket, key, 5*time.Minute)
 	if err != nil {
 		return err

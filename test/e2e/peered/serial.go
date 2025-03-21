@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/go-logr/logr"
 	"github.com/onsi/gomega"
@@ -28,11 +27,11 @@ type SerialOutputBlock struct {
 }
 
 type SerialOutputConfig struct {
-	By           func(description string, callback ...func())
-	PeeredNode   *Node
-	Instance     ec2.Instance
-	TestLogger   e2e.PausableLogger
-	OutputFolder string
+	By         func(description string, callback ...func())
+	PeeredNode *Node
+	Instance   ec2.Instance
+	TestLogger e2e.PausableLogger
+	OutputFile string
 }
 
 func NewSerialOutputBlock(ctx context.Context, config *SerialOutputConfig) (*SerialOutputBlock, error) {
@@ -43,13 +42,10 @@ func NewSerialOutputBlock(ctx context.Context, config *SerialOutputConfig) (*Ser
 
 	pausableOutput := e2e.NewSwitchWriter(os.Stdout)
 	pausableOutput.Pause() // We start it paused, we will resume it once the test output is paused
-	outputFilePath := filepath.Join(config.OutputFolder, config.Instance.Name+"-serial-output.log")
-	file, err := os.Create(outputFilePath)
+	file, err := os.Create(config.OutputFile)
 	if err != nil {
 		return nil, fmt.Errorf("creating file to store serial output: %w", err)
 	}
-
-	config.TestLogger.Info("Writing serial console output to disk", "file", outputFilePath)
 
 	if err := serial.Copy(io.MultiWriter(pausableOutput, file)); err != nil {
 		return nil, fmt.Errorf("connecting to EC2 serial console: %w", err)
