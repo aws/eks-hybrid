@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -32,6 +33,7 @@ type VerifyPodIdentityAddon struct {
 	NodeIP              string
 	PodIdentityS3Bucket string
 	K8S                 *clientgo.Clientset
+	OS                  string
 	EKSClient           *eks.Client
 	IAMClient           *iam.Client
 	S3Client            *s3.Client
@@ -68,6 +70,30 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	v.Logger.Info("Check if daemon set exists", "daemonSet", podIdentityDaemonSet)
 	if _, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet); err != nil {
 		return fmt.Errorf("getting daemon set %s: %w", podIdentityDaemonSet, err)
+	}
+
+	if strings.Contains(v.OS, "bottlerocket") {
+		v.Logger.Info("Patching pod identity agent on Bottlerocket", "daemonSet", podIdentityDaemonSet)
+		patchStr := `{
+			"spec": {
+				"template": {
+					"spec": {
+						"volumes": [
+							{
+								"name": "aws-credentials",
+								"hostPath": {
+									"path": "/var/eks-hybrid/.aws"
+								}
+							}
+						]
+					}
+				}
+			}
+		}`
+		
+		if err := kubernetes.PatchDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet, []byte(patchStr)); err != nil {
+			return fmt.Errorf("patching pod identity agent daemonset for Bottlerocket: %w", err)
+		}
 	}
 
 	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeIP, v.Logger)
