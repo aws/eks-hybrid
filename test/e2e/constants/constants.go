@@ -15,4 +15,6 @@ const (
 	TestS3LogsFolder                = "logs"
 	SerialOutputLogFile             = "serial-output.log"
 	TestInstanceNameKubernetesLabel = "test.eks-hybrid.amazonaws.com/node-name"
+	RolesAnywhereCertPath           = "/etc/roles-anywhere/pki/node.crt"
+	RolesAnywhereKeyPath            = "/etc/roles-anywhere/pki/node.key"
 )
