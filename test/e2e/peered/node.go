@@ -136,6 +136,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, e
 		return ec2.Instance{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
 
+	c.Logger.Info("A Hybrid EC2 instace is created", "instanceID", instance.ID)
 	return instance, nil
 }
 
