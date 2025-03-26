@@ -495,7 +495,7 @@ func getPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace 
 
 // Retries up to 5 times to avoid connection errors
 func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
-	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
+	err = retry.OnError(retry.DefaultBackoff, func(err error) bool {
 		// Retry any error type
 		return true
 	}, func() error {
