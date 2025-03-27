@@ -1,7 +1,6 @@
 package ssm
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,15 +10,14 @@ import (
 	"github.com/aws/eks-hybrid/internal/api"
 )
 
-const registrationFilePath = "/var/lib/amazon/ssm/registration"
-
 type HybridInstanceRegistration struct {
 	ManagedInstanceID string `json:"ManagedInstanceID"`
 	Region            string `json:"Region"`
 }
 
 func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
-	registered, err := isRegistered()
+	registration := NewSSMRegistration()
+	registered, err := registration.isRegistered()
 	if err != nil {
 		return err
 	}
@@ -47,7 +45,7 @@ func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
 	}
 
 	// Set the nodename on nodeconfig post registration
-	registeredNodeName, err := GetManagedHybridInstanceId()
+	registeredNodeName, err := registration.GetManagedHybridInstanceId()
 	if err != nil {
 		return err
 	}
@@ -55,45 +53,6 @@ func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
 	s.logger.Info("Machine registered with SSM, assigning instance ID as node name", zap.String("instanceID", registeredNodeName))
 	s.nodeConfig.Status.Hybrid.NodeName = registeredNodeName
 	return nil
-}
-
-func GetManagedHybridInstanceId() (string, error) {
-	data, err := os.ReadFile(registrationFilePath)
-	if err != nil {
-		return "", err
-	}
-
-	var registration HybridInstanceRegistration
-	err = json.Unmarshal(data, &registration)
-	if err != nil {
-		return "", err
-	}
-	return registration.ManagedInstanceID, nil
-}
-
-func isRegistered() (bool, error) {
-	_, err := GetManagedHybridInstanceId()
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("reading ssm registration file: %w", err)
-	}
-	return true, nil
-}
-
-func GetManagedHybridInstanceIdAndRegion() (string, string, error) {
-	data, err := os.ReadFile(registrationFilePath)
-	if err != nil {
-		return "", "", err
-	}
-
-	var registration HybridInstanceRegistration
-	err = json.Unmarshal(data, &registration)
-	if err != nil {
-		return "", "", err
-	}
-	return registration.ManagedInstanceID, registration.Region, nil
 }
 
 var possibleAgentPaths = []string{

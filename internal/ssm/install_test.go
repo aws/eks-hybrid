@@ -2,15 +2,22 @@ package ssm_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 
+	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/test"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -89,7 +96,6 @@ func TestInstall(t *testing.T) {
 			g := NewGomegaWithT(t)
 
 			tmpDir := t.TempDir()
-			installerPath := filepath.Join(tmpDir, "ssm-setup-cli")
 
 			server := test.NewHTTPServer(t, func(w http.ResponseWriter, r *http.Request) {
 				if tt.statusCode != http.StatusOK {
@@ -121,10 +127,10 @@ func TestInstall(t *testing.T) {
 			logger := zap.NewNop()
 
 			err := ssm.Install(context.Background(), ssm.InstallOptions{
-				Tracker:       tr,
-				Source:        source,
-				Logger:        logger,
-				InstallerPath: installerPath,
+				Tracker:     tr,
+				Source:      source,
+				Logger:      logger,
+				InstallRoot: tmpDir,
 			})
 
 			if tt.wantErr != "" {
@@ -135,11 +141,202 @@ func TestInstall(t *testing.T) {
 
 			g.Expect(err).NotTo(HaveOccurred())
 
-			installedData, err := os.ReadFile(installerPath)
+			installedData, err := os.ReadFile(tmpDir + "/opt/ssm/ssm-setup-cli")
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(installedData).To(Equal(tt.installerData))
 
 			g.Expect(tr.Artifacts.Ssm).To(BeTrue())
+		})
+	}
+}
+
+type MockSSMClient struct {
+	g                                 *GomegaWithT
+	instanceId                        string
+	describeInstanceInformationOutput *awsSsm.DescribeInstanceInformationOutput
+	describeInstanceInformationErr    error
+	deregisterManagedInstanceOutput   *awsSsm.DeregisterManagedInstanceOutput
+	deregisterManagedInstanceErr      error
+}
+
+func (m *MockSSMClient) DescribeInstanceInformation(ctx context.Context, params *awsSsm.DescribeInstanceInformationInput, optFns ...func(*awsSsm.Options)) (*awsSsm.DescribeInstanceInformationOutput, error) {
+	m.g.Expect(*params.Filters[0].Key).To(Equal("InstanceIds"))
+	m.g.Expect(params.Filters[0].Values[0]).To(Equal(m.instanceId))
+	return m.describeInstanceInformationOutput, m.describeInstanceInformationErr
+}
+
+func (m *MockSSMClient) DeregisterManagedInstance(ctx context.Context, params *awsSsm.DeregisterManagedInstanceInput, optFns ...func(*awsSsm.Options)) (*awsSsm.DeregisterManagedInstanceOutput, error) {
+	m.g.Expect(*params.InstanceId).To(Equal(m.instanceId))
+	return m.deregisterManagedInstanceOutput, m.deregisterManagedInstanceErr
+}
+
+type MockSSMRegistration struct {
+	registration ssm.ISSMRegistration
+	ssmClient    ssm.SSMClient
+}
+
+func (m *MockSSMRegistration) GetManagedHybridInstanceId() (string, error) {
+	return m.registration.GetManagedHybridInstanceId()
+}
+
+func (m *MockSSMRegistration) SSMClient(ctx context.Context) (ssm.SSMClient, error) {
+	return m.ssmClient, nil
+}
+
+func (m *MockSSMRegistration) RegistrationFilePath() string {
+	return m.registration.RegistrationFilePath()
+}
+
+type TestPackageManager struct {
+	mock.Mock
+	InstallRoot string
+}
+
+func (m *TestPackageManager) GetSSMPackage() artifact.Package {
+	return artifact.NewPackageSource(
+		artifact.NewCmd("not-used", "install", "amazon-ssm-agent"),
+		artifact.NewCmd("rm", "-rf", filepath.Join(m.InstallRoot, "/usr/bin/ssm-agent-worker")),
+		artifact.NewCmd("not-used", "update", "amazon-ssm-agent"),
+	)
+}
+
+func TestUninstall(t *testing.T) {
+	tests := []struct {
+		name                              string
+		registration                      ssm.HybridInstanceRegistration
+		registrationErr                   error
+		describeInstanceInformationOutput *awsSsm.DescribeInstanceInformationOutput
+		describeInstanceInformationErr    error
+		deregisterManagedInstanceOutput   *awsSsm.DeregisterManagedInstanceOutput
+		deregisterManagedInstanceErr      error
+		wantErr                           string
+	}{
+		{
+			name:            "registration file does not exist",
+			registrationErr: os.ErrNotExist,
+			wantErr:         "",
+		},
+		{
+			name: "instance is managed and deregister succeeds",
+			registration: ssm.HybridInstanceRegistration{
+				ManagedInstanceID: "i-1234567890abcdef0",
+				Region:            "us-west-2",
+			},
+			describeInstanceInformationOutput: &awsSsm.DescribeInstanceInformationOutput{
+				InstanceInformationList: []types.InstanceInformation{
+					{
+						InstanceId: aws.String("i-1234567890abcdef0"),
+					},
+				},
+			},
+			deregisterManagedInstanceOutput: &awsSsm.DeregisterManagedInstanceOutput{},
+		},
+		{
+			name: "instance is managed but deregister fails",
+			registration: ssm.HybridInstanceRegistration{
+				ManagedInstanceID: "i-1234567890abcdef0",
+				Region:            "us-west-2",
+			},
+			describeInstanceInformationOutput: &awsSsm.DescribeInstanceInformationOutput{
+				InstanceInformationList: []types.InstanceInformation{
+					{
+						InstanceId: aws.String("i-1234567890abcdef0"),
+					},
+				},
+			},
+			deregisterManagedInstanceOutput: &awsSsm.DeregisterManagedInstanceOutput{},
+			deregisterManagedInstanceErr:    fmt.Errorf("deregister failed"),
+			wantErr:                         "deregistering ssm managed instance: deregister failed",
+		},
+		{
+			name: "instance is not managed",
+			registration: ssm.HybridInstanceRegistration{
+				ManagedInstanceID: "i-1234567890abcdef0",
+				Region:            "us-west-2",
+			},
+			describeInstanceInformationOutput: &awsSsm.DescribeInstanceInformationOutput{
+				InstanceInformationList: []types.InstanceInformation{},
+			},
+			wantErr: "",
+		},
+		{
+			name: "check managed status fails",
+			registration: ssm.HybridInstanceRegistration{
+				ManagedInstanceID: "i-1234567890abcdef0",
+				Region:            "us-west-2",
+			},
+			describeInstanceInformationErr: fmt.Errorf("check managed status failed"),
+			wantErr:                        "getting managed instance information: check managed status failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+
+			tmpDir := t.TempDir()
+			var registrationFile string
+			// Create registration file if needed
+			if tt.registration.ManagedInstanceID != "" {
+				registrationFile = filepath.Join(tmpDir, "/var/lib/amazon/ssm/registration")
+				data, err := json.Marshal(tt.registration)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = os.MkdirAll(filepath.Dir(registrationFile), 0o755)
+				g.Expect(err).NotTo(HaveOccurred())
+				err = os.WriteFile(registrationFile, data, 0o644)
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+
+			// not matter if the instnace is registered or not, the aws config files should be removed
+			err := os.MkdirAll(filepath.Join(tmpDir, "/root/.aws"), 0o755)
+			g.Expect(err).NotTo(HaveOccurred())
+			err = os.MkdirAll(filepath.Join(tmpDir, "/eks-hybrid/.aws"), 0o755)
+			g.Expect(err).NotTo(HaveOccurred())
+			err = os.MkdirAll(filepath.Join(tmpDir, "/etc/amazon"), 0o755)
+			g.Expect(err).NotTo(HaveOccurred())
+			// ensure the ssm-agent-worker file is removed via the testpkgsource removal
+			err = os.MkdirAll(filepath.Join(tmpDir, "/usr/bin"), 0o755)
+			g.Expect(err).NotTo(HaveOccurred())
+			err = os.WriteFile(filepath.Join(tmpDir, "/usr/bin/ssm-agent-worker"), []byte(""), 0o644)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			// Create and setup mock SSM client
+			mockSSM := MockSSMClient{
+				g:                                 g,
+				instanceId:                        tt.registration.ManagedInstanceID,
+				describeInstanceInformationOutput: tt.describeInstanceInformationOutput,
+				describeInstanceInformationErr:    tt.describeInstanceInformationErr,
+				deregisterManagedInstanceOutput:   tt.deregisterManagedInstanceOutput,
+				deregisterManagedInstanceErr:      tt.deregisterManagedInstanceErr,
+			}
+			mockSSMRegistration := MockSSMRegistration{
+				registration: ssm.NewSSMRegistration(ssm.WithInstallRoot(tmpDir)),
+				ssmClient:    &mockSSM,
+			}
+
+			err = ssm.Uninstall(context.Background(), ssm.UninstallOptions{
+				Logger:          zap.NewNop(),
+				SSMRegistration: &mockSSMRegistration,
+				PkgSource: &TestPackageManager{
+					InstallRoot: tmpDir,
+				},
+				InstallRoot: tmpDir,
+			})
+
+			if tt.wantErr != "" {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err).To(MatchError(ContainSubstring(tt.wantErr)))
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+
+			if tt.registration.ManagedInstanceID != "" {
+				g.Expect(registrationFile).NotTo(BeAnExistingFile())
+			}
+			g.Expect(filepath.Join(tmpDir, "/etc/amazon")).NotTo(BeADirectory())
+			g.Expect(filepath.Join(tmpDir, "/root/.aws")).NotTo(BeADirectory())
+			g.Expect(filepath.Join(tmpDir, "/eks-hybrid/.aws")).NotTo(BeADirectory())
+			g.Expect(filepath.Join(tmpDir, "/usr/bin/ssm-agent-worker")).NotTo(BeAnExistingFile())
 		})
 	}
 }

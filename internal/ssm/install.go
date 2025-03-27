@@ -3,17 +3,15 @@ package ssm
 import (
 	"bytes"
 	"context"
+	stdErrors "errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"time"
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
-	"github.com/aws/aws-sdk-go-v2/config"
-	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
@@ -47,11 +45,11 @@ type PkgSource interface {
 }
 
 type InstallOptions struct {
-	Tracker       *tracker.Tracker
-	Source        Source
-	Logger        *zap.Logger
-	Region        string
-	InstallerPath string
+	Tracker     *tracker.Tracker
+	Source      Source
+	Logger      *zap.Logger
+	Region      string
+	InstallRoot string
 }
 
 func Install(ctx context.Context, opts InstallOptions) error {
@@ -63,19 +61,17 @@ func Install(ctx context.Context, opts InstallOptions) error {
 }
 
 func installFromSource(ctx context.Context, opts InstallOptions) error {
-	if opts.InstallerPath == "" {
-		opts.InstallerPath = defaultInstallerPath
-	}
+	installerPath := filepath.Join(opts.InstallRoot, defaultInstallerPath)
 
 	if err := writeGpgConfig(); err != nil {
 		return errors.Wrapf(err, "writing gpg config file")
 	}
 
-	if err := downloadFileWithRetries(ctx, opts.Source, opts.Logger, opts.InstallerPath); err != nil {
+	if err := downloadFileWithRetries(ctx, opts.Source, opts.Logger, installerPath); err != nil {
 		return errors.Wrap(err, "failed to install ssm installer")
 	}
 
-	if err := runInstallWithRetries(ctx, opts.InstallerPath, opts.Region); err != nil {
+	if err := runInstallWithRetries(ctx, installerPath, opts.Region); err != nil {
 		return errors.Wrapf(err, "failed to install ssm agent")
 	}
 	return nil
@@ -156,53 +152,60 @@ func validateSetupSignature(installer, signature io.Reader, publicKey string) er
 	return nil
 }
 
-// DeregisterAndUninstall de-registers the managed instance and removes all files and components that
+type UninstallOptions struct {
+	Logger *zap.Logger
+	// InstallRoot is optionally the root directory of the installation
+	// If not provided, the default will be /
+	InstallRoot     string
+	SSMRegistration ISSMRegistration
+	PkgSource       PkgSource
+}
+
+// Uninstall de-registers the managed instance and removes all files and components that
 // make up the ssm agent component.
-func DeregisterAndUninstall(ctx context.Context, logger *zap.Logger, pkgSource PkgSource) error {
-	logger.Info("Uninstalling and de-registering SSM agent...")
-	instanceId, region, err := GetManagedHybridInstanceIdAndRegion()
+func Uninstall(ctx context.Context, opts UninstallOptions) error {
+	opts.Logger.Info("Uninstalling SSM agent...")
 
-	// If uninstall is being run just after running install and before running init
-	// SSM would not be fully installed and registered, hence it's not required to run
-	// deregister instance.
-	if err != nil && os.IsNotExist(err) {
-		return uninstallPreRegisterComponents(ctx, pkgSource)
-	} else if err != nil {
-		return err
+	actions := []func() error{
+		func() error {
+			return Deregister(ctx, opts.SSMRegistration, opts.Logger)
+		},
+		func() error {
+			return removeFileOrDir(opts.SSMRegistration.RegistrationFilePath(), "uninstalling ssm registration file")
+		},
+		func() error {
+			return uninstallPreRegisterComponents(ctx, opts.PkgSource)
+		},
+		func() error {
+			return removeFileOrDir(filepath.Join(opts.InstallRoot, configRoot), "uninstalling ssm config files")
+		},
+		func() error {
+			return removeFileOrDir(filepath.Join(opts.InstallRoot, symlinkedAWSConfigPath), "uninstalling ssm aws config symlink")
+		},
+		func() error {
+			return removeFileOrDir(filepath.Join(opts.InstallRoot, defaultAWSConfigPath), "uninstalling ssm aws config")
+		},
 	}
 
-	// Create SSM client
-	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
-	if err != nil {
-		return err
-	}
-	ssmClient := awsSsm.NewFromConfig(awsConfig)
-	managed, err := isInstanceManaged(ssmClient, instanceId)
-	if err != nil {
-		return errors.Wrapf(err, "failed to get managed instance information")
-	}
-
-	// Only deregister the instance if init/ssm init was run and
-	// if instances is actively listed as managed
-	if managed {
-		if err := deregister(ssmClient, instanceId); err != nil {
-			return errors.Wrapf(err, "failed to deregister ssm managed instance")
+	allErrors := []error{}
+	for _, action := range actions {
+		if err := action(); err != nil {
+			allErrors = append(allErrors, err)
 		}
 	}
 
-	if err := uninstallPreRegisterComponents(ctx, pkgSource); err != nil {
-		return err
+	if len(allErrors) > 0 {
+		return stdErrors.Join(allErrors...)
 	}
 
-	if err := os.RemoveAll(path.Dir(registrationFilePath)); err != nil {
-		return errors.Wrapf(err, "failed to uninstall ssm config files")
-	}
+	return nil
+}
 
-	if err := os.RemoveAll(configRoot); err != nil {
-		return errors.Wrapf(err, "failed to uninstall ssm config files")
+func removeFileOrDir(path, errorMessage string) error {
+	if err := os.RemoveAll(path); err != nil {
+		return errors.Wrap(err, errorMessage)
 	}
-
-	return os.RemoveAll(symlinkedAWSConfigPath)
+	return nil
 }
 
 func writeGpgConfig() error {

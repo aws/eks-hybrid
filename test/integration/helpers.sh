@@ -270,12 +270,12 @@ function mock::aws_signing_helper() {
 
 function mock::ssm() {
   # mock ssm agent binary
-  if [ -e  /usr/bin/amazon-ssm-agent]; then
+  if [ -e  /usr/bin/amazon-ssm-agent ]; then
     printf "#!/usr/bin/env bash\necho SSM" > /usr/bin/amazon-ssm-agent
     chmod +x /usr/bin/amazon-ssm-agent
   fi
 
-  if [ -e  /snap/amazon-ssm-agent/current/amazon-ssm-agent]; then
+  if [ -e  /snap/amazon-ssm-agent/current/amazon-ssm-agent ]; then
     printf "#!/usr/bin/env bash\necho SSM" > /snap/amazon-ssm-agent/current/amazon-ssm-agent"
     chmod +x /snap/amazon-ssm-agent/current/amazon-ssm-agent"
   fi
