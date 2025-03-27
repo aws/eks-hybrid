@@ -96,6 +96,18 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 						"-c",
 						"sleep infinity",
 					},
+					ReadinessProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							Exec: &corev1.ExecAction{
+								Command: []string{
+									"bash", "-c", "aws sts get-caller-identity",
+								},
+							},
+						},
+						// default value for initialDelaySeconds is 0 and for periodSeconds is 10
+						// it would fail readiness probe after 5 failures (50 seconds)
+						FailureThreshold: 5,
+					},
 				},
 			},
 			// schedule the pod on the specific node using nodeSelector
@@ -109,14 +121,6 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	// Deploy a pod with service account then run aws cli to access aws resources
 	if err = kubernetes.CreatePod(ctx, v.K8S, pod, v.Logger); err != nil {
 		return fmt.Errorf("creating the awscli pod %s: %w", podName, err)
-	}
-
-	stsCommand := []string{
-		"bash", "-c", "aws sts get-caller-identity",
-	}
-	stdOut, stdErr, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, podName, namespace, stsCommand...)
-	if err != nil {
-		return fmt.Errorf("exec aws sts get-caller-identity command on pod %s: err: %w, stdout: %s, stderr: %s", podName, err, stdOut, stdErr)
 	}
 
 	execCommand := []string{
