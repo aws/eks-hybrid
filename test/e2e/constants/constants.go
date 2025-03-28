@@ -14,4 +14,6 @@ const (
 	TestSerialOutputLogFile         = "TestSerialOutputLogFile"
 	TestS3LogsFolder                = "logs"
 	SerialOutputLogFile             = "serial-output.log"
+	RolesAnywhereCertPath = "/etc/roles-anywhere/pki/node.crt"
+	RolesAnywhereKeyPath  = "/etc/roles-anywhere/pki/node.key"
 )

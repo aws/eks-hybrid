@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -28,7 +29,7 @@ import (
 )
 
 const (
-	nodePodWaitTimeout       = 3 * time.Minute
+	nodePodWaitTimeout       = 30 * time.Minute
 	nodePodDelayInterval     = 5 * time.Second
 	hybridNodeWaitTimeout    = 10 * time.Minute
 	hybridNodeDelayInterval  = 5 * time.Second
@@ -569,6 +570,14 @@ func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clien
 	}
 
 	return foundDaemonSet, nil
+}
+
+func PatchDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string, patchBytes []byte) error {
+	if _, err := k8s.AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("patching DaemonSet %s in namespace %s: %w", name, namespace, err)
+	}
+
+	return nil
 }
 
 func NewServiceAccount(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) error {

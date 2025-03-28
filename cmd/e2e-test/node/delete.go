@@ -114,7 +114,7 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		ID:   *instance.InstanceId,
 		IP:   *instance.PrivateIpAddress,
 		Name: d.instanceName,
-	}); err != nil {
+	}, ""); err != nil {
 		return err
 	}
 

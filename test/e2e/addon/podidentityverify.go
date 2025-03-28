@@ -32,6 +32,7 @@ type VerifyPodIdentityAddon struct {
 	NodeIP              string
 	PodIdentityS3Bucket string
 	K8S                 *clientgo.Clientset
+	OS                  string
 	EKSClient           *eks.Client
 	IAMClient           *iam.Client
 	S3Client            *s3.Client
@@ -70,6 +71,13 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return fmt.Errorf("getting daemon set %s: %w", podIdentityDaemonSet, err)
 	}
 
+	v.Logger.Info("Patching pod identity agent volumes", "daemonSet", podIdentityDaemonSet)
+	patchStr := `{"spec":{"template":{"spec":{"volumes":[{"name":"aws-credentials","hostPath":{"path":"/var/eks-hybrid/.aws","type":"Directory"}}]}}}}`
+
+	if err := kubernetes.PatchDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet, []byte(patchStr)); err != nil {
+		return fmt.Errorf("patching pod identity agent daemonset: %w", err)
+	}
+
 	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeIP, v.Logger)
 	if err != nil {
 		return fmt.Errorf("waiting for node %s to be ready: %w", v.NodeIP, err)
@@ -78,6 +86,9 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	if err := kubernetes.WaitForDaemonSetPodToBeRunning(ctx, v.K8S, "kube-system", podIdentityDaemonSet, node.Name, v.Logger); err != nil {
 		return fmt.Errorf("waiting for pod identity daemon set to be running on pod: %w", err)
 	}
+
+	patchedDaemonset, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet)
+	v.Logger.Info(fmt.Sprintf("%+v",patchedDaemonset))
 
 	podName := fmt.Sprintf("awscli-%s", node.Name)
 	v.Logger.Info("Creating a test pod on the hybrid node for pod identity add-on to access aws resources")
@@ -123,6 +134,31 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	// Deploy a pod with service account then run aws cli to access aws resources
 	if err = kubernetes.CreatePod(ctx, v.K8S, pod, v.Logger); err != nil {
 		return fmt.Errorf("creating the awscli pod %s: %w", podName, err)
+	}
+
+	time.Sleep(1 * time.Hour)
+	stsCommand := []string{
+		"bash", "-c", "aws sts get-caller-identity",
+	}
+	stdOut, stdErr, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, podName, namespace, stsCommand...)
+	if err != nil {
+		listOptions := metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/name", podIdentityDaemonSet),
+			FieldSelector: fmt.Sprintf("%s=%s", "spec.nodeName", node.Name),
+		}
+		pods, err := v.K8S.CoreV1().Pods("kube-system").List(ctx, listOptions)
+		if err != nil {
+			return fmt.Errorf("getting PIA pod: %w", err)
+		}
+		piaPod := pods.Items[0]
+
+		logs, err := kubernetes.GetPodLogsWithRetries(ctx, v.K8S, piaPod.ObjectMeta.Name, "kube-system")
+		if err != nil {
+			return fmt.Errorf("getting logs from PIA pod: %w", err)
+		}
+		v.Logger.Info(fmt.Sprintf("PIA Logs: %s", logs))
+
+		return fmt.Errorf("exec aws sts get-caller-identity command on pod %s: err: %w, stdout: %s, stderr: %s", podName, err, stdOut, stdErr)
 	}
 
 	execCommand := []string{

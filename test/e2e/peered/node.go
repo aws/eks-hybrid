@@ -17,6 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	gssh "golang.org/x/crypto/ssh"
 	clientgo "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -52,11 +53,12 @@ type NodeSpec struct {
 }
 
 type NodeCreate struct {
-	AWS     aws.Config
-	Cluster *HybridCluster
-	EC2     *ec2sdk.Client
-	SSM     *ssm.Client
-	Logger  logr.Logger
+	AWS             aws.Config
+	Cluster         *HybridCluster
+	EC2             *ec2sdk.Client
+	SSM             *ssm.Client
+	K8sClientConfig *rest.Config
+	Logger          logr.Logger
 
 	SetRootPassword bool
 	NodeadmURLs     e2e.NodeadmURLs
@@ -103,18 +105,24 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, e
 	userdata, err := spec.OS.BuildUserData(e2e.UserDataInput{
 		KubernetesVersion: spec.NodeK8sVersion,
 		NodeadmUrls:       c.NodeadmURLs,
+		NodeadmConfig:     nodeadmConfig,
 		NodeadmConfigYaml: string(nodeadmConfigYaml),
 		Provider:          string(spec.Provider.Name()),
 		RootPasswordHash:  rootPasswordHash,
 		Region:            c.Cluster.Region,
 		Files:             files,
 		PublicKey:         c.PublicKey,
+
+		KubernetesAPIServer: c.K8sClientConfig.Host,
+		HostName:            nodeSpec.Name,
+		ClusterName:         c.Cluster.Name,
+		ClusterCert:         c.K8sClientConfig.CAData,
 	})
 	if err != nil {
 		return ec2.Instance{}, fmt.Errorf("expected to successfully build user data: %w", err)
 	}
 
-	amiId, err := spec.OS.AMIName(ctx, c.AWS)
+	amiId, err := spec.OS.AMIName(ctx, c.AWS, spec.NodeK8sVersion)
 	if err != nil {
 		return ec2.Instance{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
 	}
@@ -249,10 +257,10 @@ func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, cluste
 }
 
 // Cleanup collects logs and deletes the EC2 instance and Node object.
-func (c *NodeCleanup) Cleanup(ctx context.Context, instance ec2.Instance) error {
+func (c *NodeCleanup) Cleanup(ctx context.Context, instance ec2.Instance, os string) error {
 	logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	err := c.collectLogs(logCtx, constants.LogCollectorBundleFileName, instance)
+	err := c.collectLogs(logCtx, constants.LogCollectorBundleFileName, os, instance)
 	if err != nil {
 		c.Logger.Error(err, "issue collecting logs")
 		if err := ec2.LogEC2InstanceDescribe(ctx, c.EC2, instance.ID, c.Logger); err != nil {
@@ -283,7 +291,7 @@ func (c NodeCleanup) logsPrefix(instanceName string) string {
 	return fmt.Sprintf("%s/%s/%s", constants.TestS3LogsFolder, c.ClusterName, instanceName)
 }
 
-func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instance ec2.Instance) error {
+func (c NodeCleanup) collectLogs(ctx context.Context, bundleName, os string, instance ec2.Instance) error {
 	if c.LogsBucket == "" {
 		return nil
 	}
@@ -292,7 +300,7 @@ func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instanc
 	if err != nil {
 		return err
 	}
-	err = nodeadm.RunLogCollector(ctx, c.RemoteCommandRunner, instance.IP, url)
+	err = nodeadm.RunLogCollector(ctx, c.RemoteCommandRunner, instance.IP, os, url)
 	if err != nil {
 		return err
 	}
