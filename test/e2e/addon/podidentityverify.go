@@ -107,6 +107,8 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 						// default value for initialDelaySeconds is 0 and for periodSeconds is 10
 						// it would fail readiness probe after 5 failures (50 seconds)
 						FailureThreshold: 5,
+						TimeoutSeconds:   20,
+						PeriodSeconds:    20,
 					},
 				},
 			},
