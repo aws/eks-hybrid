@@ -100,6 +100,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			validation.New("k8s-identity", apiServerValidator.CheckIdentity),
 			validation.New("k8s-vpc-network", apiServerValidator.CheckVPCEndpointAccess),
 		),
+		validation.New("k8s-certificate", kubernetes.NewKubeletCertificateValidator().Run),
 	)
 
 	if err := runner.Sequentially(ctx, nodeConfig); err != nil {
