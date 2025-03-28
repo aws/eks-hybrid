@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"fmt"
 	"hash"
 	"io"
 )
@@ -31,7 +32,7 @@ type ChecksumVerifier interface {
 func WithChecksum(rc io.ReadCloser, digest hash.Hash, expect []byte) (Source, error) {
 	parsedExpectedChecksum, err := ParseGNUChecksum(expect)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing expected checksum: %w", err)
 	}
 	return struct {
 		io.Reader
