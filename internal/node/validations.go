@@ -3,16 +3,23 @@ package node
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/aws/eks-hybrid/internal/kubelet"
 )
 
 const defaultStaticPodManifestPath = "/etc/kubernetes/manifest"
+
+const (
+	nodeValidationInterval = 10 * time.Second
+	nodeValidationTimeout  = 1 * time.Minute
+)
 
 func IsUnscheduled(ctx context.Context) error {
 	node, err := getCurrentNode(ctx)
@@ -74,5 +81,19 @@ func getCurrentNode(ctx context.Context) (*v1.Node, error) {
 		return nil, err
 	}
 
-	return clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	var node *v1.Node
+	consecutiveErrors := 0
+	err = wait.PollUntilContextTimeout(ctx, nodeValidationInterval, nodeValidationTimeout, true, func(ctx context.Context) (bool, error) {
+		node, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors > 5 {
+				return false, errors.Wrap(err, "failed to get current node")
+			}
+			return false, nil // continue polling
+		}
+		return true, nil
+	})
+
+	return node, err
 }
