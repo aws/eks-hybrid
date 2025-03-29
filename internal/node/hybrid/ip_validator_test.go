@@ -34,6 +34,11 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 						Flags: []string{"--node-ip=10.0.0.3"},
 					},
 				},
+				Status: api.NodeConfigStatus{
+					Hybrid: api.HybridDetails{
+						NodeName: "node1.example.com",
+					},
+				},
 			},
 			cluster: &types.Cluster{
 				Name: aws.String("test-cluster"),
@@ -46,12 +51,18 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 				},
 			},
 			network: &mockNetwork{
-				DNSRecords:       map[string][]net.IP{},
+				DNSRecords: map[string][]net.IP{
+					"node1.example.com": {net.ParseIP("1.2.3.4")},
+				},
 				ResolvedBindAddr: net.ParseIP("192.1.1.1"),
 				BindAddrErr:      nil,
 				NetworkInterfaces: []net.Addr{
 					&net.IPNet{
 						IP:   net.ParseIP("192.1.1.1"),
+						Mask: net.CIDRMask(24, 32),
+					},
+					&net.IPNet{
+						IP:   net.ParseIP("1.2.3.4"),
 						Mask: net.CIDRMask(24, 32),
 					},
 					&net.IPNet{
