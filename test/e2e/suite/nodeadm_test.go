@@ -245,6 +245,11 @@ var _ = Describe("Hybrid Nodes", func() {
 							if test.overrideNodeK8sVersion != "" {
 								k8sVersion = suite.TestConfig.NodeK8sVersion
 							}
+
+							existingNode, err := kubernetes.CheckForNodeWithE2ELabel(ctx, test.k8sClient, nodeName)
+							Expect(err).NotTo(HaveOccurred(), "check for existing node with e2e label")
+							Expect(existingNode).To(BeNil(), "existing node with e2e label should not have been found")
+
 							peeredNode := test.newPeeredNode()
 
 							AddReportEntry(constants.TestInstanceName, instanceName)
@@ -255,14 +260,14 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							var verifyNode *kubernetes.VerifyNode
 							var serialOutput peered.ItBlockCloser
-							var instance ec2.Instance
+							var node peered.PeerdNode
 
 							flakyCode := &FlakyCode{
 								Logger: test.logger,
 							}
 							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
 								var err error
-								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
+								node, err = peeredNode.Create(ctx, &peered.NodeSpec{
 									InstanceName:   instanceName,
 									NodeK8sVersion: k8sVersion,
 									NodeName:       nodeName,
@@ -274,17 +279,17 @@ var _ = Describe("Hybrid Nodes", func() {
 									if credentials.IsSsm(provider.Name()) {
 										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName, test.cluster.Name)).To(Succeed())
 									}
-									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
+									Expect(peeredNode.Cleanup(ctx, node)).To(Succeed())
 								}, NodeTimeout(deferCleanupTimeout))
 
-								verifyNode = test.newVerifyNode(instance.IP)
+								verifyNode = test.newVerifyNode(node.Name, node.Instance.IP)
 
 								outputFile := filepath.Join(test.artifactsPath, instanceName+"-"+constants.SerialOutputLogFile)
 								AddReportEntry(constants.TestSerialOutputLogFile, outputFile)
 								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
 									By:         By,
 									PeeredNode: peeredNode,
-									Instance:   instance,
+									Instance:   node.Instance,
 									TestLogger: test.loggerControl,
 									OutputFile: outputFile,
 								})
@@ -294,14 +299,14 @@ var _ = Describe("Hybrid Nodes", func() {
 
 								serialOutput.It("joins the cluster", func() {
 									test.logger.Info("Waiting for EC2 Instance to be Running...")
-									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
 									_, err := verifyNode.WaitForNodeReady(ctx)
 									if err != nil {
 										// an ec2 node is considered impaired if the reachability health check fails
 										// in these cases we want to retry by deleting the instance and recreating it
 										// to avoid failing tests due to instance boot issues that are not related
 										// to nodeadm or the test itself
-										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, instance.ID)
+										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, node.Instance.ID)
 										if oErr != nil {
 											Expect(oErr).NotTo(HaveOccurred(), "should describe instance status")
 										}
@@ -319,15 +324,15 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
 							test.logger.Info("Testing Pod Identity add-on functionality")
-							verifyPodIdentityAddon := test.newVerifyPodIdentityAddon(instance.IP)
+							verifyPodIdentityAddon := test.newVerifyPodIdentityAddon(node.Name)
 							Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
 
 							test.logger.Info("Resetting hybrid node...")
-							cleanNode := test.newCleanNode(provider, instance.IP)
+							cleanNode := test.newCleanNode(provider, node.Name, node.Instance.IP)
 							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 							test.logger.Info("Rebooting EC2 Instance.")
-							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
+							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, node.Instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
 							test.logger.Info("EC2 Instance rebooted successfully.")
 
 							serialOutput.It("re-joins the cluster after reboot", func() {
@@ -364,6 +369,10 @@ var _ = Describe("Hybrid Nodes", func() {
 							nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
 
+							existingNode, err := kubernetes.CheckForNodeWithE2ELabel(ctx, test.k8sClient, nodeName)
+							Expect(err).NotTo(HaveOccurred(), "check for existing node with e2e label")
+							Expect(existingNode).To(BeNil(), "existing node with e2e label should not have been found")
+
 							peeredNode := test.newPeeredNode()
 
 							AddReportEntry(constants.TestInstanceName, instanceName)
@@ -374,14 +383,14 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							var verifyNode *kubernetes.VerifyNode
 							var serialOutput peered.ItBlockCloser
-							var instance ec2.Instance
+							var node peered.PeerdNode
 
 							flakyCode := &FlakyCode{
 								Logger: test.logger,
 							}
 							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
 								var err error
-								instance, err = peeredNode.Create(ctx, &peered.NodeSpec{
+								node, err = peeredNode.Create(ctx, &peered.NodeSpec{
 									InstanceName:   instanceName,
 									NodeK8sVersion: nodeKubernetesVersion,
 									NodeName:       nodeName,
@@ -393,17 +402,17 @@ var _ = Describe("Hybrid Nodes", func() {
 									if credentials.IsSsm(provider.Name()) {
 										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName, test.cluster.Name)).To(Succeed())
 									}
-									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
+									Expect(peeredNode.Cleanup(ctx, node)).To(Succeed())
 								}, NodeTimeout(deferCleanupTimeout))
 
-								verifyNode = test.newVerifyNode(instance.IP)
+								verifyNode = test.newVerifyNode(node.Name, node.Instance.IP)
 
 								outputFile := filepath.Join(test.artifactsPath, instanceName+"-"+constants.SerialOutputLogFile)
 								AddReportEntry(constants.TestSerialOutputLogFile, outputFile)
 								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
 									By:         By,
 									PeeredNode: peeredNode,
-									Instance:   instance,
+									Instance:   node.Instance,
 									TestLogger: test.loggerControl,
 									OutputFile: outputFile,
 								})
@@ -414,14 +423,14 @@ var _ = Describe("Hybrid Nodes", func() {
 
 								serialOutput.It("joins the cluster", func() {
 									test.logger.Info("Waiting for EC2 Instance to be Running...")
-									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
 									_, err := verifyNode.WaitForNodeReady(ctx)
 									if err != nil {
 										// an ec2 node is considered impaired if the reachability health check fails
 										// in these cases we want to retry by deleting the instance and recreating it
 										// to avoid failing tests due to instance boot issues that are not related
 										// to nodeadm or the test itself
-										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, instance.ID)
+										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, node.Instance.ID)
 										if oErr != nil {
 											Expect(err).NotTo(HaveOccurred(), "should describe instance status")
 										}
@@ -437,12 +446,12 @@ var _ = Describe("Hybrid Nodes", func() {
 							})
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
-							Expect(test.newUpgradeNode(instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
+							Expect(test.newUpgradeNode(node.Name, node.Instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
 
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
 
 							test.logger.Info("Resetting hybrid node...")
-							Expect(test.newCleanNode(provider, instance.IP).Run(ctx)).To(
+							Expect(test.newCleanNode(provider, node.Name, node.Instance.IP).Run(ctx)).To(
 								Succeed(), "node should have been reset successfully",
 							)
 						},
@@ -545,31 +554,34 @@ func (t *peeredVPCTest) newPeeredNode() *peered.Node {
 	}
 }
 
-func (t *peeredVPCTest) newVerifyNode(nodeIP string) *kubernetes.VerifyNode {
+func (t *peeredVPCTest) newVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode {
 	return &kubernetes.VerifyNode{
-		ClientConfig:  t.k8sClientConfig,
-		K8s:           t.k8sClient,
-		Logger:        t.logger,
-		Region:        t.cluster.Region,
-		NodeIPAddress: nodeIP,
+		ClientConfig: t.k8sClientConfig,
+		K8s:          t.k8sClient,
+		Logger:       t.logger,
+		Region:       t.cluster.Region,
+		NodeName:     nodeName,
+		NodeIP:       nodeIP,
 	}
 }
 
-func (t *peeredVPCTest) newCleanNode(provider e2e.NodeadmCredentialsProvider, nodeIP string) *nodeadm.CleanNode {
+func (t *peeredVPCTest) newCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
 		K8s:                 t.k8sClient,
 		RemoteCommandRunner: t.remoteCommandRunner,
 		Verifier:            provider,
 		Logger:              t.logger,
+		NodeName:            nodeName,
 		NodeIP:              nodeIP,
 	}
 }
 
-func (t *peeredVPCTest) newUpgradeNode(nodeIP string) *nodeadm.UpgradeNode {
+func (t *peeredVPCTest) newUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
 	return &nodeadm.UpgradeNode{
 		K8s:                 t.k8sClient,
 		RemoteCommandRunner: t.remoteCommandRunner,
 		Logger:              t.logger,
+		NodeName:            nodeName,
 		NodeIP:              nodeIP,
 		TargetK8sVersion:    t.cluster.KubernetesVersion,
 	}
@@ -584,10 +596,10 @@ func (t *peeredVPCTest) instanceName(testName string, os e2e.NodeadmOS, provider
 	)
 }
 
-func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeIP string) *addon.VerifyPodIdentityAddon {
+func (t *peeredVPCTest) newVerifyPodIdentityAddon(instanceName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
 		Cluster:             t.cluster.Name,
-		NodeIP:              nodeIP,
+		InstanceName:        instanceName,
 		PodIdentityS3Bucket: t.podIdentityS3Bucket,
 		K8S:                 t.k8sClient,
 		EKSClient:           t.eksClient,

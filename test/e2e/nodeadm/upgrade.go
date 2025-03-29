@@ -20,11 +20,12 @@ type UpgradeNode struct {
 	Logger              logr.Logger
 
 	NodeIP           string
+	NodeName         string
 	TargetK8sVersion string
 }
 
 func (u UpgradeNode) Run(ctx context.Context) error {
-	node, err := kubernetes.WaitForNode(ctx, u.K8s, u.NodeIP, u.Logger)
+	node, err := kubernetes.WaitForNode(ctx, u.K8s, u.NodeName, u.Logger)
 	if err != nil {
 		return err
 	}

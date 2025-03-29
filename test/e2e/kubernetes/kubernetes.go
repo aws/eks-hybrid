@@ -41,17 +41,17 @@ const (
 )
 
 // WaitForNode wait for the node to join the cluster and fetches the node info from an internal IP address of the node
-func WaitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP string, logger logr.Logger) (*corev1.Node, error) {
+func WaitForNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) (*corev1.Node, error) {
 	foundNode := &corev1.Node{}
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, hybridNodeDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := getNodeByInternalIP(ctx, k8s, internalIP)
+		node, err := getNodeByE2ELabelName(ctx, k8s, nodeName)
 		if err != nil {
 			consecutiveErrors += 1
 			if consecutiveErrors > 3 {
 				return false, err
 			}
-			logger.Info("Retryable error listing nodes when looking for node with IP. Continuing to poll", "internalIP", internalIP, "error", err)
+			logger.Info("Retryable error listing nodes when looking for node with name. Continuing to poll", "nodeName", nodeName, "error", err)
 			return false, nil // continue polling
 		}
 		consecutiveErrors = 0
@@ -60,7 +60,7 @@ func WaitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP stri
 			return true, nil // node found, stop polling
 		}
 
-		logger.Info("Node with internal IP doesn't exist yet", "internalIP", internalIP)
+		logger.Info("Node with e2e label doesn't exist yet", "nodeName", nodeName)
 		return false, nil // continue polling
 	})
 	if err != nil {
@@ -69,23 +69,39 @@ func WaitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP stri
 	return foundNode, nil
 }
 
-func getNodeByInternalIP(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) (*corev1.Node, error) {
-	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("listing nodes when looking for node with IP %s: %w", internalIP, err)
-	}
-	return nodeByInternalIP(nodes, internalIP), nil
+func CheckForNodeWithE2ELabel(ctx context.Context, k8s *kubernetes.Clientset, nodeName string) (*corev1.Node, error) {
+	var node *corev1.Node
+	err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		return true
+	}, func() error {
+		var err error
+		node, err = getNodeByE2ELabelName(ctx, k8s, nodeName)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return node, err
 }
 
-func nodeByInternalIP(nodes *corev1.NodeList, nodeIP string) *corev1.Node {
-	for _, node := range nodes.Items {
-		for _, address := range node.Status.Addresses {
-			if address.Type == "InternalIP" && address.Address == nodeIP {
-				return &node
-			}
-		}
+func getNodeByE2ELabelName(ctx context.Context, k8s *kubernetes.Clientset, nodeName string) (*corev1.Node, error) {
+	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		LabelSelector: constants.TestInstanceNameKubernetesLabel + "=" + nodeName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing nodes when looking for node with e2e label %s: %w", nodeName, err)
 	}
-	return nil
+
+	// return nil if no node is found to retry
+	if len(nodes.Items) == 0 {
+		return nil, nil
+	}
+
+	if len(nodes.Items) > 1 {
+		return nil, fmt.Errorf("found multiple nodes with e2e label %s: %v", nodeName, nodes.Items)
+	}
+
+	return &nodes.Items[0], nil
 }
 
 func WaitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
@@ -325,10 +341,10 @@ func DeleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) err
 	return nil
 }
 
-func EnsureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) error {
-	node, err := getNodeByInternalIP(ctx, k8s, internalIP)
+func EnsureNodeWithE2ELabelIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, instanceName string) error {
+	node, err := getNodeByE2ELabelName(ctx, k8s, instanceName)
 	if err != nil {
-		return fmt.Errorf("getting node by internal IP: %w", err)
+		return fmt.Errorf("getting node by e2e label: %w", err)
 	}
 	if node == nil {
 		return nil

@@ -22,17 +22,32 @@ type VerifyNode struct {
 	Logger       logr.Logger
 	Region       string
 
-	NodeIPAddress string
+	NodeName string
+	NodeIP   string
 }
 
 func (v VerifyNode) WaitForNodeReady(ctx context.Context) (*corev1.Node, error) {
 	// get the hybrid node registered using nodeadm by the internal IP of an EC2 Instance
-	node, err := WaitForNode(ctx, v.K8s, v.NodeIPAddress, v.Logger)
+	node, err := WaitForNode(ctx, v.K8s, v.NodeName, v.Logger)
 	if err != nil {
 		return nil, err
 	}
 	if node == nil {
 		return nil, fmt.Errorf("returned node is nil")
+	}
+
+	var internalAddress string
+	for _, address := range node.Status.Addresses {
+		if address.Type == "InternalIP" {
+			internalAddress = address.Address
+			break
+		}
+	}
+	if internalAddress == "" {
+		return nil, fmt.Errorf("node InternalIP missing from node status. All Addresses: %v", node.Status.Addresses)
+	}
+	if internalAddress != v.NodeIP {
+		return nil, fmt.Errorf("node InternalIP %s does not match expected instance IP %s. Inspect the nodes `ifconfig.txt` log file. All Addresses: %v", internalAddress, v.NodeIP, node.Status.Addresses)
 	}
 
 	nodeName := node.Name

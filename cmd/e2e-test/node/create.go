@@ -135,7 +135,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
-	instance, err := node.Create(ctx, &peered.NodeSpec{
+	peerdNode, err := node.Create(ctx, &peered.NodeSpec{
 		InstanceName:   c.instanceName,
 		NodeK8sVersion: cluster.KubernetesVersion,
 		NodeName:       c.instanceName,
@@ -146,11 +146,11 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	logger.Info("Node created", "instanceID", instance.ID)
+	logger.Info("Node created", "instanceID", peerdNode.Instance.ID)
 
 	if c.waitForReady {
 		logger.Info("Connecting to the node serial console...")
-		serial, err := node.SerialConsole(ctx, instance.ID)
+		serial, err := node.SerialConsole(ctx, peerdNode.Instance.ID)
 		if err != nil {
 			return fmt.Errorf("preparing EC2 for serial connection: %w", err)
 		}
@@ -167,9 +167,10 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			return fmt.Errorf("resuming output: %w", err)
 		}
 		verify := kubernetes.VerifyNode{
-			K8s:           k8s,
-			Logger:        logr.Discard(),
-			NodeIPAddress: instance.IP,
+			K8s:      k8s,
+			Logger:   logr.Discard(),
+			NodeName: peerdNode.Name,
+			NodeIP:   peerdNode.Instance.IP,
 		}
 		node, err := verify.WaitForNodeReady(ctx)
 		if err != nil {

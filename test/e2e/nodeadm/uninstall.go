@@ -18,7 +18,8 @@ type CleanNode struct {
 	Verifier            UninstallVerifier
 	Logger              logr.Logger
 
-	NodeIP string
+	NodeName string
+	NodeIP   string
 }
 
 // UninstallVerifier checks if nodeadm uninstall process was successful in a node.
@@ -27,7 +28,7 @@ type UninstallVerifier interface {
 }
 
 func (u CleanNode) Run(ctx context.Context) error {
-	node, err := kubernetes.WaitForNode(ctx, u.K8s, u.NodeIP, u.Logger)
+	node, err := kubernetes.WaitForNode(ctx, u.K8s, u.NodeName, u.Logger)
 	if err != nil {
 		return err
 	}

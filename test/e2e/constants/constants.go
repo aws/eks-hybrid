@@ -14,4 +14,5 @@ const (
 	TestSerialOutputLogFile         = "TestSerialOutputLogFile"
 	TestS3LogsFolder                = "logs"
 	SerialOutputLogFile             = "serial-output.log"
+	TestInstanceNameKubernetesLabel = "eks-hybrid.amazonaws.com/e2e-instance-name"
 )

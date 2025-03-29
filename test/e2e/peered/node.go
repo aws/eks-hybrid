@@ -63,8 +63,16 @@ type NodeCreate struct {
 	PublicKey       string
 }
 
+// PeerdNode represents a Hybrid node running as an EC2 instance in a peered VPC
+// The Name is the name of the kubenretes node object
+// The Instance is the underlying EC2 instance
+type PeerdNode struct {
+	Instance ec2.Instance
+	Name     string
+}
+
 // Create spins up an EC2 instance with the proper user data to join as a Hybrid node to the cluster.
-func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) {
+func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, error) {
 	nodeSpec := e2e.NodeSpec{
 		OS:   spec.OS,
 		Name: spec.NodeName,
@@ -77,17 +85,21 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, e
 
 	files, err := spec.Provider.FilesForNode(nodeSpec)
 	if err != nil {
-		return ec2.Instance{}, err
+		return PeerdNode{}, err
 	}
 
 	nodeadmConfig, err := spec.Provider.NodeadmConfig(ctx, nodeSpec)
 	if err != nil {
-		return ec2.Instance{}, fmt.Errorf("expected to build nodeconfig: %w", err)
+		return PeerdNode{}, fmt.Errorf("expected to build nodeconfig: %w", err)
+	}
+
+	nodeadmConfig.Spec.Kubelet.Flags = []string{
+		fmt.Sprintf("--node-labels=%s=%s", constants.TestInstanceNameKubernetesLabel, spec.NodeName),
 	}
 
 	nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)
 	if err != nil {
-		return ec2.Instance{}, fmt.Errorf("expected to successfully marshal nodeadm config to YAML: %w", err)
+		return PeerdNode{}, fmt.Errorf("expected to successfully marshal nodeadm config to YAML: %w", err)
 	}
 
 	var rootPasswordHash string
@@ -95,7 +107,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, e
 		var rootPassword string
 		rootPassword, rootPasswordHash, err = os.GenerateOSPassword()
 		if err != nil {
-			return ec2.Instance{}, fmt.Errorf("expected to successfully generate root password: %w", err)
+			return PeerdNode{}, fmt.Errorf("expected to successfully generate root password: %w", err)
 		}
 		c.Logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
 	}
@@ -111,12 +123,12 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, e
 		PublicKey:         c.PublicKey,
 	})
 	if err != nil {
-		return ec2.Instance{}, fmt.Errorf("expected to successfully build user data: %w", err)
+		return PeerdNode{}, fmt.Errorf("expected to successfully build user data: %w", err)
 	}
 
 	amiId, err := spec.OS.AMIName(ctx, c.AWS)
 	if err != nil {
-		return ec2.Instance{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
+		return PeerdNode{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
 	}
 
 	ec2Input := ec2.InstanceConfig{
@@ -134,11 +146,14 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, e
 	c.Logger.Info("Creating a hybrid EC2 Instance...")
 	instance, err := ec2Input.Create(ctx, c.EC2, c.SSM)
 	if err != nil {
-		return ec2.Instance{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
+		return PeerdNode{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
 
 	c.Logger.Info("A Hybrid EC2 instace is created", "instanceID", instance.ID)
-	return instance, nil
+	return PeerdNode{
+		Instance: instance,
+		Name:     spec.NodeName,
+	}, nil
 }
 
 // SerialConsole returns the serial console for the given instance.
@@ -249,27 +264,27 @@ func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, cluste
 }
 
 // Cleanup collects logs and deletes the EC2 instance and Node object.
-func (c *NodeCleanup) Cleanup(ctx context.Context, instance ec2.Instance) error {
+func (c *NodeCleanup) Cleanup(ctx context.Context, node PeerdNode) error {
 	logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	err := c.collectLogs(logCtx, constants.LogCollectorBundleFileName, instance)
+	err := c.collectLogs(logCtx, constants.LogCollectorBundleFileName, node.Instance)
 	if err != nil {
 		c.Logger.Error(err, "issue collecting logs")
-		if err := ec2.LogEC2InstanceDescribe(ctx, c.EC2, instance.ID, c.Logger); err != nil {
+		if err := ec2.LogEC2InstanceDescribe(ctx, c.EC2, node.Instance.ID, c.Logger); err != nil {
 			c.Logger.Error(err, "describing instance")
 		}
 	}
 	if c.SkipDelete {
-		c.Logger.Info("Skipping EC2 Instance deletion", "instanceID", instance.ID)
+		c.Logger.Info("Skipping EC2 Instance deletion", "instanceID", node.Instance.ID)
 		return nil
 	}
-	c.Logger.Info("Deleting EC2 Instance", "instanceID", instance.ID)
-	if err := ec2.DeleteEC2Instance(ctx, c.EC2, instance.ID); err != nil {
+	c.Logger.Info("Deleting EC2 Instance", "instanceID", node.Instance.ID)
+	if err := ec2.DeleteEC2Instance(ctx, c.EC2, node.Instance.ID); err != nil {
 		return fmt.Errorf("deleting EC2 Instance: %w", err)
 	}
-	c.Logger.Info("Successfully deleted EC2 Instance", "instanceID", instance.ID)
-	if err := kubernetes.EnsureNodeWithIPIsDeleted(ctx, c.K8s, instance.IP); err != nil {
-		return fmt.Errorf("deleting node for instance %s: %w", instance.ID, err)
+	c.Logger.Info("Successfully deleted EC2 Instance", "instanceID", node.Instance.ID)
+	if err := kubernetes.EnsureNodeWithE2ELabelIsDeleted(ctx, c.K8s, node.Name); err != nil {
+		return fmt.Errorf("deleting node for instance %s: %w", node.Instance.ID, err)
 	}
 
 	return nil
