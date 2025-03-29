@@ -202,7 +202,15 @@ func DeregisterAndUninstall(ctx context.Context, logger *zap.Logger, pkgSource P
 		return errors.Wrapf(err, "failed to uninstall ssm config files")
 	}
 
-	return os.RemoveAll(symlinkedAWSConfigPath)
+	if err := os.RemoveAll(symlinkedAWSConfigPath); err != nil {
+		return errors.Wrapf(err, "failed to uninstall ssm aws config symlink")
+	}
+
+	if err := os.RemoveAll(defaultAWSConfigPath); err != nil {
+		return errors.Wrapf(err, "failed to uninstall ssm aws config")
+	}
+
+	return nil
 }
 
 func writeGpgConfig() error {
