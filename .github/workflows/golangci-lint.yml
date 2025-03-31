@@ -23,7 +23,7 @@ jobs:
           check-latest: true
           cache: true
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v1.61.0
           # Disable package caching to avoid a double cache with setup-go.
