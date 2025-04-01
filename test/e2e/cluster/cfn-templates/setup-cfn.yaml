@@ -99,7 +99,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${ClusterName}-public-subnet
+          Value: !Sub ${ClusterName}-cluster-public-subnet
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
         - Key: !Ref CreationTimeTagKey
@@ -113,7 +113,7 @@ Resources:
       CidrBlock: !Ref ClusterPrivateSubnetCidr
       Tags:
         - Key: Name
-          Value: !Sub ${ClusterName}-private-subnet
+          Value: !Sub ${ClusterName}-cluster-private-subnet
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
         - Key: !Ref CreationTimeTagKey
@@ -143,7 +143,7 @@ Resources:
       VpcId: !Ref ClusterVPC
       Tags:
         - Key: Name
-          Value: !Sub ${ClusterName}-route-table
+          Value: !Sub ${ClusterName}-cluster-route-table
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
         - Key: !Ref CreationTimeTagKey
@@ -170,7 +170,7 @@ Resources:
       VpcId: !Ref ClusterVPC
       Tags:
         - Key: Name
-          Value: !Sub ${ClusterName}-private-route-table
+          Value: !Sub ${ClusterName}-cluster-private-route-table
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
         - Key: !Ref CreationTimeTagKey
@@ -224,7 +224,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${ClusterName}-public-subnet
+          Value: !Sub ${ClusterName}-hybrid-public-subnet
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
         - Key: !Ref CreationTimeTagKey
@@ -238,7 +238,7 @@ Resources:
       CidrBlock: !Ref HybridNodePrivateSubnetCidr
       Tags:
         - Key: Name
-          Value: !Sub ${ClusterName}-private-subnet
+          Value: !Sub ${ClusterName}-hybrid-private-subnet
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
         - Key: !Ref CreationTimeTagKey
