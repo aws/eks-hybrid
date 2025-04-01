@@ -13,7 +13,7 @@ import (
 
 // CleanNode runs the process to unregister a node from the cluster and uninstall all the installed kubernetes dependencies.
 type CleanNode struct {
-	K8s                 *clientgo.Clientset
+	K8s                 clientgo.Interface
 	RemoteCommandRunner commands.RemoteCommandRunner
 	Verifier            UninstallVerifier
 	Logger              logr.Logger

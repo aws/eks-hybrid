@@ -15,7 +15,7 @@ import (
 // This assumes the current node's version meets the version skew policy and it can actually
 // be upgraded to the target version.
 type UpgradeNode struct {
-	K8s                 *clientgo.Clientset
+	K8s                 clientgo.Interface
 	RemoteCommandRunner commands.RemoteCommandRunner
 	Logger              logr.Logger
 

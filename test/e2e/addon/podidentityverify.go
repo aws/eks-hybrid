@@ -32,7 +32,7 @@ type VerifyPodIdentityAddon struct {
 	Cluster             string
 	NodeIP              string
 	PodIdentityS3Bucket string
-	K8S                 *clientgo.Clientset
+	K8S                 clientgo.Interface
 	EKSClient           *eks.Client
 	IAMClient           *iam.Client
 	S3Client            *s3.Client

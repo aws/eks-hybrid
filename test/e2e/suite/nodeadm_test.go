@@ -76,7 +76,7 @@ type peeredVPCTest struct {
 	ec2Client       *ec2v2.Client
 	ssmClient       *ssmv2.Client
 	cfnClient       *cloudformation.Client
-	k8sClient       *clientgo.Clientset
+	k8sClient       clientgo.Interface
 	k8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client

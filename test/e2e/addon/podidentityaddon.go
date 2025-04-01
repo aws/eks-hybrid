@@ -39,7 +39,7 @@ func NewPodIdentityAddon(cluster, roleArn string) PodIdentityAddon {
 	}
 }
 
-func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksClient *eks.Client, k8sClient *clientgo.Clientset) error {
+func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksClient *eks.Client, k8sClient clientgo.Interface) error {
 	if err := p.Addon.Create(ctx, eksClient, logger); err != nil {
 		return err
 	}

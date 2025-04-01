@@ -41,7 +41,7 @@ const (
 )
 
 // WaitForNode wait for the node to join the cluster and fetches the node info from an internal IP address of the node
-func WaitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP string, logger logr.Logger) (*corev1.Node, error) {
+func WaitForNode(ctx context.Context, k8s kubernetes.Interface, internalIP string, logger logr.Logger) (*corev1.Node, error) {
 	foundNode := &corev1.Node{}
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, hybridNodeDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
@@ -69,7 +69,7 @@ func WaitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP stri
 	return foundNode, nil
 }
 
-func getNodeByInternalIP(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) (*corev1.Node, error) {
+func getNodeByInternalIP(ctx context.Context, k8s kubernetes.Interface, internalIP string) (*corev1.Node, error) {
 	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("listing nodes when looking for node with IP %s: %w", internalIP, err)
@@ -88,7 +88,7 @@ func nodeByInternalIP(nodes *corev1.NodeList, nodeIP string) *corev1.Node {
 	return nil
 }
 
-func WaitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
+func WaitForHybridNodeToBeReady(ctx context.Context, k8s kubernetes.Interface, nodeName string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
@@ -142,7 +142,7 @@ func nodeNetworkAvailable(node *corev1.Node) bool {
 	return false
 }
 
-func WaitForHybridNodeToBeNotReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
+func WaitForHybridNodeToBeNotReady(ctx context.Context, k8s kubernetes.Interface, nodeName string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
@@ -194,7 +194,7 @@ func GetNginxPodName(name string) string {
 	return "nginx-" + name
 }
 
-func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName, namespace, region string, logger logr.Logger) error {
+func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeName, namespace, region string, logger logr.Logger) error {
 	podName := GetNginxPodName(nodeName)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -235,7 +235,7 @@ func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeNa
 	return CreatePod(ctx, k8s, pod, logger)
 }
 
-func CreatePod(ctx context.Context, k8s *kubernetes.Clientset, pod *corev1.Pod, logger logr.Logger) error {
+func CreatePod(ctx context.Context, k8s kubernetes.Interface, pod *corev1.Pod, logger logr.Logger) error {
 	podName := pod.ObjectMeta.Name
 	namespace := pod.ObjectMeta.Namespace
 
@@ -254,7 +254,7 @@ func CreatePod(ctx context.Context, k8s *kubernetes.Clientset, pod *corev1.Pod, 
 	return nil
 }
 
-func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, listOptions metav1.ListOptions, namespace string, logger logr.Logger) error {
+func waitForPodToBeRunning(ctx context.Context, k8s kubernetes.Interface, listOptions metav1.ListOptions, namespace string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		pods, err := k8s.CoreV1().Pods(namespace).List(ctx, listOptions)
@@ -295,7 +295,7 @@ func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, listO
 	})
 }
 
-func waitForPodToBeDeleted(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
+func waitForPodToBeDeleted(ctx context.Context, k8s kubernetes.Interface, name, namespace string) error {
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		_, err = k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 
@@ -309,7 +309,7 @@ func waitForPodToBeDeleted(ctx context.Context, k8s *kubernetes.Clientset, name,
 	})
 }
 
-func DeletePod(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
+func DeletePod(ctx context.Context, k8s kubernetes.Interface, name, namespace string) error {
 	err := k8s.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("deleting pod: %w", err)
@@ -317,7 +317,7 @@ func DeletePod(ctx context.Context, k8s *kubernetes.Clientset, name, namespace s
 	return waitForPodToBeDeleted(ctx, k8s, name, namespace)
 }
 
-func DeleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) error {
+func DeleteNode(ctx context.Context, k8s kubernetes.Interface, name string) error {
 	err := k8s.CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("deleting node: %w", err)
@@ -325,7 +325,7 @@ func DeleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) err
 	return nil
 }
 
-func EnsureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) error {
+func EnsureNodeWithIPIsDeleted(ctx context.Context, k8s kubernetes.Interface, internalIP string) error {
 	node, err := getNodeByInternalIP(ctx, k8s, internalIP)
 	if err != nil {
 		return fmt.Errorf("getting node by internal IP: %w", err)
@@ -341,7 +341,7 @@ func EnsureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, i
 	return nil
 }
 
-func WaitForNodeToHaveVersion(ctx context.Context, k8s *kubernetes.Clientset, nodeName, targetVersion string, logger logr.Logger) (*corev1.Node, error) {
+func WaitForNodeToHaveVersion(ctx context.Context, k8s kubernetes.Interface, nodeName, targetVersion string, logger logr.Logger) (*corev1.Node, error) {
 	foundNode := &corev1.Node{}
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeUpgradeTimeout, true, func(ctx context.Context) (done bool, err error) {
@@ -392,7 +392,7 @@ func IsPreviousVersionSupported(kubernetesVersion string) (bool, error) {
 	return version.MustParseSemantic(prevVersion + ".0").AtLeast(minVersion), nil
 }
 
-func DrainNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node) error {
+func DrainNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node) error {
 	helper := &drain.Helper{
 		Ctx:                             ctx,
 		Client:                          k8s,
@@ -414,7 +414,7 @@ func DrainNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node
 	return nil
 }
 
-func UncordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node) error {
+func UncordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node) error {
 	helper := &drain.Helper{
 		Ctx:    ctx,
 		Client: k8s,
@@ -428,7 +428,7 @@ func UncordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.N
 	return nil
 }
 
-func CordonNode(ctx context.Context, k8s *kubernetes.Clientset, node *corev1.Node, logger logr.Logger) error {
+func CordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node, logger logr.Logger) error {
 	helper := &drain.Helper{
 		Ctx:    ctx,
 		Client: k8s,
@@ -482,7 +482,7 @@ func nodeCordon(node *corev1.Node) bool {
 }
 
 // Retries up to 5 times to avoid connection errors
-func GetPodLogsWithRetries(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (logs string, err error) {
+func GetPodLogsWithRetries(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (logs string, err error) {
 	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
 		// Retry any error type
 		return true
@@ -495,7 +495,7 @@ func GetPodLogsWithRetries(ctx context.Context, k8s *kubernetes.Clientset, name,
 	return logs, err
 }
 
-func getPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) (string, error) {
+func getPodLogs(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (string, error) {
 	req := k8s.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
@@ -512,7 +512,7 @@ func getPodLogs(ctx context.Context, k8s *kubernetes.Clientset, name, namespace 
 }
 
 // Retries up to 5 times to avoid connection errors
-func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
+func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s kubernetes.Interface, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
 	err = retry.OnError(retry.DefaultBackoff, func(err error) bool {
 		// Retry any error type
 		return true
@@ -526,7 +526,7 @@ func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kub
 }
 
 // execPod returns the stdout and stderr even if the command fails and the err is non-nil
-func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
+func execPod(ctx context.Context, config *restclient.Config, k8s kubernetes.Interface, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
 	req := k8s.CoreV1().RESTClient().Post().Resource("pods").Name(name).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(
 		&corev1.PodExecOptions{
@@ -552,7 +552,7 @@ func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Cli
 	return stdoutBuf.String(), stderrBuf.String(), err
 }
 
-func WaitForDaemonSetPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, namespace, daemonSetName, nodeName string, logger logr.Logger) error {
+func WaitForDaemonSetPodToBeRunning(ctx context.Context, k8s kubernetes.Interface, namespace, daemonSetName, nodeName string, logger logr.Logger) error {
 	listOptions := metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/name", daemonSetName),
 		FieldSelector: fmt.Sprintf("%s=%s", "spec.nodeName", nodeName),
@@ -560,7 +560,7 @@ func WaitForDaemonSetPodToBeRunning(ctx context.Context, k8s *kubernetes.Clients
 	return waitForPodToBeRunning(ctx, k8s, listOptions, namespace, logger)
 }
 
-func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) (*appsv1.DaemonSet, error) {
+func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string) (*appsv1.DaemonSet, error) {
 	var foundDaemonSet *appsv1.DaemonSet
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, daemonSetDelayInternal, daemonSetWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
@@ -589,7 +589,7 @@ func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clien
 	return foundDaemonSet, nil
 }
 
-func NewServiceAccount(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) error {
+func NewServiceAccount(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string) error {
 	err := retry.OnError(retry.DefaultRetry, func(err error) bool {
 		// Retry any error type
 		return true

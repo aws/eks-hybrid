@@ -205,7 +205,7 @@ type NodeCleanup struct {
 	SSM                 *ssm.Client
 	S3                  *s3sdk.Client
 	EC2                 *ec2sdk.Client
-	K8s                 *clientgo.Clientset
+	K8s                 clientgo.Interface
 	Logger              logr.Logger
 	RemoteCommandRunner commands.RemoteCommandRunner
 
