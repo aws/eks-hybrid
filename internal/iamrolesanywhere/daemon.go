@@ -79,7 +79,7 @@ func GenerateUpdateSystemdService(node *api.NodeConfig) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := signingHelperServiceTemplate.Execute(&buf, map[string]string{
 		"SharedCredentialsFilePath": EksHybridAwsCredentialsPath,
-		"SigningHelperBinPath":      SigningHelperBinPath,
+		"SigningHelperBinPath":      DefaultSigningHelperBinPath,
 		"TrustAnchorARN":            node.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
 		"ProfileARN":                node.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
 		"RoleARN":                   node.Spec.Hybrid.IAMRolesAnywhere.RoleARN,

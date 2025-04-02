@@ -78,7 +78,7 @@ func (kct *kubeconfigTemplateVars) withHybridTemplateVars(cfg *api.NodeConfig) {
 	} else if cfg.IsSSM() {
 		kct.withSsmHybridVars(cfg)
 	}
-	kct.AwsIamAuthenticatorPath = iamauthenticator.IAMAuthenticatorBinPath
+	kct.AwsIamAuthenticatorPath = iamauthenticator.DefaultIAMAuthenticatorBinPath
 }
 
 func (kct *kubeconfigTemplateVars) withIamRolesAnywhereHybridVars(cfg *api.NodeConfig) {

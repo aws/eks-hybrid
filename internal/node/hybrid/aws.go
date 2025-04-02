@@ -87,7 +87,7 @@ func (c RolesAnywhereAWSConfigurator) Configure(_ context.Context, nodeConfig *a
 		Region:               nodeConfig.Spec.Cluster.Region,
 		NodeName:             nodeConfig.Status.Hybrid.NodeName,
 		ConfigPath:           nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath,
-		SigningHelperBinPath: iamrolesanywhere.SigningHelperBinPath,
+		SigningHelperBinPath: iamrolesanywhere.DefaultSigningHelperBinPath,
 		CertificatePath:      nodeConfig.Spec.Hybrid.IAMRolesAnywhere.CertificatePath,
 		PrivateKeyPath:       nodeConfig.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath,
 	}); err != nil {

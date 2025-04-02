@@ -170,19 +170,19 @@ func getSource(ctx context.Context, artifactName string, availableArtifacts []Ar
 		if releaseArtifact.Name == artifactName && releaseArtifact.Arch == runtime.GOARCH && releaseArtifact.OS == runtime.GOOS {
 			obj, err := util.GetHttpFileReader(ctx, releaseArtifact.URI)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("getting artifact file reader: %w", err)
 			}
 
 			artifactChecksum, err := util.GetHttpFile(ctx, releaseArtifact.ChecksumURI)
 			if err != nil {
 				obj.Close()
-				return nil, err
+				return nil, fmt.Errorf("getting artifact checksum file reader: %w", err)
 			}
 
 			source, err := artifact.WithChecksum(obj, sha256.New(), artifactChecksum)
 			if err != nil {
 				obj.Close()
-				return nil, err
+				return nil, fmt.Errorf("getting artifact with checksum: %w", err)
 			}
 			return source, nil
 		}
