@@ -94,7 +94,7 @@ func WaitForHybridNodeToBeReady(ctx context.Context, k8s kubernetes.Interface, n
 			logger.Info("Node is not ready yet", "node", nodeName)
 		} else if !nodeCiliumAgentReady(node) {
 			logger.Info("Node's cilium-agent is not ready yet. Verify the cilium-operator is running.", "node", nodeName)
-		} else if !NodeNetworkAvailable(node) {
+		} else if !nodeNetworkAvailable(node) {
 			logger.Info("Node is ready, but network is NetworkUnavailable condition not False", "node", nodeName)
 		} else {
 			logger.Info("Node is ready", "node", nodeName)
@@ -304,21 +304,18 @@ func nodeCordon(node *corev1.Node) bool {
 	return false
 }
 
-func NetworkUnavailableCondition(node *corev1.Node) *corev1.NodeCondition {
-	for _, condition := range node.Status.Conditions {
-		if condition.Type == corev1.NodeNetworkUnavailable {
-			return &condition
+// nodeNetworkAvailable returns true if the node has a NetworkUnavailable condition with status False
+// both cilium and calico will set this condition when the agents start up
+// ex:
+// message: Calico is running on this node
+// reason: CalicoIsUp
+// status: "False"
+// type: NetworkUnavailable
+func nodeNetworkAvailable(node *corev1.Node) bool {
+	for _, cond := range node.Status.Conditions {
+		if cond.Type == corev1.NodeNetworkUnavailable && cond.Status == corev1.ConditionFalse {
+			return true
 		}
 	}
-	return nil
-}
-
-// nodeNetworkAvailable returns true if the node has a NetworkUnavailable condition with status False
-// If the condition is not present, although technically this mean it might have the a network available,
-// it returns false.
-// Most CNI will set this condition to true whenever they finish their setup. In particular,
-// Cilium and Calico do it.
-func NodeNetworkAvailable(node *corev1.Node) bool {
-	condition := NetworkUnavailableCondition(node)
-	return condition != nil && condition.Status == corev1.ConditionFalse
+	return false
 }
