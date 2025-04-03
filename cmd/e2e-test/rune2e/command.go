@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/go-logr/logr"
@@ -26,7 +27,7 @@ const (
 	defaultRegion            = "us-west-2"
 	defaultK8sVersion        = "1.31"
 	defaultCNI               = "cilium"
-	defaultTimeout           = "60m"
+	defaultTimeout           = time.Minute * 60
 	defaultTestProcs         = 1
 	defaultTestsBinaryOrPath = "./test/e2e/suite"
 )
@@ -51,7 +52,7 @@ type command struct {
 	testLabelFilter   string
 	testProcs         int
 	testsBinaryOrPath string
-	testTimeout       string
+	timeout           time.Duration
 }
 
 func NewCommand() *command {
@@ -65,7 +66,7 @@ func NewCommand() *command {
 		region:            defaultRegion,
 		subCmd:            flaggy.NewSubcommand("run-e2e"),
 		testProcs:         defaultTestProcs,
-		testTimeout:       defaultTimeout,
+		timeout:           defaultTimeout,
 		testsBinaryOrPath: defaultTestsBinaryOrPath,
 	}
 	cmd.subCmd.Description = "Run E2E tests"
@@ -79,7 +80,7 @@ func NewCommand() *command {
 	cmd.subCmd.String(&cmd.artifactsDir, "a", "artifacts-dir", "Directory for artifacts (optional, defaults to a new temp directory)")
 	cmd.subCmd.String(&cmd.endpoint, "e", "endpoint", "AWS endpoint (optional)")
 	cmd.subCmd.String(&cmd.skippedTests, "s", "skipped-tests", "ginkgo regex to skip tests (optional)")
-	cmd.subCmd.String(&cmd.testTimeout, "", "timeout", "Timeout for the test (optional)")
+	cmd.subCmd.Duration(&cmd.timeout, "", "timeout", "Timeout for the test (optional)")
 	cmd.subCmd.String(&cmd.testLabelFilter, "f", "test-filter", "Filter for the test (optional)")
 	cmd.subCmd.Bool(&cmd.skipCleanup, "", "skip-cleanup", "Skip cleanup (optional)")
 	cmd.subCmd.String(&cmd.testsBinaryOrPath, "", "tests-binary", "Path to the tests binary (optional)")
@@ -142,7 +143,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		TestConfig:      testConfig,
 		TestLabelFilter: c.testLabelFilter,
 		TestProcs:       c.testProcs,
-		TestTimeout:     c.testTimeout,
+		Timeout:         c.timeout,
 		TestResources:   testResources,
 		SkipCleanup:     c.skipCleanup,
 		SkippedTests:    c.skippedTests,
