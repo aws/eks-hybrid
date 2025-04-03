@@ -23,7 +23,6 @@ import (
 const eksConfigDir = "/etc/eks"
 
 type (
-	SSMUninstall func(ctx context.Context, logger *zap.Logger, pm ssm.PkgSource) error
 	CNIUninstall func() error
 )
 
@@ -31,7 +30,6 @@ type Uninstaller struct {
 	Artifacts      *tracker.InstalledArtifacts
 	DaemonManager  daemon.DaemonManager
 	PackageManager *packagemanager.DistroPackageManager
-	SSMUninstall   SSMUninstall
 	Logger         *zap.Logger
 	CNIUninstall   CNIUninstall
 }
@@ -69,8 +67,11 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 		if err := u.DaemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-
-		if err := u.SSMUninstall(ctx, u.Logger, u.PackageManager); err != nil {
+		if err := ssm.Uninstall(ctx, ssm.UninstallOptions{
+			Logger:          u.Logger,
+			SSMRegistration: ssm.NewSSMRegistration(),
+			PkgSource:       u.PackageManager,
+		}); err != nil {
 			return fmt.Errorf("uninstalling SSM: %w", err)
 		}
 	}

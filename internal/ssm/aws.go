@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 )
 
-func isInstanceManaged(client *awsSsm.Client, instanceId string) (bool, error) {
+func isInstanceManaged(client SSMClient, instanceId string) (bool, error) {
 	output, err := client.DescribeInstanceInformation(context.Background(), &awsSsm.DescribeInstanceInformationInput{
 		Filters: []types.InstanceInformationStringFilter{
 			{
@@ -24,7 +24,7 @@ func isInstanceManaged(client *awsSsm.Client, instanceId string) (bool, error) {
 	return len(output.InstanceInformationList) > 0, nil
 }
 
-func deregister(client *awsSsm.Client, instanceId string) error {
+func deregister(client SSMClient, instanceId string) error {
 	_, err := client.DeregisterManagedInstance(context.Background(), &awsSsm.DeregisterManagedInstanceInput{
 		InstanceId: &instanceId,
 	})
