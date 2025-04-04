@@ -1,6 +1,6 @@
 _dist
 _bin
-
+__debug_bin*
 cover.out
 coverage.out
 .idea

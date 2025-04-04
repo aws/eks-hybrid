@@ -108,29 +108,24 @@ func (e *E2E) Run(ctx context.Context) (E2EResult, error) {
 	}
 
 	// After this point we are going to run as much as we can regardeless of potential errors
-	// and will collect all errors to return them at the end
-	allErrors := []error{}
-
-	runTestsPhases, err := e.runTests(ctx)
-	if err != nil {
-		allErrors = append(allErrors, err)
-	}
+	runTestsPhases := e.runTests(ctx)
 	phases = append(phases, runTestsPhases...)
 
-	e2eResult, err := e.parseReport(ctx)
-	phases, err = phaseCompleted(phases, phaseNameParseReport, "parsing report", err)
-	if err != nil {
-		allErrors = append(allErrors, err)
-	}
+	cleanupPhases := e.runCleanup(ctx)
+	phases = append(phases, cleanupPhases...)
 
-	err = e.uploadArtifactsToS3(ctx)
-	phases, err = phaseCompleted(phases, phaseNameUploadArtifactsToS3, "uploading logs to s3", err)
-	if err != nil {
-		allErrors = append(allErrors, err)
-	}
+	e2eResult, parsePhases := e.parseReport(ctx)
+	phases = append(phases, parsePhases...)
+
+	uploadPhases := e.uploadArtifactsToS3(ctx)
+	phases = append(phases, uploadPhases...)
 
 	e2eResult.Phases = phases
-	return e2eResult, errors.Join(allErrors...)
+	var allErrors error
+	for _, phase := range phases {
+		allErrors = errors.Join(allErrors, phase.Error)
+	}
+	return e2eResult, allErrors
 }
 
 func (e *E2E) initPaths() {
@@ -145,27 +140,27 @@ func (e *E2E) initPaths() {
 	e.Paths.SetupLog = filepath.Join(e.TestConfig.ArtifactsFolder, testSetupLogFile)
 }
 
-func phaseCompleted(phases []Phase, name, message string, err error) ([]Phase, error) {
+func phaseCompleted(phases []Phase, name, message string, err error) []Phase {
 	phase := Phase{Name: name, Status: "success"}
 	if err != nil {
 		phase.Error = fmt.Errorf("%s: %w", message, err)
 		phase.FailureMessage = err.Error()
 		phase.Status = "failure"
 	}
-	return append(phases, phase), phase.Error
+	return append(phases, phase)
 }
 
 // preTestSetup sets up the directories and writes the test configs
 // it returns the failed phase and an error if one occurred
 func (e *E2E) preTestSetup() ([]Phase, error) {
 	err := e.setupDirectories()
-	phases, err := phaseCompleted([]Phase{}, phaseNameSetupDirectories, "setting up directories", err)
+	phases := phaseCompleted([]Phase{}, phaseNameSetupDirectories, "setting up directories", err)
 	if err != nil {
 		return phases, err
 	}
 
 	err = e.writeTestConfigs()
-	phases, err = phaseCompleted(phases, phaseNameWriteTestConfigs, "creating test config", err)
+	phases = phaseCompleted(phases, phaseNameWriteTestConfigs, "creating test config", err)
 	if err != nil {
 		return phases, err
 	}
@@ -173,7 +168,7 @@ func (e *E2E) preTestSetup() ([]Phase, error) {
 	return phases, nil
 }
 
-func (e *E2E) runTests(ctx context.Context) ([]Phase, error) {
+func (e *E2E) runTests(ctx context.Context) []Phase {
 	runner := E2ERunner{
 		AwsCfg:          e.AwsCfg,
 		Logger:          e.Logger,
@@ -183,23 +178,47 @@ func (e *E2E) runTests(ctx context.Context) ([]Phase, error) {
 		TestProcs:       e.TestProcs,
 		TestTimeout:     e.TestTimeout,
 		TestResources:   e.TestResources,
-		SkipCleanup:     e.SkipCleanup,
 		SkippedTests:    e.SkippedTests,
 	}
-	return runner.Run(ctx)
+	phases := runner.Run(ctx)
+	for _, phase := range phases {
+		if phase.Error != nil {
+			e.Logger.Error(phase.Error, "Failed test running phase", "phase", phase.Name)
+		}
+	}
+	return phases
+}
+
+func (e *E2E) runCleanup(ctx context.Context) []Phase {
+	if e.SkipCleanup {
+		e.Logger.Info("Skipping cluster and infrastructure cleanup via stack deletion")
+		return []Phase{}
+	}
+
+	cleaner := E2ECleanup{
+		AwsCfg:        e.AwsCfg,
+		Logger:        newFileLogger(e.Paths.CleanupLog, e.NoColor),
+		TestResources: e.TestResources,
+	}
+	return cleaner.Run(ctx)
 }
 
 // parseReport parses the report and returns the E2EResult
 // on error an empty E2EResult is returned
-func (e *E2E) parseReport(ctx context.Context) (E2EResult, error) {
+func (e *E2E) parseReport(ctx context.Context) (E2EResult, []Phase) {
 	report := E2EReport{
 		ArtifactsFolder: e.TestConfig.ArtifactsFolder,
 	}
 
-	return report.Parse(ctx, e.Paths.ReportsFileJSON)
+	e2eResult, err := report.Parse(ctx, e.Paths.ReportsFileJSON)
+	phases := phaseCompleted([]Phase{}, phaseNameParseReport, "parsing report", err)
+	if err != nil {
+		e.Logger.Error(err, "Failed to parse report")
+	}
+	return e2eResult, phases
 }
 
-func (e *E2E) uploadArtifactsToS3(ctx context.Context) error {
+func (e *E2E) uploadArtifactsToS3(ctx context.Context) []Phase {
 	artifacts := E2EArtifacts{
 		ArtifactsFolder: e.TestConfig.ArtifactsFolder,
 		AwsCfg:          e.AwsCfg,
@@ -207,7 +226,12 @@ func (e *E2E) uploadArtifactsToS3(ctx context.Context) error {
 		LogsBucket:      e.TestConfig.LogsBucket,
 		LogsBucketPath:  e.Paths.LogsBucketPath,
 	}
-	return artifacts.Upload(ctx)
+	err := artifacts.Upload(ctx)
+	phases := phaseCompleted([]Phase{}, phaseNameUploadArtifactsToS3, "uploading artifacts to s3", err)
+	if err != nil {
+		e.Logger.Error(err, "Failed to upload artifacts to s3")
+	}
+	return phases
 }
 
 func (e *E2E) PrintResults(ctx context.Context, e2eResult E2EResult) error {
@@ -257,4 +281,8 @@ func (e *E2E) writeTestConfigs() error {
 		return fmt.Errorf("writing test resources: %w", err)
 	}
 	return nil
+}
+
+func newFileLogger(fileName string, noColor bool) logr.Logger {
+	return e2e.NewLogger(e2e.LoggerConfig{NoColor: noColor}, e2e.WithOutputFile(fileName))
 }
