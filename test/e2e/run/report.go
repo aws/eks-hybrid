@@ -115,6 +115,7 @@ func (e *E2EReport) parseJSONReport(reportPath string) (E2EResult, error) {
 			continue
 		}
 
+		e2eResult.TestFailed = e2eResult.TestFailed + 1
 		if failedTest.InstanceName == "" {
 			reportErrors = append(reportErrors, fmt.Errorf("no instance name found for test"))
 			continue
@@ -130,8 +131,6 @@ func (e *E2EReport) parseJSONReport(reportPath string) (E2EResult, error) {
 		e2eResult.SetupLog = e2eResult.ArtifactsBucketPath + testSetupLogFile
 		e2eResult.CleanupLog = e2eResult.ArtifactsBucketPath + testCleanupLogFile
 	}
-
-	e2eResult.TestFailed = len(e2eResult.FailedTests)
 
 	return e2eResult, errors.Join(reportErrors...)
 }
