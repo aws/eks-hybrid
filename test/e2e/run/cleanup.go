@@ -2,7 +2,6 @@ package run
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -12,26 +11,34 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 )
 
+const (
+	phaseNameCleanupStack   = "StackCleanup"
+	phaseNameCleanupSweeper = "SweeperCleanup"
+)
+
 type E2ECleanup struct {
 	AwsCfg        aws.Config
 	Logger        logr.Logger
 	TestResources cluster.TestResources
 }
 
-func (e *E2ECleanup) Run(ctx context.Context) error {
+func (e *E2ECleanup) Run(ctx context.Context) []Phase {
+	phases := []Phase{}
 	// We want to run both to ensure any dangling resources are cleaned up
 	// The sweeper cleanup is configured for this specific cluster name
-	cleanupErrors := []error{}
-	if err := e.clusterStackCleanup(ctx); err != nil {
-		cleanupErrors = append(cleanupErrors, fmt.Errorf("running cleanup cluster via stack deletion: %w", err))
+	err := e.clusterStackCleanup(ctx)
+	phases = phaseCompleted(phases, phaseNameCleanupStack, "running cleanup cluster via stack deletion", err)
+	if err != nil {
+		e.Logger.Error(err, "Failed to run cleanup cluster via stack deletion")
 	}
-	if err := e.clusterSweeperCleanup(ctx); err != nil {
-		cleanupErrors = append(cleanupErrors, fmt.Errorf("running cleanup cluster via sweeper: %w", err))
+
+	err = e.clusterSweeperCleanup(ctx)
+	phases = phaseCompleted(phases, phaseNameCleanupSweeper, "running cleanup cluster via sweeper", err)
+	if err != nil {
+		e.Logger.Error(err, "Failed to run cleanup cluster via sweeper")
 	}
-	if len(cleanupErrors) > 0 {
-		return errors.Join(cleanupErrors...)
-	}
-	return nil
+
+	return phases
 }
 
 func (e *E2ECleanup) clusterStackCleanup(ctx context.Context) error {
