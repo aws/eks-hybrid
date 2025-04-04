@@ -49,6 +49,14 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 		AccessConfig: &types.CreateAccessConfigRequest{
 			AuthenticationMode: types.AuthenticationModeApiAndConfigMap,
 		},
+		Logging: &types.Logging{
+			ClusterLogging: []types.LogSetup{
+				{
+					Enabled: aws.Bool(true),
+					Types:   []types.LogType{"api", "audit", "authenticator", "controllerManager", "scheduler"},
+				},
+			},
+		},
 		RemoteNetworkConfig: &types.RemoteNetworkConfigRequest{
 			RemoteNodeNetworks: []types.RemoteNodeNetwork{
 				{
