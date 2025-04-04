@@ -10,12 +10,18 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
+)
+
+const (
+	cleanupBuffer       = time.Minute * 5
+	ginkgoCleanupBuffer = time.Minute * 1
 )
 
 type E2ERunner struct {
@@ -54,13 +60,18 @@ func (e *E2ERunner) Run(ctx context.Context) ([]Phase, error) {
 		}
 	}()
 
-	setupErr := e.setupTestInfrastructure(ctx)
+	// save 5 minutes for cleanup
+	deadline, _ := ctx.Deadline()
+	setupAndTestCtx, cancelFunc := context.WithDeadline(ctx, deadline.Add(-cleanupBuffer))
+	defer cancelFunc()
+
+	setupErr := e.setupTestInfrastructure(setupAndTestCtx)
 	phases, setupErr = phaseCompleted(phases, phaseNameSetupTestInfrastructure, "setting up test infrastructure", setupErr)
 	if setupErr != nil {
 		err = setupErr
 		return phases, err
 	}
-	testsErr := e.executeTests(ctx)
+	testsErr := e.executeTests(setupAndTestCtx)
 	phases, testsErr = phaseCompleted(phases, phaseNameExecuteTests, "executing tests", testsErr)
 	if testsErr != nil {
 		err = testsErr
@@ -89,6 +100,12 @@ func (e *E2ERunner) executeTests(ctx context.Context) error {
 		return fmt.Errorf("getting working directory: %w", err)
 	}
 
+	deadline, _ := ctx.Deadline()
+	timeout := (time.Until(deadline) - ginkgoCleanupBuffer).Round(time.Second)
+	if timeout <= 0 {
+		return fmt.Errorf("not enought time to run tests: %s", timeout)
+	}
+
 	noColorArg := ""
 	if e.NoColor {
 		noColorArg = "--no-color"
@@ -102,7 +119,7 @@ func (e *E2ERunner) executeTests(ctx context.Context) error {
 		fmt.Sprintf("--output-dir=%s", e.Paths.Reports),
 		fmt.Sprintf("--junit-report=%s", e2eReportsFile),
 		fmt.Sprintf("--json-report=%s", e2eReportsFileJSON),
-		fmt.Sprintf("--timeout=%s", e.TestTimeout),
+		fmt.Sprintf("--timeout=%s", timeout),
 		"--fail-on-empty",
 		noColorArg,
 		e.Paths.TestsBinaryOrSource,
