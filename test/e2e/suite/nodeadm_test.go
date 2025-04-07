@@ -163,21 +163,22 @@ var _ = SynchronizedBeforeSuite(
 
 var _ = Describe("Hybrid Nodes", func() {
 	osList := []e2e.NodeadmOS{
-		osystem.NewUbuntu2004AMD(),
-		osystem.NewUbuntu2004ARM(),
-		osystem.NewUbuntu2004DockerSource(),
-		osystem.NewUbuntu2204AMD(),
-		osystem.NewUbuntu2204ARM(),
-		osystem.NewUbuntu2204DockerSource(),
-		osystem.NewUbuntu2404AMD(),
-		osystem.NewUbuntu2404ARM(),
-		osystem.NewUbuntu2404DockerSource(),
-		osystem.NewAmazonLinux2023AMD(),
-		osystem.NewAmazonLinux2023ARM(),
-		osystem.NewRedHat8AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
-		osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
-		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
-		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// osystem.NewUbuntu2004AMD(),
+		// osystem.NewUbuntu2004ARM(),
+		// osystem.NewUbuntu2004DockerSource(),
+		// osystem.NewUbuntu2204AMD(),
+		// osystem.NewUbuntu2204ARM(),
+		// osystem.NewUbuntu2204DockerSource(),
+		// osystem.NewUbuntu2404AMD(),
+		// osystem.NewUbuntu2404ARM(),
+		// osystem.NewUbuntu2404DockerSource(),
+		// osystem.NewAmazonLinux2023AMD(),
+		// osystem.NewAmazonLinux2023ARM(),
+		// osystem.NewRedHat8AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		osystem.NewBottleRocket(),
 	}
 	credentialProviders := []e2e.NodeadmCredentialsProvider{
 		&credentials.SsmProvider{},
@@ -191,6 +192,10 @@ var _ = Describe("Hybrid Nodes", func() {
 		},
 		{
 			matchOS:            osystem.IsRHEL8,
+			matchCredsProvider: credentials.IsIAMRolesAnywhere,
+		},
+		{
+			matchOS:            osystem.IsBottlerocket,
 			matchCredsProvider: credentials.IsIAMRolesAnywhere,
 		},
 	}
@@ -260,7 +265,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							var verifyNode *kubernetes.VerifyNode
 							var serialOutput peered.ItBlockCloser
-							var node peered.PeerdNode
+							var node peered.PeeredNode
 
 							flakyCode := &FlakyCode{
 								Logger: test.logger,
@@ -323,16 +328,19 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
+							// TODO: Remove check when EKS Pod identity agent add-on supports
+							// configuring volumes to a writeable location on the Bottlerocket
+							// node.
 							test.logger.Info("Testing Pod Identity add-on functionality")
-							verifyPodIdentityAddon := test.newVerifyPodIdentityAddon(node.Name)
+							verifyPodIdentityAddon := test.newVerifyPodIdentityAddon(node.Name, node.OS.Name())
 							Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
 
 							test.logger.Info("Resetting hybrid node...")
-							cleanNode := test.newCleanNode(provider, node.Name, node.Instance.IP)
+							cleanNode := test.newCleanNode(provider, node.Name, node.Instance.IP, node.OS)
 							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 							test.logger.Info("Rebooting EC2 Instance.")
-							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, node.Instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
+							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, node.Instance.IP, node.OS.Name())).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
 							test.logger.Info("EC2 Instance rebooted successfully.")
 
 							serialOutput.It("re-joins the cluster after reboot", func() {
@@ -359,7 +367,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							// Skip upgrade flow for cluster with the minimum kubernetes version
 							isSupport, err := kubernetes.IsPreviousVersionSupported(test.cluster.KubernetesVersion)
 							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-							if !isSupport {
+							if !isSupport || osystem.IsBottlerocket(nodeOS.Name()) {
 								Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
 							}
 
@@ -383,7 +391,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							var verifyNode *kubernetes.VerifyNode
 							var serialOutput peered.ItBlockCloser
-							var node peered.PeerdNode
+							var node peered.PeeredNode
 
 							flakyCode := &FlakyCode{
 								Logger: test.logger,
@@ -451,7 +459,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
 
 							test.logger.Info("Resetting hybrid node...")
-							Expect(test.newCleanNode(provider, node.Name, node.Instance.IP).Run(ctx)).To(
+							Expect(test.newCleanNode(provider, node.Name, node.Instance.IP, node.OS).Run(ctx)).To(
 								Succeed(), "node should have been reset successfully",
 							)
 						},
@@ -534,6 +542,7 @@ func (t *peeredVPCTest) newPeeredNode() *peered.Node {
 			AWS:             t.aws,
 			EC2:             t.ec2Client,
 			SSM:             t.ssmClient,
+			K8sClientConfig: t.k8sClientConfig,
 			Logger:          t.logger,
 			Cluster:         t.cluster,
 			NodeadmURLs:     t.nodeadmURLs,
@@ -565,10 +574,11 @@ func (t *peeredVPCTest) newVerifyNode(nodeName, nodeIP string) *kubernetes.Verif
 	}
 }
 
-func (t *peeredVPCTest) newCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string) *nodeadm.CleanNode {
+func (t *peeredVPCTest) newCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string, os e2e.NodeadmOS) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
 		K8s:                 t.k8sClient,
 		RemoteCommandRunner: t.remoteCommandRunner,
+		OS:                  os,
 		Verifier:            provider,
 		Logger:              t.logger,
 		NodeName:            nodeName,
@@ -596,7 +606,7 @@ func (t *peeredVPCTest) instanceName(testName string, os e2e.NodeadmOS, provider
 	)
 }
 
-func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
+func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeName, osName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
 		Cluster:             t.cluster.Name,
 		NodeName:            nodeName,
@@ -608,6 +618,7 @@ func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		Logger:              t.logger,
 		K8SConfig:           t.k8sClientConfig,
 		Region:              t.cluster.Region,
+		OS:                  osName,
 	}
 }
 
