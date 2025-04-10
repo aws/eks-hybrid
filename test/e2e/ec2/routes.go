@@ -3,6 +3,7 @@ package ec2
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -15,6 +16,11 @@ func CreateRouteForCIDRToInstance(ctx context.Context, client *ec2.Client, route
 		DestinationCidrBlock: aws.String(cidr),
 		InstanceId:           aws.String(instanceID),
 	})
+
+	if err != nil && strings.Contains(err.Error(), "RouteAlreadyExists") {
+		return nil
+	}
+
 	if err != nil {
 		return fmt.Errorf("could not create route to instance %s for dst CIDR %s: %w", instanceID, cidr, err)
 	}

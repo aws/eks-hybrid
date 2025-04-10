@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
@@ -57,6 +58,20 @@ func ciliumNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *corev1.
 }
 
 func calicoNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *corev1.Node) ([]string, error) {
+	var podCIDRs []string
+	err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		// retry on any error
+		return true
+	}, func() error {
+		var err error
+		podCIDRs, err = getCalicoNodePodCIDR(ctx, k8s, node)
+		return err
+	})
+
+	return podCIDRs, err
+}
+
+func getCalicoNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *corev1.Node) ([]string, error) {
 	ipamBlockGVR := schema.GroupVersionResource{
 		Group:    "crd.projectcalico.org",
 		Version:  "v1",
