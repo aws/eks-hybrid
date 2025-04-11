@@ -14,6 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
+
+	"github.com/aws/eks-hybrid/test/e2e"
 )
 
 type SweeperInput struct {
@@ -43,11 +45,11 @@ type FilterInput struct {
 	DryRun               bool
 }
 
-func NewSweeper(aws aws.Config, logger logr.Logger) Sweeper {
+func NewSweeper(aws aws.Config, logger logr.Logger, endpoint string) Sweeper {
 	return Sweeper{
 		cfn:           cloudformation.NewFromConfig(aws),
 		ec2Client:     ec2.NewFromConfig(aws),
-		eks:           eks.NewFromConfig(aws),
+		eks:           e2e.NewEKSClient(aws, endpoint),
 		iam:           iam.NewFromConfig(aws),
 		logger:        logger,
 		ssm:           ssm.NewFromConfig(aws),

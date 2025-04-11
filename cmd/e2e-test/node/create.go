@@ -7,7 +7,6 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/eks"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmsdk "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
@@ -78,7 +77,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("setting up test infrastructure: %w", err)
 	}
 
-	eksClient := eks.NewFromConfig(aws)
+	eksClient := e2e.NewEKSClient(aws, config.Endpoint)
 	ec2Client := ec2.NewFromConfig(aws)
 	ssmClient := ssmsdk.NewFromConfig(aws)
 	s3Client := s3sdk.NewFromConfig(aws)

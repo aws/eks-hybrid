@@ -33,11 +33,7 @@ type Delete struct {
 func NewDelete(aws aws.Config, logger logr.Logger, endpoint string) Delete {
 	return Delete{
 		logger: logger,
-		eks: eks.NewFromConfig(aws, func(o *eks.Options) {
-			o.EndpointResolverV2 = &e2e.EksResolverV2{
-				Endpoint: endpoint,
-			}
-		}),
+		eks:    e2e.NewEKSClient(aws, endpoint),
 		stack: &stack{
 			iamClient: iam.NewFromConfig(aws),
 			cfn:       cloudformation.NewFromConfig(aws),

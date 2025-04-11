@@ -28,6 +28,12 @@ for i in {1..5}; do curl --fail -s --retry 5 -L "$NODEADM_URL" -o /tmp/nodeadm &
 
 chmod +x /tmp/nodeadm
 
+# we may have a custom eks endpoint in the nodeadm wrapper
+if [ -f /tmp/nodeadm-wrapper.sh ]; then
+    mv /tmp/nodeadm /tmp/nodeadm-bin
+    mv /tmp/nodeadm-wrapper.sh /tmp/nodeadm
+fi
+
 echo "Installing kubernetes components"
 /tmp/nodeadm install $KUBERNETES_VERSION $NODEADM_ADDITIONAL_ARGS --credential-provider $PROVDER --region $REGION
 

@@ -63,7 +63,7 @@ func (e *E2ERunner) Run(ctx context.Context) []Phase {
 
 func (e *E2ERunner) setupTestInfrastructure(ctx context.Context) error {
 	logger := newFileLogger(e.Paths.SetupLog, e.NoColor)
-	create := cluster.NewCreate(e.AwsCfg, logger, e.TestResources.Endpoint)
+	create := cluster.NewCreate(e.AwsCfg, logger, e.TestResources.EKS.Endpoint)
 
 	logger.Info("Creating cluster infrastructure for E2E tests...")
 	if err := create.Run(ctx, e.TestResources); err != nil {

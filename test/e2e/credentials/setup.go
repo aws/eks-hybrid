@@ -26,9 +26,7 @@ type Infrastructure struct {
 // Setup creates the necessary infrastructure for credentials providers to be used by nodeadm. Endpoint is
 // used by EKS client and will use default endpoint if an empty string is passed.
 func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterName, endpoint string) (*Infrastructure, error) {
-	eksClient := eks.NewFromConfig(config, func(o *eks.Options) {
-		o.EndpointResolverV2 = &e2e.EksResolverV2{Endpoint: endpoint}
-	})
+	eksClient := e2e.NewEKSClient(config, endpoint)
 	cfnClient := cloudformation.NewFromConfig(config)
 	iamClient := iam.NewFromConfig(config)
 

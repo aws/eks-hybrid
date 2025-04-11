@@ -20,6 +20,7 @@ type SweeperCommand struct {
 	ageThreshold  time.Duration
 	dryRun        bool
 	all           bool
+	eksEndpoint   string
 }
 
 func NewSweeperCommand() *SweeperCommand {
@@ -36,6 +37,7 @@ func NewSweeperCommand() *SweeperCommand {
 	sweeper.Duration(&cmd.ageThreshold, "", "age", "Age threshold for instance deletion")
 	sweeper.Bool(&cmd.dryRun, "", "dry-run", "Simulate the cleanup without making any changes")
 	sweeper.Bool(&cmd.all, "", "all", "Include all resources based on the age threshold in the cleanup")
+	sweeper.String(&cmd.eksEndpoint, "e", "eks-endpoint", "EKS API endpoint")
 
 	cmd.flaggy = sweeper
 
@@ -74,7 +76,7 @@ func (s *SweeperCommand) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}
 
-	sweeper := cleanup.NewSweeper(aws, logger)
+	sweeper := cleanup.NewSweeper(aws, logger, s.eksEndpoint)
 	input := cleanup.SweeperInput{
 		AllClusters:          s.all,
 		ClusterNamePrefix:    s.clusterPrefix,

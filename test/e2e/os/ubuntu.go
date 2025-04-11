@@ -26,6 +26,9 @@ var nodeAdmInitScript []byte
 //go:embed testdata/log-collector.sh
 var logCollectorScript []byte
 
+//go:embed testdata/nodeadm-wrapper.sh
+var nodeadmWrapperScript []byte
+
 type ubuntuCloudInitData struct {
 	e2e.UserDataInput
 	NodeadmUrl            string

@@ -42,12 +42,12 @@ func (e *E2ECleanup) Run(ctx context.Context) []Phase {
 }
 
 func (e *E2ECleanup) clusterStackCleanup(ctx context.Context) error {
-	delete := cluster.NewDelete(e.AwsCfg, e.Logger, e.TestResources.Endpoint)
+	delete := cluster.NewDelete(e.AwsCfg, e.Logger, e.TestResources.EKS.Endpoint)
 	e.Logger.Info("Cleaning up E2E cluster resources via Stack deletion")
 	deleteCluster := cluster.DeleteInput{
 		ClusterName:   e.TestResources.ClusterName,
 		ClusterRegion: e.TestResources.ClusterRegion,
-		Endpoint:      e.TestResources.Endpoint,
+		Endpoint:      e.TestResources.EKS.Endpoint,
 	}
 	if err := delete.Run(ctx, deleteCluster); err != nil {
 		return fmt.Errorf("cleaning up e2e resources: %w", err)
@@ -58,7 +58,7 @@ func (e *E2ECleanup) clusterStackCleanup(ctx context.Context) error {
 }
 
 func (e *E2ECleanup) clusterSweeperCleanup(ctx context.Context) error {
-	sweeper := cleanup.NewSweeper(e.AwsCfg, e.Logger)
+	sweeper := cleanup.NewSweeper(e.AwsCfg, e.Logger, e.TestResources.EKS.Endpoint)
 	e.Logger.Info("Cleaning up E2E cluster resources via Sweeper")
 	err := sweeper.Run(ctx, cleanup.SweeperInput{ClusterName: e.TestResources.ClusterName})
 	if err != nil {
