@@ -3,6 +3,7 @@ package os
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"text/template"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -39,13 +40,20 @@ func (a architecture) amd() bool {
 func populateBaseScripts(userDataInput *e2e.UserDataInput) error {
 	logCollector, err := executeTemplate(logCollectorScript, userDataInput)
 	if err != nil {
-		return err
+		return fmt.Errorf("generating log collector script: %w", err)
 	}
-
 	userDataInput.Files = append(userDataInput.Files,
 		e2e.File{Content: string(nodeAdmInitScript), Path: "/tmp/nodeadm-init.sh", Permissions: "0755"},
 		e2e.File{Content: string(logCollector), Path: "/tmp/log-collector.sh", Permissions: "0755"},
 	)
+
+	if userDataInput.EKSEndpoint != "" {
+		nodeadmWrapper, err := executeTemplate(nodeadmWrapperScript, userDataInput)
+		if err != nil {
+			return fmt.Errorf("generating nodeadm wrapper: %w", err)
+		}
+		userDataInput.Files = append(userDataInput.Files, e2e.File{Content: string(nodeadmWrapper), Path: "/tmp/nodeadm-wrapper.sh", Permissions: "0755"})
+	}
 	return nil
 }
 

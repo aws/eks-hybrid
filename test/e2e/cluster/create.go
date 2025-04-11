@@ -28,7 +28,12 @@ type TestResources struct {
 	HybridNetwork     NetworkConfig `yaml:"hybridNetwork"`
 	KubernetesVersion string        `yaml:"kubernetesVersion"`
 	Cni               string        `yaml:"cni"`
-	Endpoint          string        `yaml:"endpoint"`
+	EKS               EKSConfig     `yaml:"eks"`
+}
+type EKSConfig struct {
+	Endpoint      string `yaml:"endpoint"`
+	ClusterRoleSP string `yaml:"clusterRoleSP"`
+	PodIdentitySP string `yaml:"podIdentitySP"`
 }
 
 type NetworkConfig struct {
@@ -56,9 +61,7 @@ type Create struct {
 func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 	return Create{
 		logger: logger,
-		eks: eks.NewFromConfig(aws, func(o *eks.Options) {
-			o.EndpointResolverV2 = &e2e.EksResolverV2{Endpoint: endpoint}
-		}),
+		eks:    e2e.NewEKSClient(aws, endpoint),
 		stack: &stack{
 			iamClient: iam.NewFromConfig(aws),
 			cfn:       cloudformation.NewFromConfig(aws),

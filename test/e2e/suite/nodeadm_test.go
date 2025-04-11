@@ -72,6 +72,7 @@ func TestE2E(t *testing.T) {
 
 type peeredVPCTest struct {
 	aws             aws.Config // TODO: move everything to aws sdk v2
+	eksEndpoint     string
 	eksClient       *eks.Client
 	ec2Client       *ec2v2.Client
 	ssmClient       *ssmv2.Client
@@ -265,6 +266,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
 								var err error
 								node, err = peeredNode.Create(ctx, &peered.NodeSpec{
+									EKSEndpoint:    test.eksEndpoint,
 									InstanceName:   instanceName,
 									NodeK8sVersion: k8sVersion,
 									NodeName:       nodeName,
@@ -389,6 +391,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
 								var err error
 								node, err = peeredNode.Create(ctx, &peered.NodeSpec{
+									EKSEndpoint:    test.eksEndpoint,
 									InstanceName:   instanceName,
 									NodeK8sVersion: nodeKubernetesVersion,
 									NodeName:       nodeName,
@@ -464,6 +467,7 @@ var _ = Describe("Hybrid Nodes", func() {
 func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) (*peeredVPCTest, error) {
 	pausableLogger := newLoggerForTests()
 	test := &peeredVPCTest{
+		eksEndpoint:            suite.TestConfig.Endpoint,
 		stackOut:               suite.CredentialsStackOutput,
 		logger:                 pausableLogger.Logger,
 		loggerControl:          pausableLogger,
@@ -481,7 +485,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 	}
 
 	test.aws = aws
-	test.eksClient = eks.NewFromConfig(aws)
+	test.eksClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
 	test.ec2Client = ec2v2.NewFromConfig(aws)
 	test.ssmClient = ssmv2.NewFromConfig(aws)
 	test.s3Client = s3v2.NewFromConfig(aws)

@@ -58,6 +58,14 @@ Parameters:
     Type: String
     Description: Tag key for the creation time of the stack
 
+  EKSClusterRoleSP:
+    Type: String
+    Description: The Service Principal for the EKS Hybrid Cluster Role
+
+  EKSPodIdentitySP:
+    Type: String
+    Description: The Service Principal for the EKS Pod Identity Association Role
+
 Resources:
   ClusterRole:
     Type: AWS::IAM::Role
@@ -67,7 +75,7 @@ Resources:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
-              Service: eks.amazonaws.com
+              Service: !Ref EKSClusterRoleSP
         Version: '2012-10-17'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
@@ -440,7 +448,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 'pods.eks.amazonaws.com'
+              Service: !Ref EKSPodIdentitySP
             Action:
               - sts:AssumeRole
               - sts:TagSession

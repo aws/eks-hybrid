@@ -43,6 +43,7 @@ type Node struct {
 
 // NodeSpec configures the Hybrid Node.
 type NodeSpec struct {
+	EKSEndpoint        string
 	InstanceName       string
 	InstanceProfileARN string
 	NodeK8sVersion     string
@@ -113,6 +114,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 	}
 
 	userdata, err := spec.OS.BuildUserData(e2e.UserDataInput{
+		EKSEndpoint:       spec.EKSEndpoint,
 		KubernetesVersion: spec.NodeK8sVersion,
 		NodeadmUrls:       c.NodeadmURLs,
 		NodeadmConfigYaml: string(nodeadmConfigYaml),

@@ -33,6 +33,8 @@ var setupTemplateBody []byte
 
 const (
 	creationTimeParameterKey = "CreationTime"
+	defaultClusterRoleSP     = "eks.amazonaws.com"
+	defaultPodIdentitySP     = "pods.eks.amazonaws.com"
 	stackWaitTimeout         = 7 * time.Minute
 	stackWaitInterval        = 10 * time.Second
 )
@@ -67,7 +69,7 @@ type stack struct {
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
 	stackName := stackName(test.ClusterName)
 
-	params := s.prepareStackParameters(test)
+	params := s.prepareStackParameters(test, test.EKS)
 
 	// There are occasional race conditions when creating the cfn stack
 	// retrying once allows to potentially resolve them on the second attempt
@@ -108,7 +110,15 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	return result, nil
 }
 
-func (s *stack) prepareStackParameters(test TestResources) []types.Parameter {
+func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []types.Parameter {
+	clusterRoleSP := defaultClusterRoleSP
+	if eks.ClusterRoleSP != "" {
+		clusterRoleSP = eks.ClusterRoleSP
+	}
+	podIdentitySP := defaultPodIdentitySP
+	if eks.PodIdentitySP != "" {
+		podIdentitySP = eks.PodIdentitySP
+	}
 	return []types.Parameter{
 		{
 			ParameterKey:   aws.String("ClusterName"),
@@ -171,6 +181,14 @@ func (s *stack) prepareStackParameters(test TestResources) []types.Parameter {
 		{
 			ParameterKey:   aws.String("CreationTimeTagKey"),
 			ParameterValue: aws.String(constants.CreationTimeTagKey),
+		},
+		{
+			ParameterKey:   aws.String("EKSClusterRoleSP"),
+			ParameterValue: aws.String(clusterRoleSP),
+		},
+		{
+			ParameterKey:   aws.String("EKSPodIdentitySP"),
+			ParameterValue: aws.String(podIdentitySP),
 		},
 	}
 }

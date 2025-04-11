@@ -21,6 +21,7 @@ type NodeadmOS interface {
 
 type UserDataInput struct {
 	CredsProviderName string
+	EKSEndpoint       string
 	KubernetesVersion string
 	NodeadmUrls       NodeadmURLs
 	NodeadmConfigYaml string

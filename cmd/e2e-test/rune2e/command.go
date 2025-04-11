@@ -36,7 +36,6 @@ type command struct {
 	artifactsDir      string
 	clusterName       string
 	cni               string
-	endpoint          string
 	ginkgoBinaryPath  string
 	k8sVersion        string
 	logsBucket        string
@@ -63,7 +62,6 @@ func NewCommand() *command {
 		nodeadmAMDURL:     defaultNodeadmAMDURL,
 		nodeadmARMURL:     defaultNodeadmARMURL,
 		skipCleanup:       false,
-		region:            defaultRegion,
 		subCmd:            flaggy.NewSubcommand("run-e2e"),
 		testProcs:         defaultTestProcs,
 		timeout:           defaultTimeout,
@@ -78,7 +76,6 @@ func NewCommand() *command {
 	cmd.subCmd.String(&cmd.nodeadmARMURL, "", "nodeadm-arm-url", "NodeADM ARM URL (optional)")
 	cmd.subCmd.String(&cmd.logsBucket, "b", "logs-bucket", "S3 bucket for logs (optional)")
 	cmd.subCmd.String(&cmd.artifactsDir, "a", "artifacts-dir", "Directory for artifacts (optional, defaults to a new temp directory)")
-	cmd.subCmd.String(&cmd.endpoint, "e", "endpoint", "AWS endpoint (optional)")
 	cmd.subCmd.String(&cmd.skippedTests, "s", "skipped-tests", "ginkgo regex to skip tests (optional)")
 	cmd.subCmd.Duration(&cmd.timeout, "", "timeout", "Timeout for the test (optional)")
 	cmd.subCmd.String(&cmd.testLabelFilter, "f", "test-filter", "Filter for the test (optional)")
@@ -107,6 +104,9 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	awsCfg, err := e2e.NewAWSConfig(ctx, config.WithRegion(c.region))
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
+	}
+	if c.region == "" {
+		c.region = awsCfg.Region
 	}
 
 	testResources, err := c.loadSetupConfig(logger)
@@ -188,7 +188,6 @@ func (c *command) loadSetupConfig(logger logr.Logger) (cluster.TestResources, er
 		ClusterRegion:     c.region,
 		KubernetesVersion: c.k8sVersion,
 		Cni:               c.cni,
-		Endpoint:          c.endpoint,
 		ClusterNetwork: cluster.NetworkConfig{
 			VpcCidr:           "10.0.0.0/16",
 			PublicSubnetCidr:  "10.0.10.0/24",
@@ -208,9 +207,8 @@ func (c *command) loadSetupConfig(logger logr.Logger) (cluster.TestResources, er
 		if c.clusterName != defaultClusterName ||
 			c.region != defaultRegion ||
 			c.k8sVersion != defaultK8sVersion ||
-			c.cni != defaultCNI ||
-			c.endpoint != "" {
-			return testResources, fmt.Errorf("cannot specify both setup-config file and individual cluster resource flags (name, region, kubernetes-version, cni, endpoint)")
+			c.cni != defaultCNI {
+			return testResources, fmt.Errorf("cannot specify both setup-config file and individual cluster resource flags (name, region, kubernetes-version, cni, eks-endpoint)")
 		}
 
 		// Load test resources from file
@@ -235,10 +233,10 @@ func (c *command) loadTestConfig(testResources cluster.TestResources, logger log
 	testConfig := e2e.TestConfig{
 		ClusterName:   testResources.ClusterName,
 		ClusterRegion: testResources.ClusterRegion,
-		Endpoint:      testResources.Endpoint,
 		NodeadmUrlAMD: c.nodeadmAMDURL,
 		NodeadmUrlARM: c.nodeadmARMURL,
 		LogsBucket:    c.logsBucket,
+		Endpoint:      testResources.EKS.Endpoint,
 	}
 
 	if c.testConfigFile != "" {
