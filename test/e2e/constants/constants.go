@@ -1,5 +1,7 @@
 package constants
 
+import "time"
+
 const (
 	CreationTimeTagKey              = "CreationTime"
 	TestClusterTagKey               = "Nodeadm-E2E-Tests-Cluster"
@@ -15,4 +17,5 @@ const (
 	TestS3LogsFolder                = "logs"
 	SerialOutputLogFile             = "serial-output.log"
 	TestInstanceNameKubernetesLabel = "test.eks-hybrid.amazonaws.com/node-name"
+	DeferCleanupTimeout             = 5 * time.Minute
 )

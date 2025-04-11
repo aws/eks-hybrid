@@ -8,58 +8,26 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
-	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/eks"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
-	s3v2 "github.com/aws/aws-sdk-go-v2/service/s3"
-	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
-	clientgo "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/test/e2e"
-	"github.com/aws/eks-hybrid/test/e2e/addon"
-	"github.com/aws/eks-hybrid/test/e2e/cluster"
-	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
-	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
-	"github.com/aws/eks-hybrid/test/e2e/s3"
-	"github.com/aws/eks-hybrid/test/e2e/ssm"
 )
-
-const deferCleanupTimeout = 5 * time.Minute
 
 var (
 	filePath string
 	suite    *suiteConfiguration
 )
-
-type suiteConfiguration struct {
-	TestConfig             *e2e.TestConfig          `json:"testConfig"`
-	SkipCleanup            bool                     `json:"skipCleanup"`
-	CredentialsStackOutput *credentials.StackOutput `json:"ec2StackOutput"`
-	RolesAnywhereCACertPEM []byte                   `json:"rolesAnywhereCACertPEM"`
-	RolesAnywhereCAKeyPEM  []byte                   `json:"rolesAnywhereCAPrivateKeyPEM"`
-	PublicKey              string                   `json:"publicKey"`
-	JumpboxInstanceId      string                   `json:"jumpboxInstanceId"`
-}
 
 func init() {
 	flag.StringVar(&filePath, "filepath", "", "Path to configuration")
@@ -68,43 +36,6 @@ func init() {
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "E2E Suite")
-}
-
-type peeredVPCTest struct {
-	aws             aws.Config // TODO: move everything to aws sdk v2
-	eksClient       *eks.Client
-	ec2Client       *ec2v2.Client
-	ssmClient       *ssmv2.Client
-	cfnClient       *cloudformation.Client
-	k8sClient       clientgo.Interface
-	k8sClientConfig *rest.Config
-	s3Client        *s3v2.Client
-	iamClient       *iam.Client
-
-	logger        logr.Logger
-	loggerControl e2e.PausableLogger
-	logsBucket    string
-	artifactsPath string
-
-	cluster         *peered.HybridCluster
-	stackOut        *credentials.StackOutput
-	nodeadmURLs     e2e.NodeadmURLs
-	rolesAnywhereCA *credentials.Certificate
-
-	overrideNodeK8sVersion string
-	setRootPassword        bool
-	skipCleanup            bool
-
-	publicKey string
-
-	remoteCommandRunner commands.RemoteCommandRunner
-
-	podIdentityS3Bucket string
-
-	// failureMessageLogged tracks if a terminal error due to a failed gomega
-	// expectation has already been registered and logged . It avoids logging
-	// the same multiple times.
-	failureMessageLogged bool
 }
 
 var _ = SynchronizedBeforeSuite(
@@ -135,7 +66,7 @@ var _ = SynchronizedBeforeSuite(
 				return
 			}
 			Expect(infra.Teardown(ctx)).To(Succeed(), "should teardown e2e resources")
-		}, NodeTimeout(deferCleanupTimeout))
+		}, NodeTimeout(constants.DeferCleanupTimeout))
 
 		suiteJson, err := yaml.Marshal(
 			&suiteConfiguration{
@@ -222,424 +153,100 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 
 		When("using ec2 instance as hybrid nodes", func() {
+			upgradeEntries := []TableEntry{}
+			initEntries := []TableEntry{}
 			for _, nodeOS := range osList {
 			providerLoop:
 				for _, provider := range credentialProviders {
 					if notSupported.matches(nodeOS.Name(), provider.Name()) {
 						continue providerLoop
 					}
-
-					DescribeTable("Joining a node",
-						func(ctx context.Context, nodeOS e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
-							Expect(nodeOS).NotTo(BeNil())
-							Expect(provider).NotTo(BeNil())
-
-							instanceName := test.instanceName("init", nodeOS, provider)
-							nodeName := "simpleflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
-
-							k8sVersion := test.cluster.KubernetesVersion
-							if test.overrideNodeK8sVersion != "" {
-								k8sVersion = suite.TestConfig.NodeK8sVersion
-							}
-
-							existingNode, err := kubernetes.CheckForNodeWithE2ELabel(ctx, test.k8sClient, nodeName)
-							Expect(err).NotTo(HaveOccurred(), "check for existing node with e2e label")
-							Expect(existingNode).To(BeNil(), "existing node with e2e label should not have been found")
-
-							peeredNode := test.newPeeredNode()
-
-							AddReportEntry(constants.TestInstanceName, instanceName)
-							if test.logsBucket != "" {
-								AddReportEntry(constants.TestArtifactsPath, peeredNode.S3LogsURL(instanceName))
-								AddReportEntry(constants.TestLogBundleFile, peeredNode.S3LogsURL(instanceName)+constants.LogCollectorBundleFileName)
-							}
-
-							var verifyNode *kubernetes.VerifyNode
-							var serialOutput peered.ItBlockCloser
-							var node peered.PeerdNode
-
-							flakyCode := &FlakyCode{
-								Logger:      test.logger,
-								FailHandler: test.handleFailure,
-							}
-							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
-								var err error
-								node, err = peeredNode.Create(ctx, &peered.NodeSpec{
-									InstanceName:   instanceName,
-									NodeK8sVersion: k8sVersion,
-									NodeName:       nodeName,
-									OS:             nodeOS,
-									Provider:       provider,
-								})
-								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
-								flakeRun.DeferCleanup(func(ctx context.Context) {
-									if credentials.IsSsm(provider.Name()) {
-										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName, test.cluster.Name)).To(Succeed())
-									}
-									Expect(peeredNode.Cleanup(ctx, node)).To(Succeed())
-								}, NodeTimeout(deferCleanupTimeout))
-
-								verifyNode = test.newVerifyNode(node.Name, node.Instance.IP)
-
-								outputFile := filepath.Join(test.artifactsPath, instanceName+"-"+constants.SerialOutputLogFile)
-								AddReportEntry(constants.TestSerialOutputLogFile, outputFile)
-								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
-									By:         By,
-									PeeredNode: peeredNode,
-									Instance:   node.Instance,
-									TestLogger: test.loggerControl,
-									OutputFile: outputFile,
-								})
-								flakeRun.DeferCleanup(func(ctx context.Context) {
-									serialOutput.Close()
-								}, NodeTimeout(deferCleanupTimeout))
-
-								serialOutput.It("joins the cluster", func() {
-									test.logger.Info("Waiting for EC2 Instance to be Running...")
-									flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
-									_, err := verifyNode.WaitForNodeReady(ctx)
-									if err != nil {
-										// an ec2 node is considered impaired if the reachability health check fails
-										// in these cases we want to retry by deleting the instance and recreating it
-										// to avoid failing tests due to instance boot issues that are not related
-										// to nodeadm or the test itself
-										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, node.Instance.ID)
-										if oErr != nil {
-											Expect(oErr).NotTo(HaveOccurred(), "should describe instance status")
-										}
-										expect := Expect
-										if isImpaired {
-											expect = flakeRun.RetryableExpect
-										}
-
-										expect(err).To(Succeed(), "node should have joined the cluster successfully")
-
-									}
-								})
-							})
-
-							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
-
-							test.logger.Info("Testing Pod Identity add-on functionality")
-							verifyPodIdentityAddon := test.newVerifyPodIdentityAddon(node.Name)
-							Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
-
-							test.logger.Info("Resetting hybrid node...")
-							cleanNode := test.newCleanNode(provider, node.Name, node.Instance.IP)
-							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
-
-							test.logger.Info("Rebooting EC2 Instance.")
-							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, node.Instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
-							test.logger.Info("EC2 Instance rebooted successfully.")
-
-							serialOutput.It("re-joins the cluster after reboot", func() {
-								Expect(verifyNode.WaitForNodeReady(ctx)).Error().To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
-							})
-
-							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
-
-							if test.skipCleanup {
-								test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
-								return
-							}
-
-							Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
-						},
-						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", nodeOS.Name(), string(provider.Name())), nodeOS, provider, Label(nodeOS.Name(), string(provider.Name()), "simpleflow", "init")),
-					)
-
-					DescribeTable("Upgrade nodeadm flow",
-						func(ctx context.Context, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
-							Expect(os).NotTo(BeNil())
-							Expect(provider).NotTo(BeNil())
-
-							// Skip upgrade flow for cluster with the minimum kubernetes version
-							isSupport, err := kubernetes.IsPreviousVersionSupported(test.cluster.KubernetesVersion)
-							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-							if !isSupport {
-								Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
-							}
-
-							instanceName := test.instanceName("upgrade", os, provider)
-							nodeName := "upgradeflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
-
-							nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
-							Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-
-							existingNode, err := kubernetes.CheckForNodeWithE2ELabel(ctx, test.k8sClient, nodeName)
-							Expect(err).NotTo(HaveOccurred(), "check for existing node with e2e label")
-							Expect(existingNode).To(BeNil(), "existing node with e2e label should not have been found")
-
-							peeredNode := test.newPeeredNode()
-
-							AddReportEntry(constants.TestInstanceName, instanceName)
-							if test.logsBucket != "" {
-								AddReportEntry(constants.TestArtifactsPath, peeredNode.S3LogsURL(instanceName))
-								AddReportEntry(constants.TestLogBundleFile, peeredNode.S3LogsURL(instanceName)+constants.LogCollectorBundleFileName)
-							}
-
-							var verifyNode *kubernetes.VerifyNode
-							var serialOutput peered.ItBlockCloser
-							var node peered.PeerdNode
-
-							flakyCode := &FlakyCode{
-								Logger:      test.logger,
-								FailHandler: test.handleFailure,
-							}
-							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
-								var err error
-								node, err = peeredNode.Create(ctx, &peered.NodeSpec{
-									InstanceName:   instanceName,
-									NodeK8sVersion: nodeKubernetesVersion,
-									NodeName:       nodeName,
-									OS:             os,
-									Provider:       provider,
-								})
-								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
-								flakeRun.DeferCleanup(func(ctx context.Context) {
-									if credentials.IsSsm(provider.Name()) {
-										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName, test.cluster.Name)).To(Succeed())
-									}
-									Expect(peeredNode.Cleanup(ctx, node)).To(Succeed())
-								}, NodeTimeout(deferCleanupTimeout))
-
-								verifyNode = test.newVerifyNode(node.Name, node.Instance.IP)
-
-								outputFile := filepath.Join(test.artifactsPath, instanceName+"-"+constants.SerialOutputLogFile)
-								AddReportEntry(constants.TestSerialOutputLogFile, outputFile)
-								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
-									By:         By,
-									PeeredNode: peeredNode,
-									Instance:   node.Instance,
-									TestLogger: test.loggerControl,
-									OutputFile: outputFile,
-								})
-								Expect(err).NotTo(HaveOccurred(), "should prepare serial output")
-								flakeRun.DeferCleanup(func(ctx context.Context) {
-									serialOutput.Close()
-								}, NodeTimeout(deferCleanupTimeout))
-
-								serialOutput.It("joins the cluster", func() {
-									test.logger.Info("Waiting for EC2 Instance to be Running...")
-									flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
-									_, err := verifyNode.WaitForNodeReady(ctx)
-									if err != nil {
-										// an ec2 node is considered impaired if the reachability health check fails
-										// in these cases we want to retry by deleting the instance and recreating it
-										// to avoid failing tests due to instance boot issues that are not related
-										// to nodeadm or the test itself
-										isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, test.ec2Client, node.Instance.ID)
-										if oErr != nil {
-											Expect(err).NotTo(HaveOccurred(), "should describe instance status")
-										}
-										expect := Expect
-										if isImpaired {
-											expect = flakeRun.RetryableExpect
-										}
-
-										expect(err).To(Succeed(), "node should have joined the cluster successfully")
-
-									}
-								})
-							})
-							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
-
-							Expect(test.newUpgradeNode(node.Name, node.Instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
-
-							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
-
-							test.logger.Info("Resetting hybrid node...")
-							Expect(test.newCleanNode(provider, node.Name, node.Instance.IP).Run(ctx)).To(
-								Succeed(), "node should have been reset successfully",
-							)
-						},
-						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", nodeOS.Name(), string(provider.Name())), nodeOS, provider, Label(nodeOS.Name(), string(provider.Name()), "upgradeflow")),
-					)
+					initEntries = append(initEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", nodeOS.Name(), string(provider.Name())), nodeOS, provider, Label(nodeOS.Name(), string(provider.Name()), "simpleflow", "init")))
+					upgradeEntries = append(upgradeEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", nodeOS.Name(), string(provider.Name())), nodeOS, provider, Label(nodeOS.Name(), string(provider.Name()), "upgradeflow")))
 				}
 			}
+
+			DescribeTable("Joining a node",
+				func(ctx context.Context, nodeOS e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
+					Expect(nodeOS).NotTo(BeNil())
+					Expect(provider).NotTo(BeNil())
+
+					instanceName := test.instanceName("init", nodeOS, provider)
+					nodeName := "simpleflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
+
+					k8sVersion := test.cluster.KubernetesVersion
+					if test.overrideNodeK8sVersion != "" {
+						k8sVersion = suite.TestConfig.NodeK8sVersion
+					}
+
+					testNode := test.newTestNode(ctx, instanceName, nodeName, k8sVersion, nodeOS, provider)
+					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
+
+					test.logger.Info("Testing Pod Identity add-on functionality")
+					verifyPodIdentityAddon := test.newVerifyPodIdentityAddon(testNode.PeerdNode().Name)
+					Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+
+					test.logger.Info("Resetting hybrid node...")
+					cleanNode := test.newCleanNode(provider, testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP)
+					Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
+
+					test.logger.Info("Rebooting EC2 Instance.")
+					Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, testNode.PeerdNode().Instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
+					test.logger.Info("EC2 Instance rebooted successfully.")
+
+					testNode.It("re-joins the cluster after reboot", func() {
+						Expect(testNode.verifyNode.WaitForNodeReady(ctx)).Error().To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
+					})
+
+					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
+
+					if test.skipCleanup {
+						test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
+						return
+					}
+
+					Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
+				},
+				initEntries,
+			)
+
+			DescribeTable("Upgrade nodeadm flow",
+				func(ctx context.Context, nodeOS e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
+					Expect(nodeOS).NotTo(BeNil())
+					Expect(provider).NotTo(BeNil())
+
+					// Skip upgrade flow for cluster with the minimum kubernetes version
+					isSupport, err := kubernetes.IsPreviousVersionSupported(test.cluster.KubernetesVersion)
+					Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
+					if !isSupport {
+						Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
+					}
+
+					instanceName := test.instanceName("upgrade", nodeOS, provider)
+					nodeName := "upgradeflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
+
+					nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.cluster.KubernetesVersion)
+					Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
+
+					testNode := test.newTestNode(ctx, instanceName, nodeName, nodeKubernetesVersion, nodeOS, provider)
+					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
+
+					Expect(test.newUpgradeNode(testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
+
+					Expect(testNode.Verify(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
+
+					if test.skipCleanup {
+						test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
+						return
+					}
+					Expect(test.newCleanNode(provider, testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP).Run(ctx)).To(
+						Succeed(), "node should have been reset successfully",
+					)
+				},
+				upgradeEntries,
+			)
 		})
 	})
 })
-
-func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) (*peeredVPCTest, error) {
-	pausableLogger := newLoggerForTests()
-	test := &peeredVPCTest{
-		stackOut:               suite.CredentialsStackOutput,
-		logger:                 pausableLogger.Logger,
-		loggerControl:          pausableLogger,
-		logsBucket:             suite.TestConfig.LogsBucket,
-		artifactsPath:          suite.TestConfig.ArtifactsFolder,
-		overrideNodeK8sVersion: suite.TestConfig.NodeK8sVersion,
-		publicKey:              suite.PublicKey,
-		setRootPassword:        suite.TestConfig.SetRootPassword,
-		skipCleanup:            suite.SkipCleanup,
-	}
-
-	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion))
-	if err != nil {
-		return nil, err
-	}
-
-	test.aws = aws
-	test.eksClient = eks.NewFromConfig(aws)
-	test.ec2Client = ec2v2.NewFromConfig(aws)
-	test.ssmClient = ssmv2.NewFromConfig(aws)
-	test.s3Client = s3v2.NewFromConfig(aws)
-	test.cfnClient = cloudformation.NewFromConfig(aws)
-	test.iamClient = iam.NewFromConfig(aws)
-	test.remoteCommandRunner = ssm.NewSSHOnSSMCommandRunner(test.ssmClient, suite.JumpboxInstanceId, test.logger)
-
-	ca, err := credentials.ParseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
-	if err != nil {
-		return nil, err
-	}
-	test.rolesAnywhereCA = ca
-
-	// TODO: ideally this should be an input to the tests and not just
-	// assume same name/path used by the setup command.
-	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(suite.TestConfig.ClusterName))
-	if err != nil {
-		return nil, err
-	}
-	test.k8sClientConfig = clientConfig
-	test.k8sClient, err = clientgo.NewForConfig(clientConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	test.cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	urls, err := s3.BuildNodeamURLs(ctx, test.s3Client, suite.TestConfig.NodeadmUrlAMD, suite.TestConfig.NodeadmUrlARM)
-	if err != nil {
-		return nil, err
-	}
-	test.nodeadmURLs = *urls
-
-	test.podIdentityS3Bucket, err = addon.PodIdentityBucket(ctx, test.s3Client, test.cluster.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	// override the default fail handler to print the error message immediately
-	// following the error. We override here once the logger has been initialized
-	// to ensure the error message is printed after the serial log (if it happens while waiting)
-	RegisterFailHandler(test.handleFailure)
-
-	return test, nil
-}
-
-func (t *peeredVPCTest) newPeeredNode() *peered.Node {
-	return &peered.Node{
-		NodeCreate: peered.NodeCreate{
-			AWS:             t.aws,
-			EC2:             t.ec2Client,
-			SSM:             t.ssmClient,
-			Logger:          t.logger,
-			Cluster:         t.cluster,
-			NodeadmURLs:     t.nodeadmURLs,
-			PublicKey:       t.publicKey,
-			SetRootPassword: t.setRootPassword,
-		},
-		NodeCleanup: peered.NodeCleanup{
-			RemoteCommandRunner: t.remoteCommandRunner,
-			EC2:                 t.ec2Client,
-			SSM:                 t.ssmClient,
-			S3:                  t.s3Client,
-			K8s:                 t.k8sClient,
-			Logger:              t.logger,
-			SkipDelete:          t.skipCleanup,
-			ClusterName:         t.cluster.Name,
-			LogsBucket:          t.logsBucket,
-		},
-	}
-}
-
-func (t *peeredVPCTest) newVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode {
-	return &kubernetes.VerifyNode{
-		ClientConfig: t.k8sClientConfig,
-		K8s:          t.k8sClient,
-		Logger:       t.logger,
-		Region:       t.cluster.Region,
-		NodeName:     nodeName,
-		NodeIP:       nodeIP,
-	}
-}
-
-func (t *peeredVPCTest) newCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string) *nodeadm.CleanNode {
-	return &nodeadm.CleanNode{
-		K8s:                 t.k8sClient,
-		RemoteCommandRunner: t.remoteCommandRunner,
-		Verifier:            provider,
-		Logger:              t.logger,
-		NodeName:            nodeName,
-		NodeIP:              nodeIP,
-	}
-}
-
-func (t *peeredVPCTest) newUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
-	return &nodeadm.UpgradeNode{
-		K8s:                 t.k8sClient,
-		RemoteCommandRunner: t.remoteCommandRunner,
-		Logger:              t.logger,
-		NodeName:            nodeName,
-		NodeIP:              nodeIP,
-		TargetK8sVersion:    t.cluster.KubernetesVersion,
-	}
-}
-
-func (t *peeredVPCTest) instanceName(testName string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) string {
-	return fmt.Sprintf("EKSHybridCI-%s-%s-%s-%s",
-		testName,
-		e2e.SanitizeForAWSName(t.cluster.Name),
-		e2e.SanitizeForAWSName(os.Name()),
-		e2e.SanitizeForAWSName(string(provider.Name())),
-	)
-}
-
-func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
-	return &addon.VerifyPodIdentityAddon{
-		Cluster:             t.cluster.Name,
-		NodeName:            nodeName,
-		PodIdentityS3Bucket: t.podIdentityS3Bucket,
-		K8S:                 t.k8sClient,
-		EKSClient:           t.eksClient,
-		IAMClient:           t.iamClient,
-		S3Client:            t.s3Client,
-		Logger:              t.logger,
-		K8SConfig:           t.k8sClientConfig,
-		Region:              t.cluster.Region,
-	}
-}
-
-// handleFailure is a wrapper around ginkgo.Fail that logs the error message
-// immediately after it happens. It doesn't modify gomega's or ginkgo's regular
-// behavior.
-// We do this to help debug errors when going through the test logs.
-func (t *peeredVPCTest) handleFailure(message string, callerSkip ...int) {
-	skip := 0
-	if len(callerSkip) > 0 {
-		skip = callerSkip[0]
-	}
-	if !t.failureMessageLogged {
-		cl := types.NewCodeLocationWithStackTrace(skip + 1)
-		err := types.GinkgoError{
-			Message:      message,
-			CodeLocation: cl,
-		}
-		t.logger.Error(nil, err.Error())
-		t.failureMessageLogged = true
-	}
-	Fail(message, skip+1)
-}
-
-func newLoggerForTests() e2e.PausableLogger {
-	_, reporter := GinkgoConfiguration()
-	cfg := e2e.LoggerConfig{}
-	if reporter.NoColor {
-		cfg.NoColor = true
-	}
-	return e2e.NewPausableLogger(cfg)
-}
