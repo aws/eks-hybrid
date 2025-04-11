@@ -19,17 +19,22 @@ import (
 	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
+// Package manager types and commands
 const (
 	aptPackageManager  = "apt"
 	snapPackageManager = "snap"
 	yumPackageManager  = "yum"
 
+	// Snap-specific commands
 	snapInstallVerb = "install"
 	snapUpdateVerb  = "refresh"
 	snapRemoveVerb  = "remove"
 
-	yumUtilsManager             = "yum-config-manager"
-	yumUtilsManagerPkg          = "yum-utils"
+	// YUM utilities
+	yumUtilsManager    = "yum-config-manager"
+	yumUtilsManagerPkg = "yum-utils"
+
+	// Repository URLs and paths
 	centOsDockerRepo            = "https://download.docker.com/linux/centos/docker-ce.repo"
 	ubuntuDockerRepo            = "https://download.docker.com/linux/ubuntu"
 	ubuntuDockerGpgKey          = "https://download.docker.com/linux/ubuntu/gpg"
@@ -38,6 +43,7 @@ const (
 	aptDockerRepoSourceFilePath = "/etc/apt/sources.list.d/docker.list"
 	yumDockerRepoSourceFilePath = "/etc/yum.repos.d/docker-ce.repo"
 
+	// Package names
 	containerdDistroPkgName = "containerd"
 	containerdDockerPkgName = "containerd.io"
 	runcPkgName             = "runc"
@@ -47,6 +53,41 @@ const (
 	ssmPkgName      = "amazon-ssm-agent"
 )
 
+// Default containerd repository content
+// TODO: Change to include download from closest region
+const containerdRepoContent = `deb http://us-west-2.ec2.archive.ubuntu.com/ubuntu jammy-updates main
+deb http://security.ubuntu.com/ubuntu jammy-security main
+deb http://us-west-2.ec2.archive.ubuntu.com/ubuntu jammy main`
+
+// Maps for package manager commands
+var (
+	packageManagerInstallCmd = map[string]string{
+		aptPackageManager: "install",
+		yumPackageManager: "install",
+	}
+
+	packageManagerUpdateCmd = map[string]string{
+		aptPackageManager: "update",
+		yumPackageManager: "update",
+	}
+
+	packageManagerDeleteCmd = map[string]string{
+		aptPackageManager: "autoremove",
+		yumPackageManager: "remove",
+	}
+
+	packageManagerMetadataRefreshCmd = map[string]string{
+		aptPackageManager: "update",
+		yumPackageManager: "makecache",
+	}
+
+	managerToDockerRepoMap = map[string]string{
+		yumPackageManager: centOsDockerRepo,
+		aptPackageManager: ubuntuDockerRepo,
+	}
+)
+
+// aptDockerRepoConfig generates the apt repository configuration for Docker
 var aptDockerRepoConfig = fmt.Sprintf("deb [arch=%s signed-by=%s] %s %s stable\n", runtime.GOARCH, ubuntuDockerGpgKeyPath,
 	ubuntuDockerRepo, system.GetVersionCodeName())
 
@@ -85,12 +126,21 @@ func New(containerdSource containerd.SourceName, logger *zap.Logger) (*DistroPac
 func (pm *DistroPackageManager) Configure(ctx context.Context) error {
 	// Add docker repos to the package manager
 	if pm.dockerRepo != "" {
-		if pm.manager == yumPackageManager {
-			return pm.configureYumPackageManagerWithDockerRepo(ctx)
-		}
-		if pm.manager == aptPackageManager {
-			return pm.configureAptPackageManagerWithDockerRepo(ctx)
-		}
+		return pm.configureDockerRepo(ctx)
+	} else if pm.manager == aptPackageManager {
+		pm.logger.Info("Updating package metadata for containerd installation")
+		return pm.updateContainerdAptPackagesWithRetries(ctx)
+	}
+	return nil
+}
+
+// configureDockerRepo configures the appropriate Docker repositories based on package manager
+func (pm *DistroPackageManager) configureDockerRepo(ctx context.Context) error {
+	if pm.manager == yumPackageManager {
+		return pm.configureYumPackageManagerWithDockerRepo(ctx)
+	}
+	if pm.manager == aptPackageManager {
+		return pm.configureAptPackageManagerWithDockerRepo(ctx)
 	}
 	return nil
 }
@@ -198,13 +248,38 @@ func (pm *DistroPackageManager) uninstallDockerRepo() error {
 	}
 }
 
-// updateAllPackages updates all packages and repo metadata on the system
+// updateDockerAptPackagesCommand creates a command to update Docker packages
 func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Context) *exec.Cmd {
 	return exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y", "-o", fmt.Sprintf("Dir::Etc::sourcelist=\"%s\"", aptDockerRepoSourceFilePath))
 }
 
+// updateDockerAptPackagesWithRetries retries the update Docker packages command
 func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.Context) error {
 	return cmd.Retry(ctx, pm.updateDockerAptPackagesCommand, 5*time.Second)
+}
+
+// updateContainerdAptPackagesWithRetries updates package info using only the containerd repos
+func (pm *DistroPackageManager) updateContainerdAptPackagesWithRetries(ctx context.Context) error {
+	// Create an in-memory temp file and use it to update Ubuntu containerd package metadata
+	tmpFile, err := os.CreateTemp("", "containerd-sources.*.list")
+	if err != nil {
+		return errors.Wrap(err, "failed to create temporary containerd sources file")
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(containerdRepoContent); err != nil {
+		return errors.Wrap(err, "failed to write to temporary containerd sources file")
+	}
+	if err := tmpFile.Close(); err != nil {
+		return errors.Wrap(err, "failed to close temporary containerd sources file")
+	}
+
+	updateCmd := exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y",
+		"-o", fmt.Sprintf("Dir::Etc::sourcelist=%s", tmpFile.Name()),
+		"-o", "Dir::Etc::sourceparts=-",
+		"-o", "APT::Get::List-Cleanup=0")
+
+	return cmd.Retry(ctx, func(ctx context.Context) *exec.Cmd { return updateCmd }, 5*time.Second)
 }
 
 func (pm *DistroPackageManager) appendPackageVersion(packageName, version string) string {
@@ -221,6 +296,7 @@ func (pm *DistroPackageManager) appendPackageVersion(packageName, version string
 	}
 }
 
+// getContainerdPackageNameWithVersion gets the appropriate containerd package name with version
 func (pm *DistroPackageManager) getContainerdPackageNameWithVersion(version string) string {
 	containerdPkgName := containerdDistroPkgName
 	if pm.dockerRepo != "" {
@@ -231,9 +307,11 @@ func (pm *DistroPackageManager) getContainerdPackageNameWithVersion(version stri
 
 // RefreshMetadataCache refreshes the package managers metadata cache
 func (pm *DistroPackageManager) RefreshMetadataCache(ctx context.Context) error {
+	pm.logger.Info("Refreshing package metadata cache")
 	return cmd.Retry(ctx, pm.refreshMetadataCacheCommand, 5*time.Second)
 }
 
+// refreshMetadataCacheCommand creates a command to refresh package metadata
 func (pm *DistroPackageManager) refreshMetadataCacheCommand(ctx context.Context) *exec.Cmd {
 	return exec.CommandContext(ctx, pm.manager, pm.refreshMetadataVerb)
 }
@@ -276,6 +354,7 @@ func (pm *DistroPackageManager) GetSSMPackage() artifact.Package {
 	)
 }
 
+// caCertsPackage returns a Package object for CA certificates
 func (pm *DistroPackageManager) caCertsPackage() artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, caCertsPkgName, "-y"),
@@ -284,6 +363,7 @@ func (pm *DistroPackageManager) caCertsPackage() artifact.Package {
 	)
 }
 
+// yumUtilsPackage returns a Package object for yum-utils
 func (pm *DistroPackageManager) yumUtilsPackage() artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, yumUtilsManagerPkg, "-y"),
@@ -292,6 +372,7 @@ func (pm *DistroPackageManager) yumUtilsPackage() artifact.Package {
 	)
 }
 
+// runcPackage returns a Package object for runc
 func (pm *DistroPackageManager) runcPackage() artifact.Package {
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, runcPkgName, "-y"),
@@ -304,6 +385,7 @@ func (pm *DistroPackageManager) runcPackage() artifact.Package {
 func (pm *DistroPackageManager) Cleanup() error {
 	// Removes docker repos if installed by nodeadm ("Containerd: docker" was set in tracker file)
 	if pm.dockerRepo != "" {
+		pm.logger.Info("Cleaning up Docker repositories")
 		if err := pm.uninstallDockerRepo(); err != nil {
 			return err
 		}
@@ -312,6 +394,7 @@ func (pm *DistroPackageManager) Cleanup() error {
 	return nil
 }
 
+// getOsPackageManager determines which package manager is available on the system
 func getOsPackageManager() (string, error) {
 	supportedManagers := []string{yumPackageManager, aptPackageManager}
 	for _, manager := range supportedManagers {
@@ -320,29 +403,4 @@ func getOsPackageManager() (string, error) {
 		}
 	}
 	return "", errors.New("unsupported package manager encountered. Please run nodeadm from a supported os")
-}
-
-var packageManagerInstallCmd = map[string]string{
-	aptPackageManager: "install",
-	yumPackageManager: "install",
-}
-
-var packageManagerUpdateCmd = map[string]string{
-	aptPackageManager: "upgrade",
-	yumPackageManager: "update",
-}
-
-var packageManagerDeleteCmd = map[string]string{
-	aptPackageManager: "autoremove",
-	yumPackageManager: "remove",
-}
-
-var packageManagerMetadataRefreshCmd = map[string]string{
-	aptPackageManager: "update",
-	yumPackageManager: "makecache",
-}
-
-var managerToDockerRepoMap = map[string]string{
-	yumPackageManager: "https://download.docker.com/linux/centos/docker-ce.repo",
-	aptPackageManager: "https://download.docker.com/linux/ubuntu",
 }
