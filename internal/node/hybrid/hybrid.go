@@ -2,6 +2,7 @@ package hybrid
 
 import (
 	"context"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
@@ -12,12 +13,18 @@ import (
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 const (
 	nodeIpValidation      = "node-ip-validation"
 	kubeletCertValidation = "kubelet-cert-validation"
 )
+
+// ValidationRunner is an interface for running validations.
+type ValidationRunner[O validation.Validatable[O]] interface {
+	Run(ctx context.Context, obj O, validations ...validation.Validation[O]) error
+}
 
 type HybridNodeProvider struct {
 	nodeConfig    *api.NodeConfig
@@ -31,17 +38,29 @@ type HybridNodeProvider struct {
 	// CertPath is the path to the kubelet certificate
 	// If not provided, defaults to kubelet.KubeletCurrentCertPath
 	certPath string
+	// installRoot is optionally the root directory of the installation
+	installRoot  string
+	singleRunner ValidationRunner[*api.NodeConfig]
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
 
 func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logger *zap.Logger, opts ...NodeProviderOpt) (nodeprovider.NodeProvider, error) {
+	var skipValidations []string
+	for _, phase := range skipPhases {
+		skipValidations = append(skipValidations, strings.TrimSuffix(phase, "-validation"))
+	}
+
 	np := &HybridNodeProvider{
 		nodeConfig: nodeConfig,
 		logger:     logger,
 		skipPhases: skipPhases,
 		network:    &defaultKubeletNetwork{},
 		certPath:   kubelet.KubeletCurrentCertPath,
+		singleRunner: validation.NewSingleRunner[*api.NodeConfig](
+			validation.NewZapInformer(logger),
+			validation.WithSingleRunnerSkipValidations(skipValidations...),
+		),
 	}
 	np.withHybridValidators()
 	if err := np.withDaemonManager(); err != nil {
@@ -79,6 +98,13 @@ func WithNetwork(network Network) NodeProviderOpt {
 func WithCertPath(path string) NodeProviderOpt {
 	return func(hnp *HybridNodeProvider) {
 		hnp.certPath = path
+	}
+}
+
+// WithSingleRunner sets the single runner for the HybridNodeProvider.
+func WithSingleRunner(runner ValidationRunner[*api.NodeConfig]) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.singleRunner = runner
 	}
 }
 
