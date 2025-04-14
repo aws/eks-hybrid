@@ -3,6 +3,7 @@ package hybrid
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
@@ -24,6 +25,11 @@ const (
 	ntpSyncValidation     = "ntp-sync-validation"
 )
 
+// ValidationRunner is an interface for running validations.
+type ValidationRunner[O validation.Validatable[O]] interface {
+	Run(ctx context.Context, obj O, validations ...validation.Validation[O]) error
+}
+
 type HybridNodeProvider struct {
 	nodeConfig    *api.NodeConfig
 	validator     func(config *api.NodeConfig) error
@@ -37,11 +43,19 @@ type HybridNodeProvider struct {
 	// If not provided, defaults to kubelet.KubeletCurrentCertPath
 	certPath string
 	kubelet  Kubelet
+	// installRoot is optionally the root directory of the installation
+	installRoot  string
+	singleRunner ValidationRunner[*api.NodeConfig]
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
 
 func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logger *zap.Logger, opts ...NodeProviderOpt) (nodeprovider.NodeProvider, error) {
+	var skipValidations []string
+	for _, phase := range skipPhases {
+		skipValidations = append(skipValidations, strings.TrimSuffix(phase, "-validation"))
+	}
+
 	np := &HybridNodeProvider{
 		nodeConfig: nodeConfig,
 		logger:     logger,
@@ -49,6 +63,10 @@ func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logg
 		network:    &defaultKubeletNetwork{},
 		certPath:   kubelet.KubeletCurrentCertPath,
 		kubelet:    kubelet.New(),
+		singleRunner: validation.NewSingleRunner[*api.NodeConfig](
+			validation.NewZapInformer(logger),
+			validation.WithSingleRunnerSkipValidations(skipValidations...),
+		),
 	}
 	np.withHybridValidators()
 	if err := np.withDaemonManager(); err != nil {
@@ -93,6 +111,13 @@ func WithCertPath(path string) NodeProviderOpt {
 func WithKubelet(kubelet Kubelet) NodeProviderOpt {
 	return func(hnp *HybridNodeProvider) {
 		hnp.kubelet = kubelet
+	}
+}
+
+// WithSingleRunner sets the single runner for the HybridNodeProvider.
+func WithSingleRunner(runner ValidationRunner[*api.NodeConfig]) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.singleRunner = runner
 	}
 }
 

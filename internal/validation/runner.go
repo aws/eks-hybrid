@@ -12,6 +12,11 @@ type Validatable[O any] interface {
 	DeepCopy() O
 }
 
+// ValidationRunner is an interface for running validations.
+type ValidationRunner[O Validatable[O]] interface {
+	Run(ctx context.Context, obj O, validations ...Validation[O]) error
+}
+
 // Validation validates the system for a type O.
 type Validation[O Validatable[O]] struct {
 	Name     string
