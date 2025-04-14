@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/node/hybrid"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func TestRolesAnywhereAWSConfigurator_Configure(t *testing.T) {
@@ -164,7 +165,12 @@ func Test_HybridNodeProvider_ConfigureAws_RolesAnywhere(t *testing.T) {
 		},
 	}
 
-	p, err := hybrid.NewHybridNodeProvider(node, []string{}, zap.NewNop())
+	p, err := hybrid.NewHybridNodeProvider(
+		node,
+		[]string{},
+		zap.NewNop(),
+		hybrid.WithSingleRunner(validation.NewNoopSingleRunner[*api.NodeConfig]()),
+	)
 	g.Expect(err).To(Succeed())
 	g.Expect(p.ConfigureAws(ctx)).To(Succeed())
 	g.Expect(p.GetConfig().Region).To(Equal("us-west-2"))
