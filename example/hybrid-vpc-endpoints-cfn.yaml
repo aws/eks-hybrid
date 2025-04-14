@@ -1,0 +1,283 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create VPC endpoints for services required for Hybrid nodes.'
+
+Metadata:
+  Version:
+    Number: "v0.0.1"
+
+Parameters:
+  VpcId:
+    Type: String
+    Description: The Id of the VPC to create endpoints
+  SubnetId1:
+    Type: String
+    Description: The ID of the first subnet in your VPC where EKS will attach ENIs
+  Subnet1DnsResolverIp:
+    Type: String
+    Description: Static IP for Route 53 Resolver in subnet1
+  SubnetId2:
+    Type: String
+    Description: The ID of the second subnet in your VPC where EKS will attach ENIs
+  Subnet2DnsResolverIp:
+    Type: String
+    Description: Static IP for Route 53 Resolver in subnet2
+  RemoteNodeCIDR:
+    Type: String
+    Description: The CIDR blocks for hybrid nodes
+  IncludeCloudwatch:
+    Type: String
+    Description: Create endpoint for Cloudwatch
+    AllowedValues:
+      - true
+      - false
+    Default: false
+  IncludeSsm:
+    Type: String
+    Description: Create endpoint for SSM
+    AllowedValues:
+      - true
+      - false
+    Default: true
+  IncludeIamra:
+    Type: String
+    Description: Create endpoint for IAM-RA
+    AllowedValues:
+      - true
+      - false
+    Default: false
+  IncludeEksAuth:
+    Type: String
+    Description: Create endpoint for eks-auth to be used with Pod Identity
+    AllowedValues:
+      - true
+      - false
+    Default: false
+
+Conditions:
+  HasCloudwatch: !Equals [!Ref IncludeCloudwatch, 'true']
+  HasSsm: !Equals [!Ref IncludeSsm, 'true']
+  HasIamra: !Equals [!Ref IncludeIamra, 'true']
+  HasEksAuth: !Equals [!Ref IncludeEksAuth, 'true']
+  HasSubnet1DnsResolverIp: !Not [!Equals [!Ref Subnet1DnsResolverIp, '']]
+  HasSubnet2DnsResolverIp: !Not [!Equals [!Ref Subnet2DnsResolverIp, '']]
+
+Resources:
+  EndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    Properties:
+      GroupDescription: Allow access to private endpoints from RemoteNodeCIDR
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref RemoteNodeCIDR
+
+  CloudwatchEndpoint:
+    Condition: HasCloudwatch
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: True
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+    
+  ECRApiEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  ECRDkrEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+# https://docs.aws.amazon.com/AmazonS3/latest/userguide/privatelink-interface-endpoints.html#accessing-s3-interface-endpoints
+# https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: 'Gateway'
+      VpcId: !Ref VpcId
+
+  S3InterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  SSMEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: HasSsm
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  SSMMessagesEndpoint:
+    Condition: HasSsm
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  EC2MessagesEndpoint:
+    Condition: HasSsm
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  RolesAnywhereEndpoint:
+    Condition: HasIamra
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.rolesanywhere'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  EKSEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.eks'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  EKSAuthEndpoint:
+    Condition: HasEksAuth
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.eks-auth'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  STSEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      PrivateDnsEnabled: True
+      SecurityGroupIds:
+        - !Ref EndpointSG
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sts'
+      SubnetIds: 
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      VpcEndpointType: 'Interface'
+      VpcId: !Ref VpcId
+
+  Route53SG:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    Properties:
+      GroupDescription: Allow dns access to route53 resolver
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: !Ref RemoteNodeCIDR
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: !Ref RemoteNodeCIDR
+
+
+  Route53Resolver:
+    Type: AWS::Route53Resolver::ResolverEndpoint
+    DeletionPolicy: Delete
+    Properties:
+      Direction: INBOUND
+      Name: hybrid-r53-resolver
+      ResolverEndpointType: IPV4
+      IpAddresses:
+        - SubnetId: !Ref SubnetId1
+          Ip: !If
+          - HasSubnet1DnsResolverIp
+          - !Ref Subnet1DnsResolverIp
+          - !Ref 'AWS::NoValue'
+        - SubnetId: !Ref SubnetId2
+          Ip: !If
+          - HasSubnet2DnsResolverIp
+          - !Ref Subnet2DnsResolverIp
+          - !Ref 'AWS::NoValue'
+      SecurityGroupIds: 
+        - !Ref Route53SG
+
+        
