@@ -17,6 +17,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/configenricher"
 	"github.com/aws/eks-hybrid/internal/node/hybrid"
 	"github.com/aws/eks-hybrid/internal/test"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func Test_hybridNodeProvider_Enrich(t *testing.T) {
@@ -428,6 +429,7 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 
 			p, err := hybrid.NewHybridNodeProvider(tc.node, []string{}, zap.NewNop(),
 				hybrid.WithAWSConfig(config),
+				hybrid.WithValidationRunner(validation.NewNoopSingleRunner[*api.NodeConfig]()),
 			)
 			g.Expect(err).To(Succeed())
 

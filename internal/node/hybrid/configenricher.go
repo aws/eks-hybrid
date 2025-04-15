@@ -13,6 +13,8 @@ import (
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/ecr"
 	"github.com/aws/eks-hybrid/internal/configenricher"
+	"github.com/aws/eks-hybrid/internal/kubernetes"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func (hnp *HybridNodeProvider) Enrich(ctx context.Context, opts ...configenricher.ConfigEnricherOption) error {
@@ -38,6 +40,13 @@ func (hnp *HybridNodeProvider) Enrich(ctx context.Context, opts ...configenriche
 		}
 
 		hnp.logger.Info("Cluster details populated", zap.Reflect("cluster", hnp.nodeConfig.Spec.Cluster))
+	}
+
+	// Validate access to the Kubernetes API endpoint
+	if err := hnp.runner.Run(ctx, hnp.nodeConfig,
+		validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(*hnp.awsConfig).Run),
+	); err != nil {
+		return err
 	}
 
 	return nil
