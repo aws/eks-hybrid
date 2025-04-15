@@ -169,7 +169,7 @@ func Test_HybridNodeProvider_ConfigureAws_RolesAnywhere(t *testing.T) {
 		node,
 		[]string{},
 		zap.NewNop(),
-		hybrid.WithSingleRunner(validation.NewNoopSingleRunner[*api.NodeConfig]()),
+		hybrid.WithValidationRunner(validation.NewNoopSingleRunner[*api.NodeConfig]()),
 	)
 	g.Expect(err).To(Succeed())
 	g.Expect(p.ConfigureAws(ctx)).To(Succeed())
