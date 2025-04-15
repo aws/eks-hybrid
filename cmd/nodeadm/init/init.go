@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
@@ -38,10 +39,28 @@ func NewInitCommand() cli.Command {
 	init.cmd = flaggy.NewSubcommand("init")
 	init.cmd.String(&init.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	init.cmd.StringSlice(&init.daemons, "d", "daemon", "Specify one or more of `containerd` and `kubelet`. This is intended for testing and should not be used in a production environment.")
-	init.cmd.StringSlice(&init.skipPhases, "s", "skip", "Phases of the bootstrap to skip. Allowed values: [install-validation, cni-validation, node-ip-validation, kubelet-cert-validation, preprocess, config, run].")
+	init.cmd.StringSlice(&init.skipPhases, "s", "skip", "Phases of the bootstrap to skip. Allowed values: ["+strings.Join(Phases(), ", ")+"]")
 	init.cmd.Description = "Initialize this instance as a node in an EKS cluster"
 	init.cmd.AdditionalHelpAppend = initHelpText
 	return &init
+}
+
+// Phases returns a list of all valid phases that can be skipped.
+func Phases() []string {
+	return []string{
+		"install-validation",
+		"cni-validation",
+		"node-ip-validation",
+		"kubelet-cert-validation",
+		"ssm-api-network-validation",
+		"iam-ra-api-network-validation",
+		"aws-auth-validation",
+		"k8s-endpoint-network-validation",
+		"k8s-authentication-validation",
+		"preprocess",
+		"config",
+		"run",
+	}
 }
 
 type initCmd struct {
