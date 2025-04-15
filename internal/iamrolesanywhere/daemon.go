@@ -46,6 +46,10 @@ func (s *SigningHelperDaemon) Configure() error {
 	if err := util.WriteFileWithDir(SigningHelperServiceFilePath, service, 0o644); err != nil {
 		return fmt.Errorf("writing aws_signing_helper_update service file %s: %v", EksHybridAwsCredentialsPath, err)
 	}
+
+	if err := s.daemonManager.DaemonReload(); err != nil {
+		return fmt.Errorf("reloading systemd daemon: %v", err)
+	}
 	return nil
 }
 
