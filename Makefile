@@ -10,7 +10,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 GIT_VERSION?=0.0.0
-MANIFEST_HOST?=hybrid-assets.eks.amazonaws.com
+MANIFEST_HOST=gamma-assets.eks-hybrid.model-rocket.aws.dev
 HYBRID_MANIFEST_URL=https://$(MANIFEST_HOST)/manifest.yaml
 
 .PHONY: all
