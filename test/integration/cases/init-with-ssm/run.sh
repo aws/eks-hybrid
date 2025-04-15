@@ -15,7 +15,7 @@ dnf remove -y containerd
 nodeadm install 1.31 --credential-provider ssm
 
 mock::ssm
-nodeadm init --skip run,preprocess,node-ip-validation --config-source file://config.yaml
+nodeadm init --skip run,preprocess,node-ip-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml
 
 assert::path-exists /root/.aws
 assert::path-exists /eks-hybrid/.aws
@@ -30,4 +30,3 @@ assert::path-not-exist /eks-hybrid/.aws
 assert::path-not-exist /usr/bin/ssm-agent-worker
 assert::path-not-exist /etc/amazon
 assert::path-not-exist /var/lib/amazon/ssm/registration
-
