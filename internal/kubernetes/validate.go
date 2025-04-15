@@ -1,4 +1,4 @@
-package node
+package kubernetes
 
 import (
 	"context"
@@ -14,7 +14,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
+<<<<<<< HEAD:internal/node/validate.go
 	k8s "github.com/aws/eks-hybrid/internal/kubernetes"
+=======
+>>>>>>> 5c97d1f (Add 4th validation to verify kubernetes credentials after configuring the kubelet):internal/kubernetes/validate.go
 	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/retry"
 	"github.com/aws/eks-hybrid/internal/validation"
@@ -31,12 +34,20 @@ type Kubelet interface {
 }
 
 type APIServerValidator struct {
-	kubelet Kubelet
+	kubeconfig Kubeconfig
 }
 
-func NewAPIServerValidator(kubelet Kubelet) APIServerValidator {
+// Kubeconfig defines the interface for working with kubeconfig files
+type Kubeconfig interface {
+	// Path returns the path to the kubeconfig file
+	Path() string
+	// BuildClient builds a Kubernetes client from the kubeconfig
+	BuildClient() (kubernetes.Interface, error)
+}
+
+func NewAPIServerValidator(kubeconfig Kubeconfig) APIServerValidator {
 	return APIServerValidator{
-		kubelet: kubelet,
+		kubeconfig: kubeconfig,
 	}
 }
 
@@ -194,9 +205,9 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 }
 
 func (a APIServerValidator) client() (kubernetes.Interface, error) {
-	client, err := a.kubelet.BuildClient()
+	client, err := a.kubeconfig.BuildClient()
 	if err != nil {
-		return nil, validation.WithRemediation(err, fmt.Sprintf("Ensure the kubeconfig at %s has been created and is valid.", a.kubelet.KubeconfigPath()))
+		return nil, validation.WithRemediation(err, fmt.Sprintf("Ensure the kubeconfig at %s has been created and is valid.", a.kubeconfig.Path()))
 	}
 
 	return client, nil
