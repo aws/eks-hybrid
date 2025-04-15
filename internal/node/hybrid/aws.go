@@ -12,11 +12,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/aws/sts"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
@@ -66,6 +68,13 @@ func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
 		}
 
 		hnp.awsConfig = &awsConfig
+	}
+
+	// Then verify that we can authenticate with AWS
+	if err := hnp.runner.Run(ctx, hnp.nodeConfig,
+		validation.New("aws-auth", sts.NewAuthenticationValidator(*hnp.awsConfig).Run),
+	); err != nil {
+		return err
 	}
 
 	return nil
