@@ -4,7 +4,7 @@ import "context"
 
 type Daemon interface {
 	// Configure configures the daemon.
-	Configure() error
+	Configure(ctx context.Context) error
 
 	// EnsureRunning ensures that the daemon is running.
 	// If the daemon is not running, it will be started.

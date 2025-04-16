@@ -37,7 +37,7 @@ func NewSigningHelperDaemon(daemonManager daemon.DaemonManager, node *api.NodeCo
 	}
 }
 
-func (s *SigningHelperDaemon) Configure() error {
+func (s *SigningHelperDaemon) Configure(ctx context.Context) error {
 	service, err := GenerateUpdateSystemdService(s.node)
 	if err != nil {
 		return err

@@ -20,6 +20,8 @@ dnf remove -y containerd
 
 nodeadm install $INITIAL_VERSION --credential-provider iam-ra
 
-nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
+mock::aws_signing_helper
+nodeadm init --skip run,node-ip-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml
+
 validate-file /etc/systemd/system/aws_signing_helper_update.service 644 expected-aws-signing-helper-systemd-unit
 validate-file /.aws/config 644 expected-aws-config

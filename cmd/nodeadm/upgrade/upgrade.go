@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 
+	initcmd "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/containerd"
@@ -49,7 +51,7 @@ func NewUpgradeCommand() cli.Command {
 	fc.AdditionalHelpAppend = upgradeHelpText
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
 	fc.String(&cmd.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
-	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of the upgrade to skip. Allowed values: [init-validation, pod-validation, node-validation, node-ip-validation].")
+	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of the upgrade to skip. Allowed values: ["+strings.Join(initcmd.Phases(), ", ")+"]")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum upgrade command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 	return &cmd

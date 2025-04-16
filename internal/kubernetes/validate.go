@@ -1,4 +1,4 @@
-package node
+package kubernetes
 
 import (
 	"context"
@@ -13,33 +13,26 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 type APIServerValidator struct {
-	buildClient func() (kubernetes.Interface, error)
+	kubeconfig Kubeconfig
 }
 
-type APIServerValidatorOption func(*APIServerValidator)
-
-func WithClientBuilder(buildClient func() (kubernetes.Interface, error)) APIServerValidatorOption {
-	return func(v *APIServerValidator) {
-		v.buildClient = buildClient
-	}
+// Kubeconfig defines the interface for working with kubeconfig files
+type Kubeconfig interface {
+	// Path returns the path to the kubeconfig file
+	Path() string
+	// BuildClient builds a Kubernetes client from the kubeconfig
+	BuildClient() (kubernetes.Interface, error)
 }
 
-func NewAPIServerValidator(opts ...APIServerValidatorOption) APIServerValidator {
-	v := APIServerValidator{
-		buildClient: kubelet.GetKubeClientFromKubeConfig,
+func NewAPIServerValidator(kubeconfig Kubeconfig) APIServerValidator {
+	return APIServerValidator{
+		kubeconfig: kubeconfig,
 	}
-
-	for _, opt := range opts {
-		opt(&v)
-	}
-
-	return v
 }
 
 const badPermissionsRemediation = "Verify the Kubernetes identity and permissions assigned to the IAM roles on this node, it should belong to the group 'system:nodes'. Check your Access Entries or aws-auth ConfigMap."
@@ -58,7 +51,10 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 
 	_, err = client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
 	if err != nil {
-		err = validation.WithRemediation(err, badPermissionsRemediation)
+		err = validation.WithRemediation(
+			fmt.Errorf("making authenticated request to Kubernetes API endpoint: %w", err),
+			badPermissionsRemediation,
+		)
 		return err
 	}
 
@@ -178,9 +174,9 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 }
 
 func (a APIServerValidator) client() (kubernetes.Interface, error) {
-	client, err := a.buildClient()
+	client, err := a.kubeconfig.BuildClient()
 	if err != nil {
-		return nil, validation.WithRemediation(err, fmt.Sprintf("Ensure the kubeconfig at %s has been created and is valid.", kubelet.KubeconfigPath()))
+		return nil, validation.WithRemediation(err, fmt.Sprintf("Ensure the kubeconfig at %s has been created and is valid.", a.kubeconfig.Path()))
 	}
 
 	return client, nil

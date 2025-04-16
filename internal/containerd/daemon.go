@@ -35,7 +35,7 @@ func NewContainerdDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig
 	}
 }
 
-func (cd *containerd) Configure() error {
+func (cd *containerd) Configure(ctx context.Context) error {
 	if err := writeContainerdConfig(cd.nodeConfig); err != nil {
 		return err
 	}

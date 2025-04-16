@@ -26,7 +26,12 @@ func (hnp *HybridNodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 	}
 	return []daemon.Daemon{
 		containerd.NewContainerdDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig, hnp.logger),
-		kubelet.NewKubeletDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig),
+		kubelet.NewKubeletDaemon(
+			hnp.daemonManager,
+			hnp.nodeConfig,
+			hnp.awsConfig,
+			hnp.runner,
+		),
 	}, nil
 }
 
@@ -35,7 +40,7 @@ func (hnp *HybridNodeProvider) PreProcessDaemon(ctx context.Context) error {
 		if hnp.nodeConfig.Spec.Hybrid.EnableCredentialsFile {
 			hnp.logger.Info("Configuring aws_signing_helper_update daemon")
 			signingHelper := iamrolesanywhere.NewSigningHelperDaemon(hnp.daemonManager, hnp.nodeConfig)
-			if err := signingHelper.Configure(); err != nil {
+			if err := signingHelper.Configure(ctx); err != nil {
 				return err
 			}
 			if err := signingHelper.EnsureRunning(ctx); err != nil {

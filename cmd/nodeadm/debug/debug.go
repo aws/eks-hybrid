@@ -16,9 +16,9 @@ import (
 	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/errors"
+	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/logger"
-	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -89,7 +89,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	os.Stderr = printer.File
 
 	runner := validation.NewRunner[*api.NodeConfig](printer)
-	apiServerValidator := node.NewAPIServerValidator()
+	apiServerValidator := kubernetes.NewAPIServerValidator(kubelet.Kubeconfig{})
 
 	runner.Register(creds.Validations(awsConfig, nodeConfig)...)
 	runner.Register(

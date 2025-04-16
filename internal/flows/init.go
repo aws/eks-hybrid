@@ -77,7 +77,7 @@ func initDaemons(ctx context.Context, nodeProvider nodeprovider.NodeProvider, sk
 			nameField := zap.String("name", daemon.Name())
 
 			logger.Info("Configuring daemon...", nameField)
-			if err := daemon.Configure(); err != nil {
+			if err := daemon.Configure(ctx); err != nil {
 				return err
 			}
 			logger.Info("Configured daemon", nameField)
