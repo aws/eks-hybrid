@@ -52,6 +52,8 @@ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 h1:dM9/92u2
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15/go.mod h1:SwFBy2vjtA0vZbjjaFtfN045boopadnoVPhu4Fv66vY=
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.15 h1:moLQUoVq91LiqT1nbvzDukyqAlCv89ZmwaHw/ZFlFZg=
 github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.15/go.mod h1:ZH34PJUc8ApjBIfgQCFvkWcUDBtl/WTD+uiYHjd8igA=
+github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.26.3 h1:P87jejqS8WvQvRWyXlHUylt99VXt0y/WUIFuU6gBU7A=
+github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.26.3/go.mod h1:cgPfPTC/V3JqwCKed7Q6d0FrgarV7ltz4Bz6S4Q+Dqk=
 github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.2 h1:0LBxtAX2bHcfPr6VSzQSvJlR1nzlna7xp031gEjbWGU=
 github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.2/go.mod h1:NW+LcIadUUlDgM3gb8+97lr6zSKExHR58NRRWSWkXl8=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.79.2 h1:tWUG+4wZqdMl/znThEk9tcCy8tTMxq8dW0JTgamohrY=

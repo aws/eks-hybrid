@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go-v2/service/rolesanywhere"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
@@ -35,6 +36,7 @@ type Sweeper struct {
 	s3Client      *s3.Client
 	ssm           *ssm.Client
 	rolesAnywhere *rolesanywhere.Client
+	taggingClient *ResourceTaggingClient
 }
 
 type FilterInput struct {
@@ -54,6 +56,7 @@ func NewSweeper(aws aws.Config, logger logr.Logger, endpoint string) Sweeper {
 		logger:        logger,
 		ssm:           ssm.NewFromConfig(aws),
 		s3Client:      s3.NewFromConfig(aws),
+		taggingClient: NewResourceTaggingClient(resourcegroupstaggingapi.NewFromConfig(aws)),
 		rolesAnywhere: rolesanywhere.NewFromConfig(aws),
 	}
 }
@@ -169,7 +172,7 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 }
 
 func (c *Sweeper) cleanupSSMManagedInstances(ctx context.Context, filterInput FilterInput) error {
-	cleaner := NewSSMCleaner(c.ssm, c.logger)
+	cleaner := NewSSMCleaner(c.ssm, c.taggingClient, c.logger)
 	instanceIds, err := cleaner.ListManagedInstances(ctx, filterInput)
 	if err != nil {
 		return fmt.Errorf("listing managed instances: %w", err)
@@ -190,7 +193,7 @@ func (c *Sweeper) cleanupSSMManagedInstances(ctx context.Context, filterInput Fi
 }
 
 func (c *Sweeper) cleanupSSMHybridActivations(ctx context.Context, filterInput FilterInput) error {
-	cleaner := NewSSMCleaner(c.ssm, c.logger)
+	cleaner := NewSSMCleaner(c.ssm, c.taggingClient, c.logger)
 	activationIDs, err := cleaner.ListActivations(ctx, filterInput)
 	if err != nil {
 		return fmt.Errorf("listing activations: %w", err)
@@ -382,7 +385,7 @@ func (c *Sweeper) cleanupEKSClusters(ctx context.Context, filterInput FilterInpu
 }
 
 func (c *Sweeper) cleanupRolesAnywhereProfiles(ctx context.Context, filterInput FilterInput) error {
-	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.logger)
+	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.taggingClient, c.logger)
 
 	profiles, err := rolesAnywhereCleaner.ListProfiles(ctx, filterInput)
 	if err != nil {
@@ -404,7 +407,7 @@ func (c *Sweeper) cleanupRolesAnywhereProfiles(ctx context.Context, filterInput 
 }
 
 func (c *Sweeper) cleanupRolesAnywhereTrustAnchors(ctx context.Context, filterInput FilterInput) error {
-	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.logger)
+	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.taggingClient, c.logger)
 
 	anchors, err := rolesAnywhereCleaner.ListTrustAnchors(ctx, filterInput)
 	if err != nil {
@@ -426,7 +429,7 @@ func (c *Sweeper) cleanupRolesAnywhereTrustAnchors(ctx context.Context, filterIn
 }
 
 func (c *Sweeper) cleanupSSMParameters(ctx context.Context, filterInput FilterInput) error {
-	cleaner := NewSSMCleaner(c.ssm, c.logger)
+	cleaner := NewSSMCleaner(c.ssm, c.taggingClient, c.logger)
 
 	parameterNames, err := cleaner.ListParameters(ctx, filterInput)
 	if err != nil {

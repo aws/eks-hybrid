@@ -8,6 +8,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	ec2sdk "github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmsdk "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/integrii/flaggy"
@@ -62,6 +63,7 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ec2Client := ec2sdk.NewFromConfig(aws)
 	ssmClient := ssmsdk.NewFromConfig(aws)
 	s3Client := s3sdk.NewFromConfig(aws)
+	taggingClient := resourcegroupstaggingapi.NewFromConfig(aws)
 
 	instances, err := ec2Client.DescribeInstances(ctx, &ec2sdk.DescribeInstancesInput{
 		Filters: []types.Filter{
@@ -108,6 +110,7 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		Logger:              logger,
 		ClusterName:         config.ClusterName,
 		LogsBucket:          config.LogsBucket,
+		TaggingClient:       taggingClient,
 	}
 
 	if err := node.Cleanup(ctx, peered.PeerdNode{
