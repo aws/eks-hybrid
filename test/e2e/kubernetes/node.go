@@ -204,10 +204,21 @@ func DeleteNode(ctx context.Context, k8s kubernetes.Interface, name string) erro
 }
 
 func EnsureNodeWithE2ELabelIsDeleted(ctx context.Context, k8s kubernetes.Interface, nodeName string) error {
-	node, err := getNodeByE2ELabelName(ctx, k8s, nodeName)
+	var node *corev1.Node
+	err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		return true // retry on all errors
+	}, func() error {
+		var err error
+		node, err = getNodeByE2ELabelName(ctx, k8s, nodeName)
+		if err != nil {
+			return fmt.Errorf("getting node by e2e label: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("getting node by e2e label: %w", err)
+		return err
 	}
+
 	if node == nil {
 		return nil
 	}
