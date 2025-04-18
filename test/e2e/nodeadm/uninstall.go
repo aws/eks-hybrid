@@ -13,13 +13,15 @@ import (
 
 // CleanNode runs the process to unregister a node from the cluster and uninstall all the installed kubernetes dependencies.
 type CleanNode struct {
-	K8s                 clientgo.Interface
-	RemoteCommandRunner commands.RemoteCommandRunner
-	Verifier            UninstallVerifier
-	Logger              logr.Logger
+	K8s                   clientgo.Interface
+	RemoteCommandRunner   commands.RemoteCommandRunner
+	Verifier              UninstallVerifier
+	InfrastructureCleaner NodeInfrastructureCleaner
+	Logger                logr.Logger
 
 	NodeName string
 	NodeIP   string
+	Instance string
 }
 
 // UninstallVerifier checks if nodeadm uninstall process was successful in a node.
@@ -27,7 +29,16 @@ type UninstallVerifier interface {
 	VerifyUninstall(ctx context.Context, nodeName string) error
 }
 
+// Clean up any infra for EC2 node
+type NodeInfrastructureCleaner interface {
+	CleanupNodeInfrastructure(ctx context.Context, instance string) error
+}
+
 func (u CleanNode) Run(ctx context.Context) error {
+	if err := u.InfrastructureCleaner.CleanupNodeInfrastructure(ctx, u.Instance); err != nil {
+		return fmt.Errorf("clean node infrastructure: %w", err)
+	}
+
 	node, err := kubernetes.WaitForNode(ctx, u.K8s, u.NodeName, u.Logger)
 	if err != nil {
 		return err

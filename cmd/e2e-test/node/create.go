@@ -12,6 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
+	"k8s.io/client-go/dynamic"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -91,6 +92,11 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	k8sDynamic, err := dynamic.NewForConfig(clientConfig)
+	if err != nil {
+		return err
+	}
+
 	cluster, err := peered.GetHybridCluster(ctx, eksClient, ec2Client, config.ClusterName)
 	if err != nil {
 		return err
@@ -165,6 +171,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := pausableOutput.Resume(); err != nil {
 			return fmt.Errorf("resuming output: %w", err)
 		}
+
 		verify := kubernetes.VerifyNode{
 			K8s:      k8s,
 			Logger:   logr.Discard(),
@@ -178,6 +185,20 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		pausableOutput.Pause()
 		fmt.Println() // newline after pausing the serial output to ensure a clean log after
 		logger.Info("Node is ready", "nodeName", node.Name)
+	}
+
+	network := peered.Network{
+		EC2:    ec2Client,
+		Logger: logger,
+		K8s: peered.K8s{
+			Interface: k8s,
+			Dynamic:   k8sDynamic,
+		},
+		Cluster: cluster,
+	}
+
+	if err := network.CreateRoutesForNode(ctx, &peerdNode); err != nil {
+		return fmt.Errorf("creating routes for node: %w", err)
 	}
 
 	return nil

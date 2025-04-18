@@ -153,6 +153,16 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		return PeerdNode{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
 
+	c.Logger.Info("Waiting for EC2 Instance to be running...", "instanceID", instance.ID)
+	if err := ec2.WaitForEC2InstanceRunning(ctx, c.EC2, instance.ID); err != nil {
+		return PeerdNode{}, fmt.Errorf("waiting for EC2 instance for node to be running: %w", err)
+	}
+
+	c.Logger.Info("Disabling source/destination check...", "instanceID", instance.ID)
+	if err := ec2.DisableSourceDestCheck(ctx, c.EC2, instance.ID); err != nil {
+		return PeerdNode{}, err
+	}
+
 	c.Logger.Info("A Hybrid EC2 instace is created", "instanceID", instance.ID)
 	return PeerdNode{
 		Instance: instance,
@@ -228,9 +238,9 @@ type NodeCleanup struct {
 	Logger              logr.Logger
 	RemoteCommandRunner commands.RemoteCommandRunner
 
-	LogsBucket  string
-	ClusterName string
-	SkipDelete  bool
+	LogsBucket string
+	Cluster    *HybridCluster
+	SkipDelete bool
 }
 
 func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, clusterName string) error {
@@ -282,6 +292,12 @@ func (c *NodeCleanup) Cleanup(ctx context.Context, node PeerdNode) error {
 		c.Logger.Info("Skipping EC2 Instance deletion", "instanceID", node.Instance.ID)
 		return nil
 	}
+
+	c.Logger.Info("Deleting routes for EC2 Instance", "instanceID", node.Instance.ID, "subnetID", c.Cluster.SubnetID)
+	if err := ec2.DeleteRoutesForInstance(ctx, c.EC2, c.Cluster.SubnetID, node.Instance.ID); err != nil {
+		return fmt.Errorf("deleting routes for EC2 Instance: %w", err)
+	}
+
 	c.Logger.Info("Deleting EC2 Instance", "instanceID", node.Instance.ID)
 	if err := ec2.DeleteEC2Instance(ctx, c.EC2, node.Instance.ID); err != nil {
 		return fmt.Errorf("deleting EC2 Instance: %w", err)
@@ -294,12 +310,21 @@ func (c *NodeCleanup) Cleanup(ctx context.Context, node PeerdNode) error {
 	return nil
 }
 
+func (c *NodeCleanup) CleanupNodeInfrastructure(ctx context.Context, instance string) error {
+	// Delete routes for EC2 Instance
+	if err := ec2.DeleteRoutesForInstance(ctx, c.EC2, c.Cluster.SubnetID, instance); err != nil {
+		return fmt.Errorf("deleting routes for EC2 Instance: %w", err)
+	}
+
+	return nil
+}
+
 func (c Node) S3LogsURL(instanceName string) string {
-	return fmt.Sprintf("https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.Cluster.Region, c.LogsBucket, c.logsPrefix(instanceName))
+	return fmt.Sprintf("https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.NodeCreate.Cluster.Region, c.LogsBucket, c.logsPrefix(instanceName))
 }
 
 func (c NodeCleanup) logsPrefix(instanceName string) string {
-	return fmt.Sprintf("%s/%s/%s", constants.TestS3LogsFolder, c.ClusterName, instanceName)
+	return fmt.Sprintf("logs/%s/%s", c.Cluster.Name, instanceName)
 }
 
 func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instance ec2.Instance) error {

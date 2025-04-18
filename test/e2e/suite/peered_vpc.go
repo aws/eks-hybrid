@@ -19,6 +19,7 @@ import (
 	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
+	"k8s.io/client-go/dynamic"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -57,7 +58,7 @@ type PeeredVPCTest struct {
 	ec2Client       *ec2v2.Client
 	SSMClient       *ssmv2.Client
 	cfnClient       *cloudformation.Client
-	k8sClient       clientgo.Interface
+	k8sClient       peered.K8s
 	K8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client
@@ -132,9 +133,19 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 	test.K8sClientConfig = clientConfig
-	test.k8sClient, err = clientgo.NewForConfig(clientConfig)
+	k8s, err := clientgo.NewForConfig(clientConfig)
 	if err != nil {
 		return nil, err
+	}
+
+	dynamicK8s, err := dynamic.NewForConfig(clientConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	test.k8sClient = peered.K8s{
+		Interface: k8s,
+		Dynamic:   dynamicK8s,
 	}
 
 	test.Cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName)
@@ -181,20 +192,31 @@ func (t *PeeredVPCTest) NewPeeredNode() *peered.Node {
 			K8s:                 t.k8sClient,
 			Logger:              t.Logger,
 			SkipDelete:          t.SkipCleanup,
-			ClusterName:         t.Cluster.Name,
+			Cluster:             t.Cluster,
 			LogsBucket:          t.logsBucket,
 		},
 	}
 }
 
-func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string) *nodeadm.CleanNode {
+func (t *PeeredVPCTest) NewPeeredNetwork() *peered.Network {
+	return &peered.Network{
+		EC2:     t.ec2Client,
+		Logger:  t.Logger,
+		K8s:     t.k8sClient,
+		Cluster: t.Cluster,
+	}
+}
+
+func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, node *peered.Node, nodeName, nodeIP, instance string) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
-		K8s:                 t.k8sClient,
-		RemoteCommandRunner: t.RemoteCommandRunner,
-		Verifier:            provider,
-		Logger:              t.Logger,
-		NodeName:            nodeName,
-		NodeIP:              nodeIP,
+		K8s:                   t.k8sClient,
+		RemoteCommandRunner:   t.RemoteCommandRunner,
+		Verifier:              provider,
+		Logger:                t.Logger,
+		InfrastructureCleaner: node,
+		NodeName:              nodeName,
+		NodeIP:                nodeIP,
+		Instance:              instance,
 	}
 }
 
@@ -253,6 +275,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		OS:              os,
 		Provider:        provider,
 		Region:          t.Cluster.Region,
+		PeeredNetwork:   t.NewPeeredNetwork(),
 	}
 }
 

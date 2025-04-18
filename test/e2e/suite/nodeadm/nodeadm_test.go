@@ -101,7 +101,8 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
 
 					test.Logger.Info("Resetting hybrid node...")
-					cleanNode := test.NewCleanNode(provider, testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP)
+					n := testNode.PeerdNode()
+					cleanNode := test.NewCleanNode(provider, testNode.PeeredNode, n.Name, n.Instance.IP, n.Instance.ID)
 					Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 					test.Logger.Info("Rebooting EC2 Instance.")
@@ -111,6 +112,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					testNode.It("re-joins the cluster after reboot", func() {
 						Expect(testNode.WaitForNodeReady(ctx)).Error().To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
 					})
+					Expect(testNode.PeeredNetwork.CreateRoutesForNode(ctx, n)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
 
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
@@ -154,7 +156,10 @@ var _ = Describe("Hybrid Nodes", func() {
 						test.Logger.Info("Skipping nodeadm uninstall from the hybrid node...")
 						return
 					}
-					Expect(test.NewCleanNode(provider, testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP).Run(ctx)).To(
+
+					n := testNode.PeerdNode()
+					cleanNode := test.NewCleanNode(provider, testNode.PeeredNode, n.Name, n.Instance.IP, n.Instance.ID)
+					Expect(cleanNode.Run(ctx)).To(
 						Succeed(), "node should have been reset successfully",
 					)
 				},
