@@ -14,9 +14,12 @@ phases:
 reports:
   e2e-reports:
     files:
-      - e2e-artifacts/e2e-reports/junit-nodeadm.xml
+      - e2e-artifacts/reports/junit-nodeadm.xml
     file-format: "JUNITXML"
-
+  conformance-reports:
+    files:
+      - e2e-artifacts/conformance/junit-conformance.xml
+    file-format: "JUNITXML"
 artifacts:
   files:
   - "e2e-artifacts/*"

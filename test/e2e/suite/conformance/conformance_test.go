@@ -28,7 +28,11 @@ var (
 	suiteConfig *suite.SuiteConfiguration
 )
 
-const numberOfNodes = 1
+const (
+	numberOfNodes            = 1
+	defaultConformanceReport = "junit_01.xml"
+	conformanceReport        = "junit-conformance.xml"
+)
 
 func init() {
 	flag.StringVar(&filePath, "filepath", "", "Path to configuration")
@@ -105,11 +109,13 @@ var _ = Describe("Hybrid Nodes", func() {
 				Expect(err).NotTo(HaveOccurred(), "should create kubernetes client successfully")
 
 				outputFolder := filepath.Join(test.ArtifactsPath, "conformance")
+				conformanceReportPath := filepath.Join(outputFolder, conformanceReport)
 				Expect(os.MkdirAll(outputFolder, 0o755)).To(Succeed(), "should create output folder successfully")
-				AddReportEntry(constants.TestConformancePath, outputFolder)
+				AddReportEntry(constants.TestConformancePath, conformanceReportPath)
 				conformance := kubernetes.NewConformanceTest(test.K8sClientConfig, k8sClient, test.Logger, kubernetes.WithOutputDir(outputFolder))
 				DeferCleanup(func(ctx context.Context) {
 					Expect(conformance.CollectLogs(ctx)).To(Succeed(), "should collect logs successfully")
+					Expect(os.Rename(filepath.Join(outputFolder, defaultConformanceReport), conformanceReportPath)).To(Succeed(), "should rename conformance report successfully")
 
 					Expect(conformance.Cleanup(ctx)).To(Succeed(), "should cleanup conformance successfully")
 					Expect(kubernetes.WaitForNamespaceToBeDeleted(ctx, k8sClient, conformance.Namespace)).To(Succeed(), "conformance namespace should be deleted successfully")

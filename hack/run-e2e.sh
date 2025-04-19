@@ -35,6 +35,9 @@ CONFIG_DIR="$REPO_ROOT/e2e-config"
 ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
 BIN_DIR="$REPO_ROOT/_bin/$ARCH"
 
+SUITE_BIN="$BIN_DIR/${E2E_SUITE:-nodeadm.test}"
+FILTER="${E2E_FILTER:-(simpleflow) || (upgradeflow && (ubuntu2204-amd64 || rhel8-amd64 || al23-amd64))}"
+
 mkdir -p $CONFIG_DIR
 
 RESOURCES_YAML=$CONFIG_DIR/e2e-setup-spec.yaml
@@ -64,8 +67,8 @@ skip=$(yq '.skipped_tests | join("|")' ${SKIP_FILE})
 
 build::common::echo_and_run $BIN_DIR/e2e-test run-e2e \
   --setup-config=$RESOURCES_YAML \
-  --test-filter="(simpleflow) || (upgradeflow && (ubuntu2204-amd64 || rhel8-amd64 || al23-amd64))" \
-  --tests-binary=$BIN_DIR/nodeadm.test \
+  --test-filter="$FILTER" \
+  --tests-binary=$SUITE_BIN \
   --skipped-tests="$skip" \
   --nodeadm-amd-url=$NODEADM_AMD_URL \
   --nodeadm-arm-url=$NODEADM_ARM_URL \

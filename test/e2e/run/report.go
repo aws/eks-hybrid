@@ -56,7 +56,7 @@ func (e *E2EReport) parseJSONReport(reportPath string) (E2EResult, error) {
 
 	e2eResult.TotalTests = report.PreRunStats.TotalSpecs
 
-	// Process each failed test
+	foundFailedBeforeSuite := false
 	reportErrors := []error{}
 	for _, spec := range report.SpecReports {
 		if spec.State == ginkgoTypes.SpecStateSkipped {
@@ -79,6 +79,15 @@ func (e *E2EReport) parseJSONReport(reportPath string) (E2EResult, error) {
 
 		if spec.State == ginkgoTypes.SpecStatePassed {
 			continue
+		}
+
+		// when running multiple process with ginkgo, if the first beforesuite failes,
+		// it will mark all the others as failed, we onlt want to show this error once
+		if spec.LeafNodeType == ginkgoTypes.NodeTypeSynchronizedBeforeSuite {
+			if foundFailedBeforeSuite {
+				continue
+			}
+			foundFailedBeforeSuite = true
 		}
 
 		// This can be one of BeforeSuite, DeferCleanup and It
