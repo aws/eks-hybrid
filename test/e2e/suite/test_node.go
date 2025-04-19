@@ -42,7 +42,7 @@ type testNode struct {
 	Region          string
 
 	flakyCode    *FlakyCode
-	node         *peered.PeerdNode
+	node         *peered.PeeredNode
 	serialOutput peered.ItBlockCloser
 	verifyNode   *kubernetes.VerifyNode
 }
@@ -125,7 +125,7 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	var debugErr error
 	if !isImpaired {
 		expect = Expect
-		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP, n.OS.Name())
 	}
 	expect(err).To(Succeed(), "node should have joined the cluster successfully")
 	Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
@@ -154,7 +154,7 @@ func (n *testNode) It(name string, f func()) {
 	n.serialOutput.It(name, f)
 }
 
-func (n *testNode) PeerdNode() *peered.PeerdNode {
+func (n *testNode) GetPeeredNode() *peered.PeeredNode {
 	return n.node
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	gssh "golang.org/x/crypto/ssh"
 	clientgo "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -54,27 +55,29 @@ type NodeSpec struct {
 }
 
 type NodeCreate struct {
-	AWS     aws.Config
-	Cluster *HybridCluster
-	EC2     *ec2sdk.Client
-	SSM     *ssm.Client
-	Logger  logr.Logger
+	AWS             aws.Config
+	Cluster         *HybridCluster
+	EC2             *ec2sdk.Client
+	SSM             *ssm.Client
+	K8sClientConfig *rest.Config
+	Logger          logr.Logger
 
 	SetRootPassword bool
 	NodeadmURLs     e2e.NodeadmURLs
 	PublicKey       string
 }
 
-// PeerdNode represents a Hybrid node running as an EC2 instance in a peered VPC
+// PeeredNode represents a Hybrid node running as an EC2 instance in a peered VPC
 // The Name is the name of the kubenretes node object
 // The Instance is the underlying EC2 instance
-type PeerdNode struct {
+type PeeredNode struct {
 	Instance ec2.Instance
 	Name     string
+	OS       e2e.NodeadmOS
 }
 
 // Create spins up an EC2 instance with the proper user data to join as a Hybrid node to the cluster.
-func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, error) {
+func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredNode, error) {
 	nodeSpec := e2e.NodeSpec{
 		OS:   spec.OS,
 		Name: spec.NodeName,
@@ -87,12 +90,12 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 
 	files, err := spec.Provider.FilesForNode(nodeSpec)
 	if err != nil {
-		return PeerdNode{}, err
+		return PeeredNode{}, err
 	}
 
 	nodeadmConfig, err := spec.Provider.NodeadmConfig(ctx, nodeSpec)
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("expected to build nodeconfig: %w", err)
+		return PeeredNode{}, fmt.Errorf("expected to build nodeconfig: %w", err)
 	}
 
 	nodeadmConfig.Spec.Kubelet.Flags = []string{
@@ -101,7 +104,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 
 	nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("expected to successfully marshal nodeadm config to YAML: %w", err)
+		return PeeredNode{}, fmt.Errorf("expected to successfully marshal nodeadm config to YAML: %w", err)
 	}
 
 	var rootPasswordHash string
@@ -109,7 +112,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		var rootPassword string
 		rootPassword, rootPasswordHash, err = os.GenerateOSPassword()
 		if err != nil {
-			return PeerdNode{}, fmt.Errorf("expected to successfully generate root password: %w", err)
+			return PeeredNode{}, fmt.Errorf("expected to successfully generate root password: %w", err)
 		}
 		c.Logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
 	}
@@ -118,20 +121,26 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		EKSEndpoint:       spec.EKSEndpoint,
 		KubernetesVersion: spec.NodeK8sVersion,
 		NodeadmUrls:       c.NodeadmURLs,
+		NodeadmConfig:     nodeadmConfig,
 		NodeadmConfigYaml: string(nodeadmConfigYaml),
 		Provider:          string(spec.Provider.Name()),
 		RootPasswordHash:  rootPasswordHash,
 		Region:            c.Cluster.Region,
 		Files:             files,
 		PublicKey:         c.PublicKey,
+
+		KubernetesAPIServer: c.K8sClientConfig.Host,
+		HostName:            nodeSpec.Name,
+		ClusterName:         c.Cluster.Name,
+		ClusterCert:         c.K8sClientConfig.CAData,
 	})
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("expected to successfully build user data: %w", err)
+		return PeeredNode{}, fmt.Errorf("expected to successfully build user data: %w", err)
 	}
 
-	amiId, err := spec.OS.AMIName(ctx, c.AWS)
+	amiId, err := spec.OS.AMIName(ctx, c.AWS, spec.NodeK8sVersion)
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
+		return PeeredNode{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
 	}
 
 	instanceSize := spec.InstanceSize
@@ -150,13 +159,14 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 	c.Logger.Info("Creating a hybrid EC2 Instance...")
 	instance, err := ec2Input.Create(ctx, c.EC2, c.SSM)
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
+		return PeeredNode{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
 
 	c.Logger.Info("A Hybrid EC2 instace is created", "instanceID", instance.ID)
-	return PeerdNode{
+	return PeeredNode{
 		Instance: instance,
 		Name:     spec.NodeName,
+		OS:       spec.OS,
 	}, nil
 }
 
@@ -268,10 +278,10 @@ func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, cluste
 }
 
 // Cleanup collects logs and deletes the EC2 instance and Node object.
-func (c *NodeCleanup) Cleanup(ctx context.Context, node PeerdNode) error {
+func (c *NodeCleanup) Cleanup(ctx context.Context, node PeeredNode) error {
 	logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	err := c.collectLogs(logCtx, constants.LogCollectorBundleFileName, node.Instance)
+	err := c.collectLogs(logCtx, constants.LogCollectorBundleFileName, node.OS.Name(), node.Instance)
 	if err != nil {
 		c.Logger.Error(err, "issue collecting logs")
 		if err := ec2.LogEC2InstanceDescribe(ctx, c.EC2, node.Instance.ID, c.Logger); err != nil {
@@ -302,7 +312,7 @@ func (c NodeCleanup) logsPrefix(instanceName string) string {
 	return fmt.Sprintf("%s/%s/%s", constants.TestS3LogsFolder, c.ClusterName, instanceName)
 }
 
-func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instance ec2.Instance) error {
+func (c NodeCleanup) collectLogs(ctx context.Context, bundleName, os string, instance ec2.Instance) error {
 	if c.LogsBucket == "" {
 		return nil
 	}
@@ -311,7 +321,7 @@ func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instanc
 	if err != nil {
 		return err
 	}
-	err = nodeadm.RunLogCollector(ctx, c.RemoteCommandRunner, instance.IP, url)
+	err = nodeadm.RunLogCollector(ctx, c.RemoteCommandRunner, instance.IP, os, url)
 	if err != nil {
 		return err
 	}

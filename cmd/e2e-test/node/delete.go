@@ -110,13 +110,14 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		LogsBucket:          config.LogsBucket,
 	}
 
-	if err := node.Cleanup(ctx, peered.PeerdNode{
+	if err := node.Cleanup(ctx, peered.PeeredNode{
 		Instance: ec2.Instance{
 			ID:   *instance.InstanceId,
 			IP:   *instance.PrivateIpAddress,
 			Name: d.instanceName,
 		},
 		Name: d.instanceName,
+		OS:   nil,
 	}); err != nil {
 		return err
 	}

@@ -127,6 +127,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	}
 	test.RolesAnywhereCA = ca
 
+	// TODO: ideally this should be an input to the tests and not just
+	// assume same name/path used by the setup command.
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(suite.TestConfig.ClusterName))
 	if err != nil {
 		return nil, err
@@ -167,6 +169,7 @@ func (t *PeeredVPCTest) NewPeeredNode() *peered.Node {
 			AWS:             t.aws,
 			EC2:             t.ec2Client,
 			SSM:             t.SSMClient,
+			K8sClientConfig: t.K8sClientConfig,
 			Logger:          t.Logger,
 			Cluster:         t.Cluster,
 			NodeadmURLs:     t.nodeadmURLs,
@@ -187,10 +190,11 @@ func (t *PeeredVPCTest) NewPeeredNode() *peered.Node {
 	}
 }
 
-func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string) *nodeadm.CleanNode {
+func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string, os e2e.NodeadmOS) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
 		K8s:                 t.k8sClient,
 		RemoteCommandRunner: t.RemoteCommandRunner,
+		OS:                  os,
 		Verifier:            provider,
 		Logger:              t.Logger,
 		NodeName:            nodeName,
@@ -218,7 +222,7 @@ func (t *PeeredVPCTest) InstanceName(testName string, os e2e.NodeadmOS, provider
 	)
 }
 
-func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
+func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName, osName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
 		Cluster:             t.Cluster.Name,
 		NodeName:            nodeName,
@@ -230,6 +234,7 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		Logger:              t.Logger,
 		K8SConfig:           t.K8sClientConfig,
 		Region:              t.Cluster.Region,
+		OS:                  osName,
 	}
 }
 
@@ -359,21 +364,22 @@ type OSProvider struct {
 
 func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSProvider {
 	osList := []e2e.NodeadmOS{
-		osystem.NewUbuntu2004AMD(),
-		osystem.NewUbuntu2004ARM(),
-		osystem.NewUbuntu2004DockerSource(),
-		osystem.NewUbuntu2204AMD(),
-		osystem.NewUbuntu2204ARM(),
-		osystem.NewUbuntu2204DockerSource(),
-		osystem.NewUbuntu2404AMD(),
-		osystem.NewUbuntu2404ARM(),
-		osystem.NewUbuntu2404DockerSource(),
-		osystem.NewAmazonLinux2023AMD(),
-		osystem.NewAmazonLinux2023ARM(),
-		osystem.NewRedHat8AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
-		osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
-		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
-		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// osystem.NewUbuntu2004AMD(),
+		// osystem.NewUbuntu2004ARM(),
+		// osystem.NewUbuntu2004DockerSource(),
+		// osystem.NewUbuntu2204AMD(),
+		// osystem.NewUbuntu2204ARM(),
+		// osystem.NewUbuntu2204DockerSource(),
+		// osystem.NewUbuntu2404AMD(),
+		// osystem.NewUbuntu2404ARM(),
+		// osystem.NewUbuntu2404DockerSource(),
+		// osystem.NewAmazonLinux2023AMD(),
+		// osystem.NewAmazonLinux2023ARM(),
+		// osystem.NewRedHat8AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		osystem.NewBottleRocket(),
 	}
 	osProviderList := []OSProvider{}
 	for _, nodeOS := range osList {

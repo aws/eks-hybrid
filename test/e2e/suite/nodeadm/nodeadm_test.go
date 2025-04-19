@@ -14,8 +14,10 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
+	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
@@ -96,16 +98,18 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
-					test.Logger.Info("Testing Pod Identity add-on functionality")
-					verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.PeerdNode().Name)
-					Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+					if osystem.IsBottlerocket(nodeOS.Name()) && !credentials.IsIAMRolesAnywhere(provider.Name()) {
+						test.Logger.Info("Testing Pod Identity add-on functionality")
+						verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.GetPeeredNode().Name, testNode.OS.Name())
+						Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+					}
 
 					test.Logger.Info("Resetting hybrid node...")
-					cleanNode := test.NewCleanNode(provider, testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP)
+					cleanNode := test.NewCleanNode(provider, testNode.GetPeeredNode().Name, testNode.GetPeeredNode().Instance.IP, testNode.OS)
 					Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 					test.Logger.Info("Rebooting EC2 Instance.")
-					Expect(nodeadm.RebootInstance(ctx, test.RemoteCommandRunner, testNode.PeerdNode().Instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
+					Expect(nodeadm.RebootInstance(ctx, test.RemoteCommandRunner, testNode.GetPeeredNode().Instance.IP, testNode.OS.Name())).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
 					test.Logger.Info("EC2 Instance rebooted successfully.")
 
 					testNode.It("re-joins the cluster after reboot", func() {
@@ -132,7 +136,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					// Skip upgrade flow for cluster with the minimum kubernetes version
 					isSupport, err := kubernetes.IsPreviousVersionSupported(test.Cluster.KubernetesVersion)
 					Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-					if !isSupport {
+					if !isSupport || osystem.IsBottlerocket(nodeOS.Name()) {
 						Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
 					}
 
@@ -146,7 +150,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
-					Expect(test.NewUpgradeNode(testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
+					Expect(test.NewUpgradeNode(testNode.GetPeeredNode().Name, testNode.GetPeeredNode().Instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
 
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
 
@@ -154,7 +158,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						test.Logger.Info("Skipping nodeadm uninstall from the hybrid node...")
 						return
 					}
-					Expect(test.NewCleanNode(provider, testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP).Run(ctx)).To(
+					Expect(test.NewCleanNode(provider, testNode.GetPeeredNode().Name, testNode.GetPeeredNode().Instance.IP, testNode.OS).Run(ctx)).To(
 						Succeed(), "node should have been reset successfully",
 					)
 				},

@@ -32,6 +32,7 @@ type VerifyPodIdentityAddon struct {
 	NodeName            string
 	PodIdentityS3Bucket string
 	K8S                 clientgo.Interface
+	OS                  string
 	EKSClient           *eks.Client
 	IAMClient           *iam.Client
 	S3Client            *s3.Client
@@ -69,6 +70,13 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	v.Logger.Info("Check if daemon set exists", "daemonSet", podIdentityDaemonSet)
 	if _, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet); err != nil {
 		return fmt.Errorf("getting daemon set %s: %w", podIdentityDaemonSet, err)
+	}
+
+	v.Logger.Info("Patching pod identity agent volumes", "daemonSet", podIdentityDaemonSet)
+	patchStr := `{"spec":{"template":{"spec":{"volumes":[{"name":"aws-credentials","hostPath":{"path":"/var/eks-hybrid/.aws","type":"Directory"}}],"containers":[{"name":"eks-pod-identity-agent","securityContext":{"seLinuxOptions":{"type":"spc_t"}}}]}}}}`
+
+	if err := kubernetes.PatchDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet, []byte(patchStr)); err != nil {
+		return fmt.Errorf("patching pod identity agent daemonset: %w", err)
 	}
 
 	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeName, v.Logger)
