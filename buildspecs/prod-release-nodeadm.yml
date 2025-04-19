@@ -47,6 +47,11 @@ phases:
       - aws s3 cp --no-progress _bin/amd64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha512 --profile artifacts-production
       - aws s3 cp --no-progress _bin/arm64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha512 --profile artifacts-production
 
+      - echo "Generating and uploading attribution..."
+      - make generate-attribution
+      - aws s3 cp --no-progress ATTRIBUTION.txt s3://${PROD_BUCKET}/releases/${VERSION}/ATTRIBUTION.txt --profile artifacts-production
+      - aws s3 cp --no-progress ATTRIBUTION.txt s3://${PROD_BUCKET}/latest/ATTRIBUTION.txt --profile artifacts-production 
+
   post_build:
     commands:
       - echo "Invalidating CloudFront cache..."

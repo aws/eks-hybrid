@@ -128,7 +128,9 @@ generate-attribution:
 .PHONY: generate-attribution-in-docker
 generate-attribution-in-docker:
 	mkdir -p _output/.go/mod/cache
+	chmod -R 777 _output
 	docker run --rm --pull=always -e GOPROXY=$(GOPROXY) -e GOMODCACHE=/mod-cache -v  $$(pwd)/_output/.go/mod/cache:/mod-cache -v $$(pwd):/eks-hybrid public.ecr.aws/eks-distro-build-tooling/builder-base:standard-latest.al23 make -C /eks-hybrid generate-attribution
+	rm -rf _output
 
 ##@ Build Dependencies
 
