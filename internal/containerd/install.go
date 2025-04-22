@@ -7,12 +7,16 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/containerd/containerd/integration/remote"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
+	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
+	"github.com/aws/eks-hybrid/internal/util"
 	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
@@ -126,4 +130,65 @@ func isContainerdNotInstalled() bool {
 	_, containerdNotFoundErr := exec.LookPath(containerdPackageName)
 	_, runcNotFoundErr := exec.LookPath(runcPackageName)
 	return containerdNotFoundErr != nil || runcNotFoundErr != nil
+}
+
+func RemovePods() error {
+	client, err := remote.NewRuntimeService(ContainerRuntimeEndpoint, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	podSandboxes, err := client.ListPodSandbox(&v1.PodSandboxFilter{
+		State: &v1.PodSandboxStateValue{
+			State: v1.PodSandboxState_SANDBOX_READY,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, sandbox := range podSandboxes {
+		zap.L().Info("Stopping pod..", zap.String("pod", sandbox.Metadata.Name))
+		err := util.RetryExponentialBackoff(3, 2*time.Second, func() error {
+			if err := client.StopPodSandbox(sandbox.Id); err != nil {
+				return err
+			}
+			if err := client.RemovePodSandbox(sandbox.Id); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			zap.L().Info("ignored error stopping pod", zap.Error(err))
+		}
+	}
+
+	// If pod sandbox deletes dont work, we can try to stop and remove containers individually
+	containers, err := client.ListContainers(nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list containers")
+	}
+
+	for _, container := range containers {
+		status, err := client.ContainerStatus(container.Id)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get container status for %s", container.Id)
+		}
+		zap.L().Info("Stopping container..", zap.String("container", container.Metadata.Name))
+		err = util.RetryExponentialBackoff(3, 2*time.Second, func() error {
+			if status.State == v1.ContainerState_CONTAINER_RUNNING {
+				if err := client.StopContainer(container.Id, 0); err != nil {
+					return errors.Wrapf(err, "failed to stop container %s", container.Id)
+				}
+			}
+
+			if err := client.RemoveContainer(container.Id); err != nil {
+				return errors.Wrapf(err, "failed to remove container %s", container.Id)
+			}
+			return nil
+		})
+		if err != nil {
+			zap.L().Info("ignored error removing container", zap.Error(err))
+		}
+	}
+	return nil
 }
