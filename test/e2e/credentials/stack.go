@@ -87,14 +87,17 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 	if err != nil && !isResourceAlreadyInUse(err) {
 		return nil, err
 	}
-	logger.Info("Creating access entry", "iamRoleArn", output.IRANodeRoleARN)
-	_, err = s.EKS.CreateAccessEntry(ctx, &eks.CreateAccessEntryInput{
-		ClusterName:  &s.ClusterName,
-		PrincipalArn: &output.IRANodeRoleARN,
-		Type:         aws.String("HYBRID_LINUX"),
-	})
-	if err != nil && !isResourceAlreadyInUse(err) {
-		return nil, err
+
+	if !skipIRATest() {
+		logger.Info("Creating access entry", "iamRoleArn", output.IRANodeRoleARN)
+		_, err = s.EKS.CreateAccessEntry(ctx, &eks.CreateAccessEntryInput{
+			ClusterName:  &s.ClusterName,
+			PrincipalArn: &output.IRANodeRoleARN,
+			Type:         aws.String("HYBRID_LINUX"),
+		})
+		if err != nil && !isResourceAlreadyInUse(err) {
+			return nil, err
+		}
 	}
 
 	// We create the instance profile manually instead of as part of the CFN stack because it's faster.
@@ -328,12 +331,14 @@ func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOut
 	}); err != nil {
 		return fmt.Errorf("deleting SSM access entry: %w", err)
 	}
-	logger.Info("Deleting access entry", "iamRoleArn", output.IRANodeRoleARN)
-	if _, err := s.EKS.DeleteAccessEntry(ctx, &eks.DeleteAccessEntryInput{
-		ClusterName:  &s.ClusterName,
-		PrincipalArn: &output.IRANodeRoleARN,
-	}); err != nil {
-		return fmt.Errorf("deleting iam-ra access entry: %w", err)
+	if !skipIRATest() {
+		logger.Info("Deleting access entry", "iamRoleArn", output.IRANodeRoleARN)
+		if _, err := s.EKS.DeleteAccessEntry(ctx, &eks.DeleteAccessEntryInput{
+			ClusterName:  &s.ClusterName,
+			PrincipalArn: &output.IRANodeRoleARN,
+		}); err != nil {
+			return fmt.Errorf("deleting iam-ra access entry: %w", err)
+		}
 	}
 
 	cfnCleaner := cleanup.NewCFNStackCleanup(s.CFN, logger)

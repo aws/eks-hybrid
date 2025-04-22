@@ -117,6 +117,11 @@ func (e *E2EReport) parseJSONReport(reportPath string) (E2EResult, error) {
 			failedTest.CollectorLogsBundle = collectorLogsURL
 		}
 
+		nodeadmVersion := getReportEntry(spec, constants.TestNodeadmVersion)
+		if nodeadmVersion != "" {
+			failedTest.NodeadmVersion = nodeadmVersion
+		}
+
 		e2eResult.FailedTests = append(e2eResult.FailedTests, failedTest)
 
 		// Only process "It" test nodes for detailed logs

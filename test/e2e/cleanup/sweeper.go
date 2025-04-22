@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -406,6 +407,10 @@ func (c *Sweeper) cleanupEKSClusters(ctx context.Context, filterInput FilterInpu
 }
 
 func (c *Sweeper) cleanupRolesAnywhereProfiles(ctx context.Context, filterInput FilterInput) error {
+	if skipIRATest() {
+		c.logger.Info("Skipping Roles Anywhere profiles cleanup")
+		return nil
+	}
 	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.logger)
 
 	profiles, err := rolesAnywhereCleaner.ListProfiles(ctx, filterInput)
@@ -428,6 +433,10 @@ func (c *Sweeper) cleanupRolesAnywhereProfiles(ctx context.Context, filterInput 
 }
 
 func (c *Sweeper) cleanupRolesAnywhereTrustAnchors(ctx context.Context, filterInput FilterInput) error {
+	if skipIRATest() {
+		c.logger.Info("Skipping Roles Anywhere trust anchors cleanup")
+		return nil
+	}
 	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.logger)
 
 	anchors, err := rolesAnywhereCleaner.ListTrustAnchors(ctx, filterInput)
@@ -662,4 +671,8 @@ func (c *Sweeper) cleanupTransitGateways(ctx context.Context, filterInput Filter
 		}
 	}
 	return nil
+}
+
+func skipIRATest() bool {
+	return os.Getenv("SKIP_IRA_TEST") == "true"
 }

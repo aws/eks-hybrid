@@ -64,6 +64,7 @@ type FailedTest struct {
 	InstanceName        string `json:"instanceName"`
 	GinkgoLog           string `json:"ginkgoLog"`
 	Name                string `json:"name"`
+	NodeadmVersion      string `json:"nodeadmVersion"`
 	SerialLog           string `json:"serialLog"`
 	State               string `json:"state"`
 }

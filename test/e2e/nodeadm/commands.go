@@ -3,6 +3,7 @@ package nodeadm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/eks-hybrid/test/e2e/commands"
 )
@@ -90,4 +91,21 @@ func RunNodeadmDebug(ctx context.Context, runner commands.RemoteCommandRunner, i
 	}
 
 	return nil
+}
+
+func RunNodeadmVersion(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) (string, error) {
+	commands := []string{
+		"/tmp/nodeadm version",
+	}
+
+	output, err := runner.Run(ctx, instanceIP, commands)
+	if err != nil {
+		return "", fmt.Errorf("running remote command: %w", err)
+	}
+
+	if output.Status != "Success" {
+		return "", fmt.Errorf("nodeadm version remote command did not succeed")
+	}
+
+	return strings.TrimSpace(output.StandardOutput), nil
 }

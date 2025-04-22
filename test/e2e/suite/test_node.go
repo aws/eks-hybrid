@@ -94,6 +94,10 @@ func (n *testNode) Start(ctx context.Context) error {
 		n.serialOutput.It("joins the cluster", func() {
 			n.waitForNodeToJoin(ctx, flakeRun)
 		})
+		version, err := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+		Expect(err).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
+		Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
+		AddReportEntry(constants.TestNodeadmVersion, version)
 	})
 	return nil
 }
