@@ -136,6 +136,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 			FailureMessage: "cleaning up network interfaces",
 		},
 		{
+			Cleanup:        c.cleanupTransitGateways,
+			FailureMessage: "cleaning up transit gateways",
+		},
+		{
 			Cleanup:        c.cleanupSubnets,
 			FailureMessage: "cleaning up subnets",
 		},
@@ -635,6 +639,26 @@ func (c *Sweeper) cleanupSecurityGroups(ctx context.Context, filterInput FilterI
 	for _, securityGroupID := range securityGroupIDs {
 		if err := vpcCleaner.DeleteSecurityGroup(ctx, securityGroupID); err != nil {
 			return fmt.Errorf("deleting security group %s: %w", securityGroupID, err)
+		}
+	}
+	return nil
+}
+
+func (c *Sweeper) cleanupTransitGateways(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+	transitGatewayIDs, err := vpcCleaner.ListTransitGateways(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing transit gateways: %w", err)
+	}
+
+	c.logger.Info("Deleting transit gateways", "transitGatewayIDs", transitGatewayIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, transitGatewayID := range transitGatewayIDs {
+		if err := vpcCleaner.DeleteTransitGateway(ctx, transitGatewayID); err != nil {
+			return fmt.Errorf("deleting transit gateway %s: %w", transitGatewayID, err)
 		}
 	}
 	return nil

@@ -489,3 +489,94 @@ func (c dependencyViolationRetryable) IsErrorRetryable(err error) aws.Ternary {
 
 	return aws.BoolTernary(false)
 }
+
+// ListTransitGateways lists all transit gateways
+func (v *VPCCleaner) ListTransitGateways(ctx context.Context, input FilterInput) ([]string, error) {
+	paginator := ec2.NewDescribeTransitGatewaysPaginator(v.ec2Client, &ec2.DescribeTransitGatewaysInput{
+		Filters: ec2Filters(input),
+	})
+
+	var tgwIDs []string
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describing transit gateways: %w", err)
+		}
+
+		for _, tgw := range resp.TransitGateways {
+			creationTime, err := creationTimeFromTags(tgw.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("getting creation time from tags: %w", err)
+			}
+			resource := ResourceWithTags{
+				ID:           aws.ToString(tgw.TransitGatewayId),
+				Tags:         convertEC2Tags(tgw.Tags),
+				CreationTime: creationTime,
+			}
+
+			if shouldDeleteResource(resource, input) {
+				tgwIDs = append(tgwIDs, *tgw.TransitGatewayId)
+			}
+		}
+	}
+
+	return tgwIDs, nil
+}
+
+func (v *VPCCleaner) DeleteTransitGateway(ctx context.Context, tgwID string) error {
+	// verify if tgw is deleted or not
+	resp, err := v.ec2Client.DescribeTransitGateways(ctx, &ec2.DescribeTransitGatewaysInput{
+		TransitGatewayIds: []string{tgwID},
+	})
+	if err != nil && errors.IsAwsError(err, "InvalidTransitGatewayID.NotFound") {
+		v.logger.Info("Transit gateway already deleted", "tgwID", tgwID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("describing transit gateway %s: %w", tgwID, err)
+	}
+	if len(resp.TransitGateways) == 0 {
+		return nil
+	}
+
+	// find tgw attachments
+	attachments, err := v.ec2Client.DescribeTransitGatewayAttachments(ctx, &ec2.DescribeTransitGatewayAttachmentsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("transit-gateway-id"),
+				Values: []string{tgwID},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("describing transit gateway attachment for transit gateway %s: %w", tgwID, err)
+	}
+
+	if len(attachments.TransitGatewayAttachments) > 0 {
+		for _, attachment := range attachments.TransitGatewayAttachments {
+			attachmentId := attachment.TransitGatewayAttachmentId
+			_, err := v.ec2Client.DeleteTransitGatewayVpcAttachment(ctx, &ec2.DeleteTransitGatewayVpcAttachmentInput{
+				TransitGatewayAttachmentId: attachmentId,
+			})
+			if err != nil {
+				return fmt.Errorf("detaching transit gateway attachment %s for tgw %s: %w", *attachmentId, tgwID, err)
+			}
+		}
+	}
+
+	_, err = v.ec2Client.DeleteTransitGateway(ctx, &ec2.DeleteTransitGatewayInput{
+		TransitGatewayId: aws.String(tgwID),
+	}, func(o *ec2.Options) {
+		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
+			o.MaxAttempts = 10 // ~ 2 minutes
+			o.Retryables = append(o.Retryables, dependencyViolationRetryable{})
+		})
+	})
+
+	if err != nil && !errors.IsAwsError(err, "InvalidTransitGatewayID.NotFound") {
+		return fmt.Errorf("deleting transit gateway %s: %w", tgwID, err)
+	}
+
+	v.logger.Info("Deleted transit gateway", "tgwID", tgwID)
+	return nil
+}
