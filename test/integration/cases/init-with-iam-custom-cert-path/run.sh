@@ -20,6 +20,8 @@ dnf remove -y containerd
 
 nodeadm install $INITIAL_VERSION --credential-provider iam-ra
 
+# mock iam-ra update service credentials file
+mock::iamra_aws_credentials
 nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
 validate-file /etc/systemd/system/aws_signing_helper_update.service 644 expected-aws-signing-helper-systemd-unit
 validate-file /.aws/config 644 expected-aws-config

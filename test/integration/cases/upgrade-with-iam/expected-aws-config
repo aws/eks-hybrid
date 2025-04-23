@@ -1,3 +1,8 @@
+[profile default]
+region = us-west-2
+credential_process = /usr/local/bin/aws_signing_helper credential-process --certificate /etc/iam/pki/server.pem --private-key /etc/iam/pki/server.key --trust-anchor-arn arn:aws:acm-pca:us-west-2:123456789010:certificate-authority/fc32b514-4aca-4a4b-91a5-602294a6f4b7 --profile-arn arn:aws:iam::123456789010:instance-profile/mockHybridNodeRole --role-arn arn:aws:iam::123456789010:role/mockHybridNodeRole --role-session-name mock-hybrid-node
+
+# hybrid profile is maintained for backwards compatibility, nodeadm no longer uses it
 [profile hybrid]
 region = us-west-2
 credential_process = /usr/local/bin/aws_signing_helper credential-process --certificate /etc/iam/pki/server.pem --private-key /etc/iam/pki/server.key --trust-anchor-arn arn:aws:acm-pca:us-west-2:123456789010:certificate-authority/fc32b514-4aca-4a4b-91a5-602294a6f4b7 --profile-arn arn:aws:iam::123456789010:instance-profile/mockHybridNodeRole --role-arn arn:aws:iam::123456789010:role/mockHybridNodeRole --role-session-name mock-hybrid-node

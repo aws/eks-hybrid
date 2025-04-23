@@ -41,6 +41,12 @@ function assert::json-files-equal() {
   stat $FILE2
   if ! diff <(jq -S . $FILE1) <(jq -S . $FILE2); then
     echo "Files $FILE1 and $FILE2 are not equal"
+    echo "**** Actual Content ****"
+    cat $FILE1
+    echo "**************************"
+    echo "**** Expected Content ****"
+    cat $FILE2
+    echo "**************************"
     exit 1
   fi
 }
@@ -266,6 +272,10 @@ function mock::kubelet() {
 function mock::aws_signing_helper() {
   printf "#!/usr/bin/env bash\necho '{\"Version\": 1, \"AccessKeyId\": \"${AWS_ACCESS_KEY_ID}\", \"SecretAccessKey\": \"${AWS_SECRET_ACCESS_KEY}\", \"SessionToken\": \"${AWS_SESSION_TOKEN}\"}'" > /usr/local/bin/aws_signing_helper
   chmod +x /usr/local/bin/aws_signing_helper
+}
+function mock::iamra_aws_credentials() {
+  mkdir -p /eks-hybrid/.aws
+  touch /eks-hybrid/.aws/credentials
 }
 
 function mock::ssm() {

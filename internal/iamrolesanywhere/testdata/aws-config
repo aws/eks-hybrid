@@ -1,3 +1,8 @@
+[profile default]
+region = region
+credential_process = /random/path credential-process --certificate /etc/certificates/iam/pki/my-server.crt --private-key /etc/certificates/iam/pki/my-server.key --trust-anchor-arn trust-anchor --profile-arn profile --role-arn role --role-session-name test01
+
+# hybrid profile is maintained for backwards compatibility, nodeadm no longer uses it
 [profile hybrid]
 region = region
 credential_process = /random/path credential-process --certificate /etc/certificates/iam/pki/my-server.crt --private-key /etc/certificates/iam/pki/my-server.key --trust-anchor-arn trust-anchor --profile-arn profile --role-arn role --role-session-name test01

@@ -24,24 +24,17 @@ func (hnp *HybridNodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 	if hnp.awsConfig == nil {
 		return nil, errors.New("aws config not set")
 	}
+	credentialProviderAwsConfig := kubelet.CredentialProviderAwsConfig{}
+	if hnp.nodeConfig.IsIAMRolesAnywhere() {
+		credentialProviderAwsConfig.Profile = iamrolesanywhere.ProfileName
+		credentialProviderAwsConfig.CredentialsPath = iamrolesanywhere.EksHybridAwsCredentialsPath
+	}
 	return []daemon.Daemon{
 		containerd.NewContainerdDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig, hnp.logger),
-		kubelet.NewKubeletDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig),
+		kubelet.NewKubeletDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig, credentialProviderAwsConfig),
 	}, nil
 }
 
 func (hnp *HybridNodeProvider) PreProcessDaemon(ctx context.Context) error {
-	if hnp.nodeConfig.IsIAMRolesAnywhere() {
-		if hnp.nodeConfig.Spec.Hybrid.EnableCredentialsFile {
-			hnp.logger.Info("Configuring aws_signing_helper_update daemon")
-			signingHelper := iamrolesanywhere.NewSigningHelperDaemon(hnp.daemonManager, hnp.nodeConfig)
-			if err := signingHelper.Configure(); err != nil {
-				return err
-			}
-			if err := signingHelper.EnsureRunning(ctx); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }

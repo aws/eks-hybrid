@@ -7,15 +7,16 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"go.uber.org/zap"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
+	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/ssm"
 )
-
-const iamRoleAnywhereProfileName = "hybrid"
 
 func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
 	if hnp.nodeConfig.IsSSM() {
@@ -38,7 +39,10 @@ func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
 
 		hnp.awsConfig = &awsConfig
 	} else {
-		configurator := RolesAnywhereAWSConfigurator{}
+		configurator := RolesAnywhereAWSConfigurator{
+			Manager: hnp.daemonManager,
+			Logger:  hnp.logger,
+		}
 		if err := configurator.Configure(ctx, hnp.nodeConfig); err != nil {
 			return fmt.Errorf("configuring aws credentials with IAM Roles Anywhere: %w", err)
 		}
@@ -77,9 +81,12 @@ func (c SSMAWSConfigurator) Configure(ctx context.Context, nodeConfig *api.NodeC
 	return nil
 }
 
-type RolesAnywhereAWSConfigurator struct{}
+type RolesAnywhereAWSConfigurator struct {
+	Manager daemon.DaemonManager
+	Logger  *zap.Logger
+}
 
-func (c RolesAnywhereAWSConfigurator) Configure(_ context.Context, nodeConfig *api.NodeConfig) error {
+func (c RolesAnywhereAWSConfigurator) Configure(ctx context.Context, nodeConfig *api.NodeConfig) error {
 	if err := iamrolesanywhere.WriteAWSConfig(iamrolesanywhere.AWSConfig{
 		TrustAnchorARN:       nodeConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
 		ProfileARN:           nodeConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
@@ -94,6 +101,22 @@ func (c RolesAnywhereAWSConfigurator) Configure(_ context.Context, nodeConfig *a
 		return err
 	}
 
+	if !nodeConfig.Spec.Hybrid.EnableCredentialsFile {
+		return nil
+	}
+
+	c.Logger.Info("Configuring aws_signing_helper_update daemon")
+	signingHelper := iamrolesanywhere.NewSigningHelperDaemon(c.Manager, nodeConfig, c.Logger)
+	if err := signingHelper.Configure(); err != nil {
+		return err
+	}
+	if err := signingHelper.EnsureRunning(ctx); err != nil {
+		return err
+	}
+	if err := signingHelper.PostLaunch(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -101,6 +124,23 @@ func LoadAWSConfigForRolesAnywhere(ctx context.Context, nodeConfig *api.NodeConf
 	return config.LoadDefaultConfig(ctx,
 		config.WithRegion(nodeConfig.Spec.Cluster.Region),
 		config.WithSharedConfigFiles([]string{nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath}),
-		config.WithSharedConfigProfile(iamRoleAnywhereProfileName),
+		config.WithSharedCredentialsFiles([]string{iamrolesanywhere.EksHybridAwsCredentialsPath}),
+		config.WithSharedConfigProfile(iamrolesanywhere.ProfileName),
+		// This is helpful if the machine happens to be running on an EC2 instance
+		// so we avoid defaulting to IMDS by mistake.
+		config.WithEC2IMDSClientEnableState(imds.ClientDisabled),
 	)
+}
+
+// BuildKubeClient builds a kubernetes client from the kubelet kubeconfig
+// but with the iam-ra credentials file set
+// if the node is running the iam-ra service, this will avoid starting a new session
+// to make the kuberenetes api calls
+// if the node is not running the iam-ra service, aws config will fallback to the default
+// aws_config file, which either be a creds file created by ssm or if using iam-ra, will
+// exec the aws_signing_helper
+func BuildKubeClient() (kubernetes.Interface, error) {
+	return kubelet.GetKubeClientFromKubeConfig(kubelet.WithAwsEnvironmentVariables(map[string]string{
+		"AWS_SHARED_CREDENTIALS_FILE": iamrolesanywhere.EksHybridAwsCredentialsPath,
+	}))
 }

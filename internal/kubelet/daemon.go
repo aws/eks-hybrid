@@ -13,6 +13,11 @@ const KubeletDaemonName = "kubelet"
 
 var _ daemon.Daemon = &kubelet{}
 
+type CredentialProviderAwsConfig struct {
+	Profile         string
+	CredentialsPath string
+}
+
 type kubelet struct {
 	daemonManager daemon.DaemonManager
 	awsConfig     *aws.Config
@@ -20,16 +25,18 @@ type kubelet struct {
 	// environment variables to write for kubelet
 	environment map[string]string
 	// kubelet config flags without leading dashes
-	flags map[string]string
+	flags                       map[string]string
+	credentialProviderAwsConfig CredentialProviderAwsConfig
 }
 
-func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config) daemon.Daemon {
+func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config, credentialProviderAwsConfig CredentialProviderAwsConfig) daemon.Daemon {
 	return &kubelet{
-		daemonManager: daemonManager,
-		nodeConfig:    cfg,
-		awsConfig:     awsConfig,
-		environment:   make(map[string]string),
-		flags:         make(map[string]string),
+		daemonManager:               daemonManager,
+		nodeConfig:                  cfg,
+		awsConfig:                   awsConfig,
+		environment:                 make(map[string]string),
+		flags:                       make(map[string]string),
+		credentialProviderAwsConfig: credentialProviderAwsConfig,
 	}
 }
 

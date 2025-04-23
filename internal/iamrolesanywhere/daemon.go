@@ -6,10 +6,14 @@ import (
 	_ "embed"
 	"fmt"
 	"text/template"
+	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/util"
+	"github.com/aws/eks-hybrid/internal/util/file"
 )
 
 const (
@@ -28,12 +32,14 @@ var (
 type SigningHelperDaemon struct {
 	daemonManager daemon.DaemonManager
 	node          *api.NodeConfig
+	logger        *zap.Logger
 }
 
-func NewSigningHelperDaemon(daemonManager daemon.DaemonManager, node *api.NodeConfig) daemon.Daemon {
+func NewSigningHelperDaemon(daemonManager daemon.DaemonManager, node *api.NodeConfig, logger *zap.Logger) daemon.Daemon {
 	return &SigningHelperDaemon{
 		daemonManager: daemonManager,
 		node:          node,
+		logger:        logger,
 	}
 }
 
@@ -65,6 +71,31 @@ func (s *SigningHelperDaemon) EnsureRunning(ctx context.Context) error {
 // PostLaunch runs any additional step that needs to occur after the service
 // daemon as been started.
 func (s *SigningHelperDaemon) PostLaunch() error {
+	if !s.node.Spec.Hybrid.EnableCredentialsFile {
+		return nil
+	}
+
+	// Wait for the credentials file to be created by the service
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	s.logger.Info("waiting for AWS credentials file to be created by iam-ra service")
+	err := waitForIAMRolesAnywhereCreds(ctx, 2*time.Second, EksHybridAwsCredentialsPath)
+	if err != nil {
+		return fmt.Errorf("waiting for AWS credentials file: %w", err)
+	}
+	s.logger.Info("AWS credentials file created successfully")
+	return nil
+}
+
+func waitForIAMRolesAnywhereCreds(ctx context.Context, backoff time.Duration, awsCredsFile string) error {
+	for !file.Exists(awsCredsFile) {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("iam-roles-anywhere AWS creds file %s hasn't been created on time: %w", awsCredsFile, ctx.Err())
+		case <-time.After(backoff):
+		}
+	}
 	return nil
 }
 

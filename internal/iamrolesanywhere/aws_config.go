@@ -15,7 +15,7 @@ const (
 	DefaultAWSConfigPath = "/etc/aws/hybrid/config"
 
 	// ProfileName is the profile used when writing the AWS config.
-	ProfileName = "hybrid"
+	ProfileName = "default"
 )
 
 //go:embed aws_config.tpl

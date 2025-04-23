@@ -47,6 +47,8 @@ assert::file-permission-matches /usr/local/bin/kubectl 755
 assert::file-permission-matches /etc/eks/image-credential-provider/ecr-credential-provider 755
 assert::file-permission-matches /usr/local/bin/aws-iam-authenticator 755
 
+# mock iam-ra update service credentials file
+mock::iamra_aws_credentials
 nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
 validate-file /etc/systemd/system/aws_signing_helper_update.service 644 expected-aws-signing-helper-systemd-unit
 validate-file /.aws/config 644 expected-aws-config

@@ -11,9 +11,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 )
 
-const iamRoleAnywhereProfileName = "hybrid"
-
-func ReadConfig(ctx context.Context, node *api.NodeConfig, opts ...func(*config.LoadOptions) error) (aws.Config, error) {
+func ReadConfigAsKubelet(ctx context.Context, node *api.NodeConfig, opts ...func(*config.LoadOptions) error) (aws.Config, error) {
 	if !node.IsHybridNode() {
 		if node.Spec.Cluster.Region != "" {
 			opts = append(opts, config.WithRegion(node.Spec.Cluster.Region))
@@ -32,10 +30,13 @@ func ReadConfig(ctx context.Context, node *api.NodeConfig, opts ...func(*config.
 			awsConfigPath = iamrolesanywhere.DefaultAWSConfigPath
 		}
 
+		// we do not specify the iam-ra credentials file since this is used by the
+		// debug command which we want to match as close as possible to the kubelet which
+		// also does not use the iam-ra credentials file
 		opts = append(opts,
 			config.WithRegion(node.Spec.Cluster.Region),
 			config.WithSharedConfigFiles([]string{awsConfigPath}),
-			config.WithSharedConfigProfile(iamRoleAnywhereProfileName),
+			config.WithSharedConfigProfile(iamrolesanywhere.ProfileName),
 		)
 
 		return config.LoadDefaultConfig(ctx, opts...)

@@ -9,9 +9,11 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/iamauthenticator"
+	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
@@ -57,6 +59,7 @@ type kubeconfigTemplateVars struct {
 	AssumeRole              string
 	AwsConfigPath           string
 	AwsIamAuthenticatorPath string
+	AwsProfile              string
 }
 
 func newKubeconfigTemplateVars(cfg *api.NodeConfig) *kubeconfigTemplateVars {
@@ -74,16 +77,17 @@ func (kct *kubeconfigTemplateVars) withOutpostVars(cfg *api.NodeConfig) {
 
 func (kct *kubeconfigTemplateVars) withHybridTemplateVars(cfg *api.NodeConfig) {
 	if cfg.IsIAMRolesAnywhere() {
-		kct.withIamRolesAnywhereHybridVars(cfg)
+		kct.withIamRolesAnywhereHybridVars(cfg, iamrolesanywhere.ProfileName)
 	} else if cfg.IsSSM() {
 		kct.withSsmHybridVars(cfg)
 	}
 	kct.AwsIamAuthenticatorPath = iamauthenticator.IAMAuthenticatorBinPath
 }
 
-func (kct *kubeconfigTemplateVars) withIamRolesAnywhereHybridVars(cfg *api.NodeConfig) {
+func (kct *kubeconfigTemplateVars) withIamRolesAnywhereHybridVars(cfg *api.NodeConfig, awsProfile string) {
 	kct.Region = cfg.Spec.Cluster.Region
 	kct.AwsConfigPath = cfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath
+	kct.AwsProfile = awsProfile
 }
 
 func (kct *kubeconfigTemplateVars) withSsmHybridVars(cfg *api.NodeConfig) {
@@ -114,14 +118,50 @@ func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// GetKubeClientFromKubeConfig gets kubernetes client from kubeconfig on the disk
-func GetKubeClientFromKubeConfig() (kubernetes.Interface, error) {
-	// Use the current context in the kubeconfig file
-	config, err := clientcmd.BuildConfigFromFlags("", KubeconfigPath())
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to build config from kubeconfig")
+type KubeClientOptions struct {
+	awsEnvVars map[string]string
+}
+
+type KubeClientOption func(*KubeClientOptions)
+
+func WithAwsEnvironmentVariables(envVars map[string]string) KubeClientOption {
+	return func(o *KubeClientOptions) {
+		o.awsEnvVars = envVars
 	}
-	return kubernetes.NewForConfig(config)
+}
+
+// GetKubeClientFromKubeConfig gets kubernetes client from kubeconfig on the disk
+func GetKubeClientFromKubeConfig(opts ...KubeClientOption) (kubernetes.Interface, error) {
+	options := &KubeClientOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	// Use the current context in the kubeconfig file
+	config, err := clientcmd.LoadFromFile(KubeconfigPath())
+	if err != nil {
+		return nil, errors.Wrap(err, "loading kubeconfig")
+	}
+
+	// Apply AWS environment variables if provided
+	if len(options.awsEnvVars) > 0 {
+		envVars := make([]clientcmdapi.ExecEnvVar, 0, len(options.awsEnvVars))
+		for name, value := range options.awsEnvVars {
+			envVars = append(envVars, clientcmdapi.ExecEnvVar{
+				Name:  name,
+				Value: value,
+			})
+		}
+		config.AuthInfos["kubelet"].Exec.Env = append(config.AuthInfos["kubelet"].Exec.Env, envVars...)
+	}
+
+	clientConfig := clientcmd.NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{})
+	restConfig, err := clientConfig.ClientConfig()
+	if err != nil {
+		return nil, errors.Wrap(err, "building config from kubeconfig")
+	}
+
+	return kubernetes.NewForConfig(restConfig)
 }
 
 // KubeconfigPath returns the path to the kubeconfig file used by the kubelet.

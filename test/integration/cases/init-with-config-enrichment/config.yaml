@@ -6,7 +6,7 @@ spec:
     name: my-cluster
     region: us-west-2
   hybrid:
-    enableCredentialsFile: true
+    enableCredentialsFile: false
     iamRolesAnywhere:
       nodeName: mock-hybrid-node
       roleArn: arn:aws:iam::123456789010:role/mockHybridNodeRole

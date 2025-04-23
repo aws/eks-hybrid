@@ -68,7 +68,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	awsConfig, err := creds.ReadConfig(ctx, nodeConfig, config.WithLogger(logging.Nop{}))
+	awsConfig, err := creds.ReadConfigAsKubelet(ctx, nodeConfig, config.WithLogger(logging.Nop{}))
 	if err != nil {
 		return err
 	}

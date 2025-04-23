@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/node/hybrid"
 )
 
 const defaultStaticPodManifestPath = "/etc/kubernetes/manifest"
@@ -84,7 +85,7 @@ func IsDrained(ctx context.Context) (bool, error) {
 		return false, errors.Wrap(err, "getting node name from kubelet")
 	}
 
-	clientset, err := kubelet.GetKubeClientFromKubeConfig()
+	clientset, err := hybrid.BuildKubeClient()
 	if err != nil {
 		return false, errors.Wrap(err, "failed to create kubernetes client")
 	}
@@ -123,7 +124,7 @@ func getCurrentNode(ctx context.Context) (*v1.Node, error) {
 		return nil, err
 	}
 
-	clientset, err := kubelet.GetKubeClientFromKubeConfig()
+	clientset, err := hybrid.BuildKubeClient()
 	if err != nil {
 		return nil, err
 	}

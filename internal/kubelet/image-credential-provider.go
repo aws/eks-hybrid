@@ -1,16 +1,18 @@
 package kubelet
 
 import (
-	"bytes"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
-	"text/template"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/mod/semver"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	config "k8s.io/kubelet/config/v1"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/util"
@@ -26,13 +28,7 @@ const (
 	ecrCredentialProviderBinPathEnvironmentName = "ECR_CREDENTIAL_PROVIDER_BIN_PATH"
 )
 
-var (
-	//go:embed image-credential-provider.template.json
-	imageCredentialProviderTemplateData string
-	//go:embed hybrid-roles-anywhere-image-credential-provider.template.json
-	hybridRolesAnywhereImageCredentialProviderTemplateData string
-	imageCredentialProviderConfigPath                      = path.Join(imageCredentialProviderRoot, imageCredentialProviderConfig)
-)
+var imageCredentialProviderConfigPath = path.Join(imageCredentialProviderRoot, imageCredentialProviderConfig)
 
 func (k *kubelet) writeImageCredentialProviderConfig() error {
 	// fallback default for image credential provider binary if not overridden
@@ -45,7 +41,7 @@ func (k *kubelet) writeImageCredentialProviderConfig() error {
 		return err
 	}
 
-	config, err := generateImageCredentialProviderConfig(k.nodeConfig, ecrCredentialProviderBinPath)
+	config, err := generateImageCredentialProviderConfig(k.nodeConfig, ecrCredentialProviderBinPath, k.credentialProviderAwsConfig)
 	if err != nil {
 		return err
 	}
@@ -56,42 +52,65 @@ func (k *kubelet) writeImageCredentialProviderConfig() error {
 	return util.WriteFileWithDir(imageCredentialProviderConfigPath, config, imageCredentialProviderPerm)
 }
 
-type imageCredentialProviderTemplateVars struct {
-	ConfigApiVersion   string
-	ProviderApiVersion string
-	EcrProviderName    string
-	AwsConfigPath      string
-}
-
-func generateImageCredentialProviderConfig(cfg *api.NodeConfig, ecrCredentialProviderBinPath string) ([]byte, error) {
-	templateVars := imageCredentialProviderTemplateVars{
-		EcrProviderName: filepath.Base(ecrCredentialProviderBinPath),
-	}
+func generateImageCredentialProviderConfig(cfg *api.NodeConfig, ecrCredentialProviderBinPath string, kubeletCredentialProviderAwsConfig CredentialProviderAwsConfig) ([]byte, error) {
 	kubeletVersion, err := GetKubeletVersion()
 	if err != nil {
 		return nil, err
 	}
+	configApiVersion := "kubelet.config.k8s.io/v1"
+	providerApiVersion := "credentialprovider.kubelet.k8s.io/v1"
 	if semver.Compare(kubeletVersion, "v1.27.0") < 0 {
-		templateVars.ConfigApiVersion = "kubelet.config.k8s.io/v1alpha1"
-		templateVars.ProviderApiVersion = "credentialprovider.kubelet.k8s.io/v1alpha1"
-	} else {
-		templateVars.ConfigApiVersion = "kubelet.config.k8s.io/v1"
-		templateVars.ProviderApiVersion = "credentialprovider.kubelet.k8s.io/v1"
+		configApiVersion = "kubelet.config.k8s.io/v1alpha1"
+		providerApiVersion = "credentialprovider.kubelet.k8s.io/v1alpha1"
 	}
 
-	var buf bytes.Buffer
-	var imageCredentialProviderTemplate *template.Template
+	env := []config.ExecEnvVar{}
 	if cfg.IsIAMRolesAnywhere() {
-		templateVars.AwsConfigPath = cfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath
-		imageCredentialProviderTemplate = template.Must(template.New("image-credential-provider").Parse(hybridRolesAnywhereImageCredentialProviderTemplateData))
-	} else {
-		// The regular non-iam roles anywhere credential provider would still work for SSM based installs
-		imageCredentialProviderTemplate = template.Must(template.New("image-credential-provider").Parse(imageCredentialProviderTemplateData))
+		env = append(env, config.ExecEnvVar{
+			Name:  "AWS_CONFIG_FILE",
+			Value: cfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath,
+		})
 	}
-	if err := imageCredentialProviderTemplate.Execute(&buf, templateVars); err != nil {
-		return nil, err
+	if kubeletCredentialProviderAwsConfig.Profile != "" {
+		env = append(env, config.ExecEnvVar{
+			Name:  "AWS_PROFILE",
+			Value: kubeletCredentialProviderAwsConfig.Profile,
+		})
 	}
-	return buf.Bytes(), nil
+	if kubeletCredentialProviderAwsConfig.CredentialsPath != "" {
+		env = append(env, config.ExecEnvVar{
+			Name:  "AWS_SHARED_CREDENTIALS_FILE",
+			Value: kubeletCredentialProviderAwsConfig.CredentialsPath,
+		})
+	}
+
+	providerConfig := config.CredentialProviderConfig{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: configApiVersion,
+			Kind:       "CredentialProviderConfig",
+		},
+		Providers: []config.CredentialProvider{
+			{
+				Name: filepath.Base(ecrCredentialProviderBinPath),
+				MatchImages: []string{
+					"*.dkr.ecr.*.amazonaws.com",
+					"*.dkr.ecr.*.amazonaws.com.cn",
+					"*.dkr.ecr-fips.*.amazonaws.com",
+					"*.dkr.ecr.*.c2s.ic.gov",
+					"*.dkr.ecr.*.sc2s.sgov.gov",
+				},
+				DefaultCacheDuration: &metav1.Duration{Duration: 12 * time.Hour},
+				APIVersion:           providerApiVersion,
+				Env:                  env,
+			},
+		},
+	}
+
+	data, err := json.MarshalIndent(providerConfig, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshalling image credential provider config: %w", err)
+	}
+	return data, nil
 }
 
 func ensureCredentialProviderBinaryExists(binPath string) error {
