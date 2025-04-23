@@ -29,7 +29,7 @@ var (
 )
 
 const (
-	numberOfNodes            = 1
+	numberOfNodes            = 3
 	defaultConformanceReport = "junit_01.xml"
 	conformanceReport        = "junit-conformance.xml"
 )

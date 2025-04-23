@@ -2,6 +2,8 @@ package suite
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"path/filepath"
 
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -22,25 +24,26 @@ import (
 )
 
 type testNode struct {
-	ArtifactsPath   string
-	ClusterName     string
-	EC2Client       *ec2v2.Client
-	EKSEndpoint     string
-	FailHandler     func(message string, callerSkip ...int)
-	InstanceName    string
-	InstanceSize    e2e.InstanceSize
-	K8sClient       clientgo.Interface
-	K8sClientConfig *rest.Config
-	K8sVersion      string
-	LogsBucket      string
-	LoggerControl   e2e.PausableLogger
-	Logger          logr.Logger
-	NodeName        string
-	OS              e2e.NodeadmOS
-	PeeredNode      *peered.Node
-	Provider        e2e.NodeadmCredentialsProvider
-	Region          string
-	PeeredNetwork   *peered.Network
+	ArtifactsPath      string
+	ClusterName        string
+	EC2Client          *ec2v2.Client
+	EKSEndpoint        string
+	FailHandler        func(message string, callerSkip ...int)
+	InstanceName       string
+	InstanceSize       e2e.InstanceSize
+	K8sClient          clientgo.Interface
+	K8sClientConfig    *rest.Config
+	K8sVersion         string
+	LogsBucket         string
+	LoggerControl      e2e.PausableLogger
+	Logger             logr.Logger
+	NodeName           string
+	OS                 e2e.NodeadmOS
+	PeeredNode         *peered.Node
+	Provider           e2e.NodeadmCredentialsProvider
+	Region             string
+	PeeredNetwork      *peered.Network
+	SerialOutputWriter io.Writer
 
 	flakyCode    *FlakyCode
 	node         *peered.PeerdNode
@@ -55,7 +58,7 @@ func (n *testNode) Start(ctx context.Context) error {
 		Logger:      n.Logger,
 		FailHandler: n.FailHandler,
 	}
-	n.flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
+	n.flakyCode.It(ctx, fmt.Sprintf("Creates a node: %s", n.NodeName), 3, func(ctx context.Context, flakeRun FlakeRun) {
 		n.addReportEntries(n.PeeredNode)
 
 		node, err := n.PeeredNode.Create(ctx, &peered.NodeSpec{
@@ -86,13 +89,14 @@ func (n *testNode) Start(ctx context.Context) error {
 			Instance:   node.Instance,
 			TestLogger: n.LoggerControl,
 			OutputFile: outputFile,
+			Output:     n.SerialOutputWriter,
 		})
 
 		flakeRun.DeferCleanup(func(ctx context.Context) {
 			n.serialOutput.Close()
 		}, NodeTimeout(constants.DeferCleanupTimeout))
 
-		n.serialOutput.It("joins the cluster", func() {
+		n.serialOutput.It(fmt.Sprintf("joins the cluster: %s", n.NodeName), func() {
 			n.waitForNodeToJoin(ctx, flakeRun)
 		})
 

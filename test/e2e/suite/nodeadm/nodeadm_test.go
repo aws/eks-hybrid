@@ -15,7 +15,6 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
-	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
@@ -111,7 +110,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 					test.Logger.Info("Rebooting EC2 Instance.")
-					Expect(nodeadm.RebootInstance(ctx, test.RemoteCommandRunner, testNode.PeerdNode().Instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
+					Expect(cleanNode.RebootInstance(ctx)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
 					test.Logger.Info("EC2 Instance rebooted successfully.")
 
 					testNode.It("re-joins the cluster after reboot", func() {
