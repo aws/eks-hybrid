@@ -41,3 +41,5 @@ preflight:
     tag: "v1.16.7"
     imagePullPolicy: "IfNotPresent"
     digest: "sha256:294d2432507fed393b26e9fbfacb25c2e37095578cb34dabac7312b66ed0782e"
+# enable session affinity for conformance tests
+sessionAffinity: true

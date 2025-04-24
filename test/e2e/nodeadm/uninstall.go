@@ -80,3 +80,7 @@ func (u CleanNode) Run(ctx context.Context) error {
 
 	return nil
 }
+
+func (u CleanNode) RebootInstance(ctx context.Context) error {
+	return RebootInstance(ctx, u.RemoteCommandRunner, u.NodeIP)
+}

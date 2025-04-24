@@ -24,6 +24,7 @@ type SerialOutputBlock struct {
 	logsFile     io.WriteCloser
 	serialOutout *e2e.SwitchWriter
 	testLogger   e2e.PausableLogger
+	stdOut       io.Writer
 }
 
 type SerialOutputConfig struct {
@@ -32,6 +33,7 @@ type SerialOutputConfig struct {
 	Instance   ec2.Instance
 	TestLogger e2e.PausableLogger
 	OutputFile string
+	Output     io.Writer // Writer to output serial console to, defaults to os.Stdout if nil
 }
 
 func NewSerialOutputBlock(ctx context.Context, config *SerialOutputConfig) (*SerialOutputBlock, error) {
@@ -40,7 +42,12 @@ func NewSerialOutputBlock(ctx context.Context, config *SerialOutputConfig) (*Ser
 		return nil, fmt.Errorf("preparing EC2 for serial connection: %w", err)
 	}
 
-	pausableOutput := e2e.NewSwitchWriter(os.Stdout)
+	output := config.Output
+	if output == nil {
+		output = os.Stdout
+	}
+
+	pausableOutput := e2e.NewSwitchWriter(output)
 	pausableOutput.Pause() // We start it paused, we will resume it once the test output is paused
 	file, err := os.Create(config.OutputFile)
 	if err != nil {
@@ -57,6 +64,7 @@ func NewSerialOutputBlock(ctx context.Context, config *SerialOutputConfig) (*Ser
 		logsFile:     file,
 		testLogger:   config.TestLogger,
 		serialOutout: pausableOutput,
+		stdOut:       output,
 	}, nil
 }
 
@@ -80,11 +88,11 @@ func (b *SerialOutputBlock) It(description string, body func()) {
 		// hack: this prints the resume message immediately after resuming the test logs
 		// and more importantly, before any logs produced by body()
 		b.testLogger.Info("Node serial output stopped and test logs resumed")
-		fmt.Println("-------------- Serial output starts here --------------")
+		fmt.Fprintln(b.stdOut, "-------------- Serial output starts here --------------")
 		gomega.Expect(b.serialOutout.Resume()).To(gomega.Succeed())
 		body()
 		b.serialOutout.Pause()
-		fmt.Println("-------------- Serial output ends here --------------")
+		fmt.Fprintln(b.stdOut, "-------------- Serial output ends here --------------")
 		gomega.Expect(b.testLogger.Resume()).To(gomega.Succeed())
 	})
 }

@@ -46,6 +46,26 @@ func NewConformanceTest(clientConfig *rest.Config, k8s *kubernetes.Clientset, lo
 	conformanceImage, _ := getConformanceImage(k8s)
 	config.ConformanceImage = conformanceImage
 
+	// Skipping known cilium failure: https://github.com/cilium/cilium/issues/9207
+	// fixed is merged in cilium 1.17
+	// config.Skip = "validates that there is no conflict between pods with same hostPort but different hostIP and protocol"
+
+	// Summarizing 4 Failures:
+	// [FAIL] [sig-network] HostPort [It] validates that there is no conflict between pods with same hostPort but different hostIP and protocol [LinuxOnly] [Conformance] [sig-network, Conformance]
+	// k8s.io/kubernetes/test/e2e/network/hostport.go:161
+	// [FAIL] [sig-node] Downward API [It] should provide host IP as an env var [NodeConformance] [Conformance] [sig-node, NodeConformance, Conformance]
+	// k8s.io/kubernetes/test/e2e/framework/pod/output/output.go:166
+	// [FAIL] [sig-network] Services [It] should serve endpoints on same port and different protocols [Conformance] [sig-network, Conformance]
+	// k8s.io/kubernetes/test/e2e/network/service.go:3784
+	// [FAIL] [sig-scheduling] SchedulerPredicates [Serial] [It] validates that NodeSelector is respected if matching [Conformance] [sig-scheduling, Serial, Conformance]
+	// k8s.io/kubernetes/test/e2e/scheduling/predicates.go:1043
+
+	// 	Summarizing 2 Failures:
+	//   [FAIL] [sig-network] HostPort [It] validates that there is no conflict between pods with same hostPort but different hostIP and protocol [LinuxOnly] [Conformance] [sig-network, Conformance]
+	//   k8s.io/kubernetes/test/e2e/network/hostport.go:161
+	//   [FAIL] [sig-network] Services [It] should serve endpoints on same port and different protocols [Conformance] [sig-network, Conformance]
+	//   k8s.io/kubernetes/test/e2e/network/service.go:3784
+
 	testRunner := conformance.NewTestRunner(config, k8s)
 	testClient := client.NewClient(clientConfig, k8s, config.Namespace)
 
@@ -85,8 +105,7 @@ func (c ConformanceTest) Run(ctx context.Context) error {
 		return fmt.Errorf("waiting for namespace to be deleted: %w", err)
 	}
 
-	// focus := `\[NodeConformance\]`
-	focus := `Projected configMap should be consumable in multiple volumes in the same pod`
+	focus := `\[Conformance\]`
 	if err := c.conformanceRunner.Deploy(ctx, focus, "", true, 5*time.Minute); err != nil {
 		return fmt.Errorf("deploying: %w", err)
 	}
