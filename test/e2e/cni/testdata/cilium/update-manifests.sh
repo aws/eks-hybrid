@@ -66,6 +66,8 @@ preflight:
     tag: "$CILIUM_VERSION"
     imagePullPolicy: "IfNotPresent"
     digest: $CILIUM_DIGEST
+# enable session affinity for conformance tests
+sessionAffinity: true
 EOF
 
 helm repo add cilium https://helm.cilium.io/

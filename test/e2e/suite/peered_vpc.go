@@ -197,10 +197,10 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 	}
 }
 
-func (t *PeeredVPCTest) NewPeeredNetwork() *peered.Network {
+func (t *PeeredVPCTest) NewPeeredNetwork(logger logr.Logger) *peered.Network {
 	return &peered.Network{
 		EC2:     t.ec2Client,
-		Logger:  t.Logger,
+		Logger:  logger,
 		K8s:     t.k8sClient,
 		Cluster: t.Cluster,
 	}
@@ -282,7 +282,6 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		OS:              os,
 		Provider:        provider,
 		Region:          t.Cluster.Region,
-		PeeredNetwork:   t.NewPeeredNetwork(),
 	}
 
 	for _, opt := range opts {
@@ -290,7 +289,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 	}
 
 	node.PeeredNode = t.NewPeeredNode(node.Logger)
-
+	node.PeeredNetwork = t.NewPeeredNetwork(node.Logger)
 	return node
 }
 
