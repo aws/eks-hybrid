@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	getAddonTimeout           = 8 * time.Minute
+	getAddonTimeout           = 10 * time.Minute
 	podIdentityDaemonSet      = "eks-pod-identity-agent-hybrid"
 	podIdentityToken          = "eks-pod-identity-token"
 	policyName                = "pod-identity-association-role-policy"
