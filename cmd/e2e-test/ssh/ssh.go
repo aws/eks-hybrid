@@ -106,7 +106,7 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		"--document",
 		"AWS-StartInteractiveCommand",
 		"--parameters",
-		fmt.Sprintf("{\"command\":[\"sudo ssh %s\"]}", *targetInstance.PrivateIpAddress),
+		fmt.Sprintf("{\"command\":[\"sudo ssh ec2-user@%s\"]}", *targetInstance.PrivateIpAddress),
 		"--target",
 		*jumpbox.InstanceId,
 	)

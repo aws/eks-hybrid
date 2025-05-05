@@ -18,6 +18,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
+	"github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 )
 
@@ -43,7 +44,7 @@ type testNode struct {
 	PeeredNetwork   *peered.Network
 
 	flakyCode    *FlakyCode
-	node         *peered.PeerdNode
+	node         *peered.PeeredNode
 	serialOutput peered.ItBlockCloser
 	verifyNode   *kubernetes.VerifyNode
 }
@@ -95,13 +96,14 @@ func (n *testNode) Start(ctx context.Context) error {
 		n.serialOutput.It("joins the cluster", func() {
 			n.waitForNodeToJoin(ctx, flakeRun)
 		})
-
 		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.node)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
 
-		version, err := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
-		Expect(err).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
-		Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
-		AddReportEntry(constants.TestNodeadmVersion, version)
+		if !os.IsBottlerocket(n.OS.Name()) {
+			version, err := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP, n.OS.Name())
+			Expect(err).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
+			Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
+			AddReportEntry(constants.TestNodeadmVersion, version)
+		}
 	})
 	return nil
 }
@@ -133,7 +135,7 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	var debugErr error
 	if !isImpaired {
 		expect = Expect
-		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP, n.OS.Name())
 	}
 	expect(err).To(Succeed(), "node should have joined the cluster successfully")
 	Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
@@ -162,7 +164,7 @@ func (n *testNode) It(name string, f func()) {
 	n.serialOutput.It(name, f)
 }
 
-func (n *testNode) PeerdNode() *peered.PeerdNode {
+func (n *testNode) GetPeeredNode() *peered.PeeredNode {
 	return n.node
 }
 

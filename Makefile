@@ -91,7 +91,7 @@ lint: golangci-lint ## Run golangci-lint.
 .PHONY: build
 build: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
 build: ## Build nodeadm binary.
-	$(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
+	CGO_ENABLED=0 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
 
 .PHONY: build-cross-platform
 build-cross-platform: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static

@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 )
@@ -44,4 +45,12 @@ func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s kubernetes.Interf
 	}
 
 	return foundDaemonSet, nil
+}
+
+func PatchDaemonSet(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string, patchBytes []byte) error {
+	if _, err := k8s.AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
+		return fmt.Errorf("patching DaemonSet %s in namespace %s: %w", name, namespace, err)
+	}
+
+	return nil
 }
