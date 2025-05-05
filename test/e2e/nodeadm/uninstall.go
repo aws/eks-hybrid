@@ -3,10 +3,12 @@ package nodeadm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	clientgo "k8s.io/client-go/kubernetes"
 
+	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
@@ -16,6 +18,7 @@ type CleanNode struct {
 	K8s                   clientgo.Interface
 	RemoteCommandRunner   commands.RemoteCommandRunner
 	Verifier              UninstallVerifier
+	OS                    e2e.NodeadmOS
 	InfrastructureCleaner NodeInfrastructureCleaner
 	Logger                logr.Logger
 
@@ -54,9 +57,16 @@ func (u CleanNode) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err = RunNodeadmUninstall(ctx, u.RemoteCommandRunner, u.NodeIP); err != nil {
-		return err
+	if strings.Contains(u.OS.Name(), "bottlerocket") {
+		if err = StopKubelet(ctx, u.RemoteCommandRunner, u.NodeIP, u.OS.Name()); err != nil {
+			return err
+		}
+	} else {
+		if err = RunNodeadmUninstall(ctx, u.RemoteCommandRunner, u.NodeIP); err != nil {
+			return err
+		}
 	}
+
 	u.Logger.Info("Waiting for hybrid node to be not ready...")
 	if err = kubernetes.WaitForHybridNodeToBeNotReady(ctx, u.K8s, node.Name, u.Logger); err != nil {
 		return err

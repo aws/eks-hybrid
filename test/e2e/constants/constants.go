@@ -20,4 +20,7 @@ const (
 	SerialOutputLogFile             = "serial-output.log"
 	TestInstanceNameKubernetesLabel = "test.eks-hybrid.amazonaws.com/node-name"
 	DeferCleanupTimeout             = 5 * time.Minute
+	RolesAnywhereCertPath           = "/etc/roles-anywhere/pki/node.crt"
+	RolesAnywhereKeyPath            = "/etc/roles-anywhere/pki/node.key"
+	BottlerocketOsName              = "bottlerocket"
 )

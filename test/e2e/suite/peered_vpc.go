@@ -128,6 +128,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	}
 	test.RolesAnywhereCA = ca
 
+	// TODO: ideally this should be an input to the tests and not just
+	// assume same name/path used by the setup command.
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(suite.TestConfig.ClusterName))
 	if err != nil {
 		return nil, err
@@ -178,6 +180,7 @@ func (t *PeeredVPCTest) NewPeeredNode() *peered.Node {
 			AWS:             t.aws,
 			EC2:             t.ec2Client,
 			SSM:             t.SSMClient,
+			K8sClientConfig: t.K8sClientConfig,
 			Logger:          t.Logger,
 			Cluster:         t.Cluster,
 			NodeadmURLs:     t.nodeadmURLs,
@@ -207,10 +210,11 @@ func (t *PeeredVPCTest) NewPeeredNetwork() *peered.Network {
 	}
 }
 
-func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string) *nodeadm.CleanNode {
+func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string, os e2e.NodeadmOS) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
 		K8s:                   t.k8sClient,
 		RemoteCommandRunner:   t.RemoteCommandRunner,
+		OS:                    os,
 		Verifier:              provider,
 		Logger:                t.Logger,
 		InfrastructureCleaner: infraCleaner,
@@ -396,6 +400,7 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 		osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		osystem.NewBottleRocket(),
 	}
 	osProviderList := []OSProvider{}
 	for _, nodeOS := range osList {
