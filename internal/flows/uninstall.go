@@ -102,6 +102,9 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 	}
 	if u.Artifacts.Containerd != string(containerd.ContainerdSourceNone) {
 		u.Logger.Info("Uninstalling containerd...")
+		if err := containerd.RemovePods(); err != nil {
+			u.Logger.Info("ignored error stopping pods", zap.Error(err))
+		}
 		if err := u.DaemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
 			return err
 		}
