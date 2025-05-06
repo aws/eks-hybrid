@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/url"
 
+	"k8s.io/apimachinery/pkg/util/wait"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/validation"
@@ -23,7 +25,19 @@ func CheckConnection(ctx context.Context, informer validation.Informer, node *ap
 		return err
 	}
 
-	if err = network.CheckConnectionToHost(ctx, *endpoint); err != nil {
+	consecutiveErrors := 0
+	err = wait.PollUntilContextTimeout(ctx, validation.ValidationInterval, validation.ValidationTimeout, true, func(ctx context.Context) (bool, error) {
+		err = network.CheckConnectionToHost(ctx, *endpoint)
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors == validation.ValidationMaxRetries {
+				return false, err
+			}
+			return false, nil // continue polling
+		}
+		return true, nil
+	})
+	if err != nil {
 		err = validation.WithRemediation(err, "Ensure your network configuration allows the node to access the Kubernetes API endpoint.")
 		return err
 	}

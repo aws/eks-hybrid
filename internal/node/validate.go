@@ -2,15 +2,17 @@ package node
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
 
+	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -52,7 +54,18 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 		return err
 	}
 
-	_, err = client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+	consecutiveErrors := 0
+	err = wait.PollUntilContextTimeout(ctx, validation.ValidationInterval, validation.ValidationTimeout, true, func(ctx context.Context) (bool, error) {
+		_, err = client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors == validation.ValidationMaxRetries {
+				return false, err
+			}
+			return false, nil // continue polling
+		}
+		return true, nil
+	})
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -140,7 +153,19 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 		return err
 	}
 
-	kubeEndpoint, err := client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+	var kubeEndpoint *v1.Endpoints
+	consecutiveErrors := 0
+	err = wait.PollUntilContextTimeout(ctx, validation.ValidationInterval, validation.ValidationTimeout, true, func(ctx context.Context) (bool, error) {
+		kubeEndpoint, err = client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors == validation.ValidationMaxRetries {
+				return false, err
+			}
+			return false, nil // continue polling
+		}
+		return true, nil
+	})
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err

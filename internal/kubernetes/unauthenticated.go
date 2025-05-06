@@ -5,10 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/validation"
@@ -35,7 +37,19 @@ func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertific
 		return validation.WithRemediation(err, "Ensure the Kubernetes API server endpoint provided is correct.")
 	}
 
-	resp, err := client.Do(req)
+	consecutiveErrors := 0
+	var resp *http.Response
+	err = wait.PollUntilContextTimeout(ctx, validation.ValidationInterval, validation.ValidationTimeout, true, func(ctx context.Context) (bool, error) {
+		resp, err = client.Do(req)
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors == validation.ValidationMaxRetries {
+				return false, err
+			}
+			return false, nil // continue polling
+		}
+		return true, nil
+	})
 	if err != nil {
 		return validation.WithRemediation(err, "Ensure the provided Kubernetes API server endpoint is correct and the CA certificate is valid for that endpoint.")
 	}
