@@ -84,14 +84,15 @@ func CreatePod(ctx context.Context, k8s kubernetes.Interface, pod *corev1.Pod, l
 	podListOptions := metav1.ListOptions{
 		FieldSelector: "metadata.name=" + podName,
 	}
-	err = waitForPodToBeRunning(ctx, k8s, podListOptions, namespace, logger)
+	err = WaitForPodsToBeRunning(ctx, k8s, podListOptions, namespace, logger)
 	if err != nil {
 		return fmt.Errorf("waiting for test pod to be running: %w", err)
 	}
 	return nil
 }
 
-func waitForPodToBeRunning(ctx context.Context, k8s kubernetes.Interface, listOptions metav1.ListOptions, namespace string, logger logr.Logger) error {
+// WaitForPodsToBeRunning waits until a pod is in running phase and all containers are ready.
+func WaitForPodsToBeRunning(ctx context.Context, k8s kubernetes.Interface, listOptions metav1.ListOptions, namespace string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		pods, err := k8s.CoreV1().Pods(namespace).List(ctx, listOptions)
@@ -109,22 +110,18 @@ func waitForPodToBeRunning(ctx context.Context, k8s kubernetes.Interface, listOp
 			return false, nil // continue polling
 		}
 
-		if len(pods.Items) > 1 {
-			return false, fmt.Errorf("found multiple pods for selector %s: %v", listOptions.FieldSelector, pods.Items)
-		}
-
-		pod := pods.Items[0]
-
-		if pod.Status.Phase == corev1.PodSucceeded {
-			return false, fmt.Errorf("test pod exited before containers ready")
-		}
-		if pod.Status.Phase != corev1.PodRunning {
-			return false, nil // continue polling
-		}
-
-		for _, cond := range pod.Status.Conditions {
-			if cond.Type == corev1.ContainersReady && cond.Status != corev1.ConditionTrue {
+		for _, pod := range pods.Items {
+			if pod.Status.Phase == corev1.PodSucceeded {
+				return false, fmt.Errorf("test pod exited before containers ready")
+			}
+			if pod.Status.Phase != corev1.PodRunning {
 				return false, nil // continue polling
+			}
+
+			for _, cond := range pod.Status.Conditions {
+				if cond.Type == corev1.ContainersReady && cond.Status != corev1.ConditionTrue {
+					return false, nil // continue polling
+				}
 			}
 		}
 
@@ -155,21 +152,21 @@ func DeletePod(ctx context.Context, k8s kubernetes.Interface, name, namespace st
 }
 
 // Retries up to 5 times to avoid connection errors
-func GetPodLogsWithRetries(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (logs string, err error) {
+func GetPodLogsWithRetries(ctx context.Context, k8s kubernetes.Interface, name, namespace string, opts *corev1.PodLogOptions) (logs string, err error) {
 	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
 		// Retry any error type
 		return true
 	}, func() error {
 		var err error
-		logs, err = getPodLogs(ctx, k8s, name, namespace)
+		logs, err = getPodLogs(ctx, k8s, name, namespace, opts)
 		return err
 	})
 
 	return logs, err
 }
 
-func getPodLogs(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (string, error) {
-	req := k8s.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
+func getPodLogs(ctx context.Context, k8s kubernetes.Interface, name, namespace string, opts *corev1.PodLogOptions) (string, error) {
+	req := k8s.CoreV1().Pods(namespace).GetLogs(name, opts)
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
 		return "", fmt.Errorf("opening log stream: %w", err)
@@ -230,5 +227,5 @@ func WaitForDaemonSetPodToBeRunning(ctx context.Context, k8s kubernetes.Interfac
 		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/name", daemonSetName),
 		FieldSelector: fmt.Sprintf("%s=%s", "spec.nodeName", nodeName),
 	}
-	return waitForPodToBeRunning(ctx, k8s, listOptions, namespace, logger)
+	return WaitForPodsToBeRunning(ctx, k8s, listOptions, namespace, logger)
 }

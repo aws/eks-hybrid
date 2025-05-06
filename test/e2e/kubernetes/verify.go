@@ -84,7 +84,7 @@ func (v VerifyNode) Run(ctx context.Context) error {
 	v.Logger.Info("Successfully exec'd nginx -version", "pod", podName)
 
 	v.Logger.Info("Checking logs for nginx output", "pod", podName)
-	logs, err := GetPodLogsWithRetries(ctx, v.K8s, podName, testPodNamespace)
+	logs, err := GetPodLogsWithRetries(ctx, v.K8s, podName, testPodNamespace, &corev1.PodLogOptions{})
 	if err != nil {
 		return err
 	}

@@ -45,3 +45,19 @@ func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s kubernetes.Interf
 
 	return foundDaemonSet, nil
 }
+
+// WaitForDaemonSetReady waits for a daemonset to be ready
+func WaitForDaemonSetReady(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string) error {
+	resourceName := fmt.Sprintf("DaemonSet %s", name)
+
+	getResource := func(ctx context.Context) (any, error) {
+		return k8s.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	}
+
+	isResourceReady := func(resource any) bool {
+		daemonSet := resource.(*appsv1.DaemonSet)
+		return daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled
+	}
+
+	return GenericResourcePoller(ctx, logger, resourceName, getResource, isResourceReady)
+}
