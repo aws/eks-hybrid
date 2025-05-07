@@ -45,3 +45,30 @@ func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s kubernetes.Interf
 
 	return foundDaemonSet, nil
 }
+
+func WaitForDaemonSetReady(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string) error {
+	consecutiveErrors := 0
+	err := wait.PollUntilContextTimeout(ctx, daemonSetDelayInternal, daemonSetWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
+		daemonSet, err := k8s.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting daemonSet %s: %w", name, err)
+			}
+			logger.Info("Retryable error getting DaemonSet. Continuing to poll", "name", name, "error", err)
+			return false, nil // continue polling
+		}
+
+		consecutiveErrors = 0
+		if daemonSet != nil && daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled {
+			return true, nil
+		}
+
+		return false, nil // continue polling
+	})
+	if err != nil {
+		return fmt.Errorf("waiting for DaemonSet %s to be ready: %w", name, err)
+	}
+
+	return nil
+}

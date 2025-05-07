@@ -62,7 +62,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, getAddonTimeout)
 	defer cancel()
 
-	if err := podIdentityAddon.WaitUtilActive(timeoutCtx, v.EKSClient, v.Logger); err != nil {
+	if err := podIdentityAddon.WaitUntilActive(timeoutCtx, v.EKSClient, v.Logger); err != nil {
 		return fmt.Errorf("waiting for pod identity add-on to be active: %w", err)
 	}
 
