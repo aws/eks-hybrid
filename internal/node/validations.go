@@ -9,11 +9,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/node/hybrid"
+	"github.com/aws/eks-hybrid/internal/retrier"
 )
 
 const defaultStaticPodManifestPath = "/etc/kubernetes/manifest"
@@ -140,16 +140,11 @@ func getNode(ctx context.Context, nodeName string, clientset kubernetes.Interfac
 	}
 
 	var node *v1.Node
-	var err error
-	consecutiveErrors := 0
-	err = wait.PollUntilContextTimeout(ctx, opts.ValidationInterval, opts.ValidationTimeout, true, func(ctx context.Context) (bool, error) {
+	err := retrier.PollWithRetriesCustom(ctx, opts.ValidationInterval, opts.ValidationTimeout, opts.MaxRetries, func(ctx context.Context) (bool, error) {
+		var err error
 		node, err = clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors == opts.MaxRetries {
-				return false, errors.Wrap(err, "failed to get current node")
-			}
-			return false, nil // continue polling
+			return false, errors.Wrap(err, "failed to get current node")
 		}
 		return true, nil
 	})
