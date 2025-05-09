@@ -34,6 +34,7 @@ type ubuntuCloudInitData struct {
 	NodeadmUrl            string
 	NodeadmInitScript     string
 	NodeadmAdditionalArgs string
+	PreinstallContainerd  bool
 }
 
 func templateFuncMap() map[string]interface{} {
@@ -203,6 +204,14 @@ func NewUbuntu2404DockerSource() *Ubuntu2404 {
 	return u
 }
 
+func NewUbuntu2404NoDockerSource() *Ubuntu2404 {
+	u := new(Ubuntu2404)
+	u.amiArchitecture = amd64Arch
+	u.architecture = amd64
+	u.containerdSource = "none"
+	return u
+}
+
 func NewUbuntu2404ARM() *Ubuntu2404 {
 	u := new(Ubuntu2404)
 	u.amiArchitecture = arm64Arch
@@ -215,6 +224,8 @@ func (u Ubuntu2404) Name() string {
 	name := "ubuntu2404-" + u.architecture.String()
 	if u.containerdSource == "docker" {
 		name += "-docker"
+	} else if u.containerdSource == "none" {
+		name += "-source-none"
 	}
 	return name
 }
@@ -244,6 +255,9 @@ func (u Ubuntu2404) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, erro
 
 	if u.containerdSource == "docker" {
 		data.NodeadmAdditionalArgs = "--containerd-source docker"
+	} else if u.containerdSource == "none" {
+		data.NodeadmAdditionalArgs = "--containerd-source none"
+		data.PreinstallContainerd = true
 	}
 
 	return executeTemplate(ubuntu2404CloudInit, data)

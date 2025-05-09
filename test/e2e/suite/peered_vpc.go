@@ -405,12 +405,14 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 		osystem.NewUbuntu2404AMD(),
 		osystem.NewUbuntu2404ARM(),
 		osystem.NewUbuntu2404DockerSource(),
+		osystem.NewUbuntu2404NoDockerSource(),
 		osystem.NewAmazonLinux2023AMD(),
 		osystem.NewAmazonLinux2023ARM(),
 		osystem.NewRedHat8AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		osystem.NewRedHat9NoDockerSource(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 	}
 	osProviderList := []OSProvider{}
 	for _, nodeOS := range osList {
