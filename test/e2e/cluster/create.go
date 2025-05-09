@@ -48,10 +48,10 @@ type EKSConfig struct {
 }
 
 type NetworkConfig struct {
-	VpcCidr           string `yaml:"vpcCidr"`
-	PublicSubnetCidr  string `yaml:"publicSubnetCidr"`
-	PrivateSubnetCidr string `yaml:"privateSubnetCidr"`
-	PodCidr           string `yaml:"podCidr"`
+	VpcCidr                  string `yaml:"vpcCidr"`
+	PublicSubnetCidr         string `yaml:"publicSubnetCidr"`
+	PrivateSubnetCidr        string `yaml:"privateSubnetCidr"`
+	PodCidr                  string `yaml:"podCidr"`
 }
 
 const (
