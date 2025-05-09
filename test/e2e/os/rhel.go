@@ -30,6 +30,7 @@ type rhelCloudInitData struct {
 	RhelUsername      string
 	RhelPassword      string
 	SSMAgentURL       string
+	ContainerdSource  string
 }
 
 type RedHat8 struct {
@@ -96,10 +97,11 @@ func (r RedHat8) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) 
 }
 
 type RedHat9 struct {
-	rhelUsername    string
-	rhelPassword    string
-	amiArchitecture string
-	architecture    architecture
+	rhelUsername     string
+	rhelPassword     string
+	amiArchitecture  string
+	architecture     architecture
+	containerdSource string
 }
 
 func NewRedHat9AMD(rhelUsername, rhelPassword string) *RedHat9 {
@@ -120,8 +122,22 @@ func NewRedHat9ARM(rhelUsername, rhelPassword string) *RedHat9 {
 	return rh9
 }
 
+func NewRedHat9NoDockerSource(rhelUsername, rhelPassword string) *RedHat9 {
+	rh9 := new(RedHat9)
+	rh9.rhelUsername = rhelUsername
+	rh9.rhelPassword = rhelPassword
+	rh9.amiArchitecture = x8664Arch
+	rh9.architecture = amd64
+	rh9.containerdSource = "none"
+	return rh9
+}
+
 func (r RedHat9) Name() string {
-	return "rhel9-" + r.architecture.String()
+	name := "rhel9-" + r.architecture.String()
+	if r.containerdSource == "none" {
+		name += "-source-none"
+	}
+	return name
 }
 
 func (r RedHat9) InstanceType(region string, instanceSize e2e.InstanceSize) string {
@@ -150,6 +166,11 @@ func (r RedHat9) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) 
 	if r.architecture.arm() {
 		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 		data.SSMAgentURL = rhelSsmAgentARM
+	}
+
+	data.ContainerdSource = "docker"
+	if r.containerdSource == "none" {
+		data.ContainerdSource = "none"
 	}
 
 	return executeTemplate(rhel9CloudInit, data)

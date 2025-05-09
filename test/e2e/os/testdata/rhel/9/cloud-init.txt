@@ -10,6 +10,16 @@ users:
 rh_subscription:
   username: {{ .RhelUsername }}
   password: {{ .RhelPassword }}
+{{- if eq .ContainerdSource "none" }}
+yum_repos:
+  docker-ce-stable:
+    name: docker-ce-stable
+    baseurl: https://download.docker.com/linux/rhel/$releasever/$basearch/stable
+    gpgcheck: true
+    gpgkey: https://download.docker.com/linux/rhel/gpg
+packages:
+  - containerd.io
+{{- end }}
 package_update: true
 write_files:
   - content: |
@@ -25,6 +35,6 @@ write_files:
 {{- end }}
 
 runcmd:
-  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source docker"
+  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source {{ .ContainerdSource }}"
 
 final_message: "The system is prepped, after $UPTIME seconds"
