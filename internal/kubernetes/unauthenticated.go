@@ -10,9 +10,9 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/retrier"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -37,28 +37,25 @@ func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertific
 		return validation.WithRemediation(err, "Ensure the Kubernetes API server endpoint provided is correct.")
 	}
 
-	consecutiveErrors := 0
 	var resp *http.Response
-	err = wait.PollUntilContextTimeout(ctx, validation.ValidationInterval, validation.ValidationTimeout, true, func(ctx context.Context) (bool, error) {
+	var body []byte
+	err = retrier.PollWithRetries(ctx, func(ctx context.Context) (bool, error) {
+		var err error
 		resp, err = client.Do(req)
 		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors == validation.ValidationMaxRetries {
-				return false, err
-			}
-			return false, nil // continue polling
+			return false, err
+		}
+
+		defer resp.Body.Close()
+
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return false, fmt.Errorf("reading unauthenticated request response body: %w", err)
 		}
 		return true, nil
 	})
 	if err != nil {
 		return validation.WithRemediation(err, "Ensure the provided Kubernetes API server endpoint is correct and the CA certificate is valid for that endpoint.")
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading unauthenticated request response body: %w", err)
 	}
 
 	apiServerResp := &apiServerResponse{}

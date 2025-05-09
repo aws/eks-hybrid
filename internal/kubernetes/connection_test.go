@@ -68,7 +68,6 @@ func TestCheckConnectionFailureWithAccess(t *testing.T) {
 	err := kubernetes.CheckConnection(ctx, informer, config)
 	g.Expect(err).NotTo(Succeed())
 	g.Expect(informer.Started).To(BeTrue())
-	g.Expect(informer.DoneWith).To(HaveOccurred())
-	g.Expect(informer.DoneWith.Error()).To(ContainSubstring("connect: connection refused"))
+	g.Expect(informer.DoneWith).To(MatchError(ContainSubstring("connect: connection refused")))
 	g.Expect(validation.Remediation(informer.DoneWith)).To(Equal("Ensure your network configuration allows the node to access the Kubernetes API endpoint."))
 }
