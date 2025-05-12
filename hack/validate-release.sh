@@ -33,7 +33,10 @@ echo "CloudFront invalidation completed successfully"
 echo "Validating released version..."
 curl -L -o released_nodeadm https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/amd64/nodeadm
 chmod +x released_nodeadm
-RELEASED_VERSION=$(./released_nodeadm version)
+
+# Extract just the semantic version using regex i.e. 'Version: v1.0.5' -> 'v1.0.5'
+NODEADM_VERSION_OUTPUT=$(./released_nodeadm version)
+RELEASED_VERSION=$(echo "${NODEADM_VERSION_OUTPUT}" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+\(-[0-9a-zA-Z.-]\+\)\?' || echo "VERSION_NOT_FOUND")
 EXPECTED_VERSION=$(cat "${VERSION_FILE}")
 
 if [ "${RELEASED_VERSION}" != "${EXPECTED_VERSION}" ]; then
@@ -43,4 +46,4 @@ fi
 echo "Version validation successful"
 
 echo "Production release completed successfully"
-echo "Version: ${VERSION_FILE}"
+echo "Version: $(cat ${VERSION_FILE})"
