@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	smithytime "github.com/aws/smithy-go/time"
 	"github.com/go-logr/logr"
 	"gopkg.in/yaml.v2"
 	"k8s.io/client-go/dynamic"
@@ -28,8 +29,10 @@ import (
 )
 
 const (
-	clusterLogRetentionDays = 14
-	clusterLogGroupName     = "/aws/eks/%s/cluster"
+	clusterLogRetentionDays  = 14
+	clusterLogGroupName      = "/aws/eks/%s/cluster"
+	logGroupWaitTimeout      = 5 * time.Minute
+	logGroupWaitSleepTimeout = 10 * time.Second
 )
 
 type TestResources struct {
@@ -246,24 +249,52 @@ func SetTestResourcesDefaults(testResources TestResources) TestResources {
 	return testResources
 }
 
-func (c *Create) tagClusterLogGroup(ctx context.Context, clusterName string) error {
-	describeLogGroups, err := c.cloudWatchLogs.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(fmt.Sprintf(clusterLogGroupName, clusterName)),
-	})
-	if err != nil {
-		return fmt.Errorf("describing log groups: %w", err)
+// WaitForLogGroup waits for a CloudWatch log group to be available
+func (c *Create) waitForLogGroup(ctx context.Context, clusterName string) (*string, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, logGroupWaitTimeout)
+	defer cancel()
+
+	c.logger.Info("Waiting for cluster log group to be available", "clusterName", clusterName)
+
+	for {
+		describeLogGroups, err := c.cloudWatchLogs.DescribeLogGroups(waitCtx, &cloudwatchlogs.DescribeLogGroupsInput{
+			LogGroupNamePrefix: aws.String(fmt.Sprintf(clusterLogGroupName, clusterName)),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("describing log groups: %w", err)
+		}
+
+		if len(describeLogGroups.LogGroups) > 0 {
+			c.logger.Info("Found cluster log group", "logGroupName", *describeLogGroups.LogGroups[0].LogGroupName)
+			return describeLogGroups.LogGroups[0].LogGroupArn, nil
+		}
+
+		c.logger.Info("Log group not found yet, retrying", "clusterName", clusterName)
+		if err := smithytime.SleepWithContext(waitCtx, logGroupWaitSleepTimeout); err != nil {
+			return nil, fmt.Errorf("request cancelled while waiting for log group: %w", err)
+		}
 	}
-	if len(describeLogGroups.LogGroups) == 0 {
-		return fmt.Errorf("log group not found")
+}
+
+func (c *Create) tagClusterLogGroup(ctx context.Context, clusterName string) error {
+	logGroupArn, err := c.waitForLogGroup(ctx, clusterName)
+	if err != nil {
+		return err
 	}
 
 	_, err = c.cloudWatchLogs.TagResource(ctx, &cloudwatchlogs.TagResourceInput{
-		ResourceArn: describeLogGroups.LogGroups[0].LogGroupArn,
+		ResourceArn: logGroupArn,
 		Tags: map[string]string{
 			constants.TestClusterTagKey: clusterName,
 		},
 	})
-	return err
+
+	if err != nil {
+		return fmt.Errorf("tagging log group: %w", err)
+	}
+
+	c.logger.Info("Successfully tagged cluster log group", "clusterName", clusterName)
+	return nil
 }
 
 func (c *Create) setClusterLogRetention(ctx context.Context, clusterName string) error {
