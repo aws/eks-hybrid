@@ -25,6 +25,15 @@ phases:
 
   build:
     commands:
+      - echo "Setting up Git repository for attribution generation"
+      - git init
+      - git config --global user.email "ci@eks-hybrid.local"
+      - git config --global user.name "Release CodePipeline"
+      - git remote add origin https://github.com/aws/eks-hybrid.git
+      - git add .
+      - git commit -m "Initialize repository for attribution"
+      - echo "Git repository initialized successfully"
+
       - ./hack/release-nodeadm.sh "${PROD_BUCKET}" "artifacts-production" "${VERSION}"
 
   post_build:
