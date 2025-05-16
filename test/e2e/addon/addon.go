@@ -16,6 +16,7 @@ type Addon struct {
 	Name          string
 	Cluster       string
 	Configuration string
+	AddonVersion  string
 }
 
 const (
@@ -29,6 +30,7 @@ func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logge
 		ClusterName:         &a.Cluster,
 		AddonName:           &a.Name,
 		ConfigurationValues: &a.Configuration,
+		AddonVersion:        &a.AddonVersion,
 	}
 
 	_, err := client.CreateAddon(ctx, params)

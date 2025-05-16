@@ -148,7 +148,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		instanceSize = e2e.XLarge
 	}
 
-	peerdNode, err := node.Create(ctx, &peered.NodeSpec{
+	peeredNodeInstance, err := node.Create(ctx, &peered.NodeSpec{
 		InstanceName:   c.instanceName,
 		InstanceSize:   instanceSize,
 		InstanceType:   c.instanceType,
@@ -161,10 +161,10 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	logger.Info("Node created", "instanceID", peerdNode.Instance.ID)
+	logger.Info("Node created", "instanceID", peeredNodeInstance.ID)
 
 	logger.Info("Connecting to the node serial console...")
-	serial, err := node.SerialConsole(ctx, peerdNode.Instance.ID)
+	serial, err := node.SerialConsole(ctx, peeredNodeInstance.ID)
 	if err != nil {
 		return fmt.Errorf("preparing EC2 for serial connection: %w", err)
 	}
@@ -184,8 +184,8 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	verifyNode := kubernetes.VerifyNode{
 		K8s:      k8s,
 		Logger:   logr.Discard(),
-		NodeName: peerdNode.Name,
-		NodeIP:   peerdNode.Instance.IP,
+		NodeName: peeredNodeInstance.Name,
+		NodeIP:   peeredNodeInstance.IP,
 	}
 	vn, err := verifyNode.WaitForNodeReady(ctx)
 	if err != nil {
@@ -205,7 +205,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		Cluster: cluster,
 	}
 
-	if err := network.CreateRoutesForNode(ctx, &peerdNode); err != nil {
+	if err := network.CreateRoutesForNode(ctx, &peeredNodeInstance); err != nil {
 		return fmt.Errorf("creating routes for node: %w", err)
 	}
 
@@ -223,7 +223,12 @@ func buildOS(osName, arch string) (e2e.NodeadmOS, error) {
 		return nil, fmt.Errorf("unknown architecture %q for OS %q", arch, osName)
 	}
 
-	return build(), nil
+	os := build()
+	if os == nil {
+		return nil, fmt.Errorf("failed to build OS for %s-%s", osName, arch)
+	}
+
+	return os, nil
 }
 
 var oses = map[string]map[string]func() e2e.NodeadmOS{

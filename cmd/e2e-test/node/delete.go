@@ -19,7 +19,9 @@ import (
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
+	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
 )
@@ -100,7 +102,27 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	commandRunner := ssm.NewSSHOnSSMCommandRunner(ssmClient, *jumpbox.InstanceId, logger)
+	var osArch string
+	found := false
+	for _, tag := range instance.Tags {
+		if sdk.ToString(tag.Key) == constants.OSArchTagKey {
+			osArch = sdk.ToString(tag.Value)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("tag '%s' not found on instance %s", constants.OSArchTagKey, d.instanceName)
+	}
+
+	// Convert the OS name to a NodeadmOS instance
+	nodeOS := osystem.GetOSFromName(osArch)
+	if nodeOS == nil {
+		return fmt.Errorf("unsupported OS: %s", osArch)
+	}
+
+	commandRunner := ssm.NewSSHOnSSMCommandRunner(ssmClient, *jumpbox.InstanceId, osArch, logger)
 
 	cluster, err := peered.GetHybridCluster(ctx, eksClient, ec2Client, config.ClusterName)
 	if err != nil {
@@ -115,9 +137,10 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		Logger:              logger,
 		Cluster:             cluster,
 		LogsBucket:          config.LogsBucket,
+		OS:                  nodeOS,
 	}
 
-	if err := node.Cleanup(ctx, peered.PeerdNode{
+	if err := node.Cleanup(ctx, peered.NodeInstance{
 		Instance: ec2.Instance{
 			ID:   *instance.InstanceId,
 			IP:   *instance.PrivateIpAddress,

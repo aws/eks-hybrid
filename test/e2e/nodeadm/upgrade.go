@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	clientgo "k8s.io/client-go/kubernetes"
 
+	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
@@ -18,6 +19,7 @@ type UpgradeNode struct {
 	K8s                 clientgo.Interface
 	RemoteCommandRunner commands.RemoteCommandRunner
 	Logger              logr.Logger
+	OS                  e2e.NodeadmOS
 
 	NodeIP           string
 	NodeName         string
@@ -44,7 +46,7 @@ func (u UpgradeNode) Run(ctx context.Context) error {
 	}
 
 	u.Logger.Info("Upgrading hybrid node...")
-	if err = RunNodeadmUpgrade(ctx, u.RemoteCommandRunner, u.NodeIP, u.TargetK8sVersion); err != nil {
+	if err = u.OS.Upgrade(ctx, u.RemoteCommandRunner, u.NodeIP, u.TargetK8sVersion); err != nil {
 		return err
 	}
 
