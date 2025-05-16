@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/eks"
+	"github.com/aws/eks-hybrid/internal/retrier"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -23,7 +24,13 @@ func NewAccessValidator(config aws.Config) AccessValidator {
 func (a AccessValidator) Run(ctx context.Context, informer validation.Informer, node *api.NodeConfig) error {
 	// APIServerEndpoint, CertificateAuthority are required for the validations we want to run here but are optional in the config
 	// When not specified, we need to read them from the EKS API.
-	cluster, err := eks.ReadClusterDetails(ctx, a.aws, node)
+	var err error
+	var cluster *api.ClusterDetails
+	err = retrier.PollWithRetries(ctx, func(ctx context.Context) (bool, error) {
+		// var err error
+		cluster, err = eks.ReadClusterDetails(ctx, a.aws, node)
+		return err == nil, err
+	})
 	if err != nil {
 		err = validation.WithRemediation(err,
 			"Either provide the Kubernetes API server endpoint or ensure the node has access and permissions to call DescribeCluster EKS API.",

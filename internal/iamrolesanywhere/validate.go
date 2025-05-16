@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/network"
+	"github.com/aws/eks-hybrid/internal/retrier"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -24,7 +25,11 @@ func CheckEndpointAccess(ctx context.Context, config aws.Config) error {
 		return fmt.Errorf("resolving IAM Roles Anywhere endpoint: %w", err)
 	}
 
-	if err := network.CheckConnectionToHost(ctx, endpoint.URI); err != nil {
+	err = retrier.PollWithRetries(ctx, func(ctx context.Context) (bool, error) {
+		err := network.CheckConnectionToHost(ctx, endpoint.URI)
+		return err == nil, err
+	})
+	if err != nil {
 		return fmt.Errorf("checking connection to IAM Roles Anywhere endpoint: %w", err)
 	}
 

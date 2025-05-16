@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/network"
+	"github.com/aws/eks-hybrid/internal/retrier"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -23,7 +24,11 @@ func CheckConnection(ctx context.Context, informer validation.Informer, node *ap
 		return err
 	}
 
-	if err = network.CheckConnectionToHost(ctx, *endpoint); err != nil {
+	err = retrier.PollWithRetries(ctx, func(ctx context.Context) (bool, error) {
+		err := network.CheckConnectionToHost(ctx, *endpoint)
+		return err == nil, err
+	})
+	if err != nil {
 		err = validation.WithRemediation(err, "Ensure your network configuration allows the node to access the Kubernetes API endpoint.")
 		return err
 	}

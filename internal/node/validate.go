@@ -2,19 +2,21 @@ package node
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
 
+	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/network"
+	"github.com/aws/eks-hybrid/internal/retrier"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -52,7 +54,10 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 		return err
 	}
 
-	_, err = client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+	err = retrier.PollWithRetries(ctx, func(ctx context.Context) (bool, error) {
+		_, err := client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+		return err == nil, err
+	})
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -86,7 +91,11 @@ func (a APIServerValidator) CheckIdentity(ctx context.Context, informer validati
 
 	self := &authenticationv1.SelfSubjectReview{}
 
-	self, err = client.AuthenticationV1().SelfSubjectReviews().Create(ctx, self, metav1.CreateOptions{})
+	err = retrier.PollWithRetries(ctx, func(ctx context.Context) (bool, error) {
+		var err error
+		self, err = client.AuthenticationV1().SelfSubjectReviews().Create(ctx, self, metav1.CreateOptions{})
+		return err == nil, err
+	})
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -140,7 +149,13 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 		return err
 	}
 
-	kubeEndpoint, err := client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+	//nolint:staticcheck
+	var kubeEndpoint *v1.Endpoints
+	err = retrier.PollWithRetries(ctx, func(ctx context.Context) (bool, error) {
+		var err error
+		kubeEndpoint, err = client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+		return err == nil, err
+	})
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -172,7 +187,11 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 				Host:   fmt.Sprintf("%s:%d", address.IP, port),
 			}
 
-			if err = network.CheckConnectionToHost(ctx, u); err != nil {
+			err = retrier.PollWithRetries(ctx, func(ctx context.Context) (bool, error) {
+				err := network.CheckConnectionToHost(ctx, u)
+				return err == nil, err
+			})
+			if err != nil {
 				err = validation.WithRemediation(err,
 					fmt.Sprintf("Ensure the node has access to the Kube-API server endpoint %s in the VPC", address.IP),
 				)
