@@ -13,6 +13,7 @@ import (
 	"golang.org/x/mod/semver"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/commands"
 )
 
 const rhelAWSAccount = "309956199498"
@@ -38,6 +39,7 @@ type RedHat8 struct {
 	rhelPassword    string
 	amiArchitecture string
 	architecture    architecture
+	genericOS       *GenericLinuxOS
 }
 
 const (
@@ -51,6 +53,7 @@ func NewRedHat8AMD(rhelUsername, rhelPassword string) *RedHat8 {
 	rh8.rhelPassword = rhelPassword
 	rh8.amiArchitecture = x8664Arch
 	rh8.architecture = amd64
+	rh8.genericOS = NewGenericLinuxOS("rhel8", amd64)
 	return rh8
 }
 
@@ -60,6 +63,7 @@ func NewRedHat8ARM(rhelUsername, rhelPassword string) *RedHat8 {
 	rh8.rhelPassword = rhelPassword
 	rh8.amiArchitecture = arm64Arch
 	rh8.architecture = arm64
+	rh8.genericOS = NewGenericLinuxOS("rhel8", arm64)
 	return rh8
 }
 
@@ -71,7 +75,7 @@ func (r RedHat8) InstanceType(region string, instanceSize e2e.InstanceSize) stri
 	return getInstanceTypeFromRegionAndArch(region, r.architecture, instanceSize)
 }
 
-func (r RedHat8) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
+func (r RedHat8) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
 	// there is no rhel ssm parameter
 	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-8*" "Name=architecture,Values=x86_64" --region us-west-2
 	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-8*", r.amiArchitecture)
@@ -102,6 +106,7 @@ type RedHat9 struct {
 	amiArchitecture  string
 	architecture     architecture
 	containerdSource string
+	genericOS        *GenericLinuxOS
 }
 
 func NewRedHat9AMD(rhelUsername, rhelPassword string) *RedHat9 {
@@ -110,6 +115,7 @@ func NewRedHat9AMD(rhelUsername, rhelPassword string) *RedHat9 {
 	rh9.rhelPassword = rhelPassword
 	rh9.amiArchitecture = x8664Arch
 	rh9.architecture = amd64
+	rh9.genericOS = NewGenericLinuxOS("rhel9", amd64)
 	return rh9
 }
 
@@ -119,6 +125,7 @@ func NewRedHat9ARM(rhelUsername, rhelPassword string) *RedHat9 {
 	rh9.rhelPassword = rhelPassword
 	rh9.amiArchitecture = arm64Arch
 	rh9.architecture = arm64
+	rh9.genericOS = NewGenericLinuxOS("rhel9", arm64)
 	return rh9
 }
 
@@ -129,6 +136,7 @@ func NewRedHat9NoDockerSource(rhelUsername, rhelPassword string) *RedHat9 {
 	rh9.amiArchitecture = x8664Arch
 	rh9.architecture = amd64
 	rh9.containerdSource = "none"
+	rh9.genericOS = NewGenericLinuxOS("rhel9-source-none", amd64)
 	return rh9
 }
 
@@ -144,7 +152,7 @@ func (r RedHat9) InstanceType(region string, instanceSize e2e.InstanceSize) stri
 	return getInstanceTypeFromRegionAndArch(region, r.architecture, instanceSize)
 }
 
-func (r RedHat9) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
+func (r RedHat9) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
 	// there is no rhel ssm parameter
 	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-9*" "Name=architecture,Values=x86_64" --region us-west-2
 	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-9*", r.amiArchitecture)
@@ -246,7 +254,66 @@ func paginationDone(in *ec2.DescribeImagesInput, out *ec2.DescribeImagesOutput) 
 	return out.NextToken == nil || (in.NextToken != nil && in.NextToken == out.NextToken)
 }
 
-// IsRHEL8 returns true if the given name is a RHEL 8 OS name.
-func IsRHEL8(name string) bool {
-	return strings.HasPrefix(name, "rhel8")
+func (r RedHat8) RebootInstance(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
+	return r.genericOS.RebootInstance(ctx, runner, instanceIP)
+}
+
+func (r RedHat8) CollectLogs(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, logBundleUrl string) error {
+	return r.genericOS.CollectLogs(ctx, runner, instanceIP, logBundleUrl)
+}
+
+func (r RedHat8) Uninstall(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
+	return r.genericOS.Uninstall(ctx, runner, instanceIP)
+}
+
+func (r RedHat8) GetNodeadmVersion(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) (string, error) {
+	return r.genericOS.GetNodeadmVersion(ctx, runner, instanceIP)
+}
+
+func (r RedHat8) RunNodeadmDebug(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
+	return r.genericOS.RunNodeadmDebug(ctx, runner, instanceIP)
+}
+
+func (r RedHat8) ShouldRunNodeadmDebug() bool {
+	return r.genericOS.ShouldRunNodeadmDebug()
+}
+
+func (r RedHat9) RebootInstance(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
+	return r.genericOS.RebootInstance(ctx, runner, instanceIP)
+}
+
+func (r RedHat9) CollectLogs(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, logBundleUrl string) error {
+	return r.genericOS.CollectLogs(ctx, runner, instanceIP, logBundleUrl)
+}
+
+func (r RedHat9) Uninstall(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
+	return r.genericOS.Uninstall(ctx, runner, instanceIP)
+}
+
+func (r RedHat9) GetNodeadmVersion(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) (string, error) {
+	return r.genericOS.GetNodeadmVersion(ctx, runner, instanceIP)
+}
+
+func (r RedHat9) RunNodeadmDebug(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
+	return r.genericOS.RunNodeadmDebug(ctx, runner, instanceIP)
+}
+
+func (r RedHat9) ShouldRunNodeadmDebug() bool {
+	return r.genericOS.ShouldRunNodeadmDebug()
+}
+
+func (r RedHat8) Upgrade(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, kubernetesVersion string) error {
+	return r.genericOS.Upgrade(ctx, runner, instanceIP, kubernetesVersion)
+}
+
+func (r RedHat9) Upgrade(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, kubernetesVersion string) error {
+	return r.genericOS.Upgrade(ctx, runner, instanceIP, kubernetesVersion)
+}
+
+func (r RedHat8) PodIdentityAgentDaemonsetName() string {
+	return r.genericOS.PodIdentityAgentDaemonsetName()
+}
+
+func (r RedHat9) PodIdentityAgentDaemonsetName() string {
+	return r.genericOS.PodIdentityAgentDaemonsetName()
 }

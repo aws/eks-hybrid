@@ -21,7 +21,6 @@ import (
 
 const (
 	getAddonTimeout           = 10 * time.Minute
-	podIdentityDaemonSet      = "eks-pod-identity-agent-hybrid"
 	podIdentityToken          = "eks-pod-identity-token"
 	policyName                = "pod-identity-association-role-policy"
 	PodIdentityS3BucketPrefix = "podid"
@@ -38,6 +37,7 @@ type VerifyPodIdentityAddon struct {
 	Logger              logr.Logger
 	K8SConfig           *rest.Config
 	Region              string
+	DaemonsetName       string
 }
 
 type PolicyDocument struct {
@@ -66,9 +66,9 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return fmt.Errorf("waiting for pod identity add-on to be active: %w", err)
 	}
 
-	v.Logger.Info("Check if daemon set exists", "daemonSet", podIdentityDaemonSet)
-	if _, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet); err != nil {
-		return fmt.Errorf("getting daemon set %s: %w", podIdentityDaemonSet, err)
+	v.Logger.Info("Check if daemon set exists", "daemonSet", v.DaemonsetName)
+	if _, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", v.DaemonsetName); err != nil {
+		return fmt.Errorf("getting daemon set %s: %w", v.DaemonsetName, err)
 	}
 
 	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeName, v.Logger)
@@ -76,7 +76,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return fmt.Errorf("waiting for node %s to be ready: %w", v.NodeName, err)
 	}
 
-	if err := kubernetes.WaitForDaemonSetPodToBeRunning(ctx, v.K8S, "kube-system", podIdentityDaemonSet, node.Name, v.Logger); err != nil {
+	if err := kubernetes.WaitForDaemonSetPodToBeRunning(ctx, v.K8S, "kube-system", v.DaemonsetName, node.Name, v.Logger); err != nil {
 		return fmt.Errorf("waiting for pod identity daemon set to be running on pod: %w", err)
 	}
 

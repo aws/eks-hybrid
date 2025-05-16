@@ -19,7 +19,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
-	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 )
 
@@ -46,7 +45,7 @@ type testNode struct {
 	SerialOutputWriter io.Writer
 
 	flakyCode    *FlakyCode
-	node         *peered.PeerdNode
+	nodeInstance *peered.NodeInstance
 	serialOutput peered.ItBlockCloser
 	verifyNode   *kubernetes.VerifyNode
 }
@@ -78,9 +77,9 @@ func (n *testNode) Start(ctx context.Context) error {
 			Expect(n.PeeredNode.Cleanup(ctx, node)).To(Succeed())
 		}, NodeTimeout(constants.DeferCleanupTimeout))
 
-		n.node = &node
+		n.nodeInstance = &node
 
-		n.verifyNode = n.NewVerifyNode(node.Name, node.Instance.IP)
+		n.verifyNode = n.NewVerifyNode(node.Name, node.IP)
 		outputFile := filepath.Join(n.ArtifactsPath, n.InstanceName+"-"+constants.SerialOutputLogFile)
 		AddReportEntry(constants.TestSerialOutputLogFile, outputFile)
 		n.serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
@@ -99,12 +98,10 @@ func (n *testNode) Start(ctx context.Context) error {
 		n.serialOutput.It(fmt.Sprintf("joins the cluster: %s", n.NodeName), func() {
 			n.waitForNodeToJoin(ctx, flakeRun)
 		})
+		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.nodeInstance)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
 
-		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.node)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
-
-		version, err := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+		version, err := n.OS.GetNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.nodeInstance.IP)
 		Expect(err).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
-		Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
 		AddReportEntry(constants.TestNodeadmVersion, version)
 	})
 	return nil
@@ -126,7 +123,7 @@ func (n *testNode) addReportEntries(peeredNode *peered.Node) {
 
 func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	n.Logger.Info("Waiting for EC2 Instance to be Running...")
-	flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, n.EC2Client, n.node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+	flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, n.EC2Client, n.nodeInstance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
 	_, err := n.verifyNode.WaitForNodeReady(ctx)
 
 	// if the node is impaired, we want to trigger a retryable expect
@@ -134,13 +131,15 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	// if the node joined successfully and debug fails, the test will fail
 	expect := flakeRun.RetryableExpect
 	isImpaired := n.isImpaired(ctx, err)
-	var debugErr error
 	if !isImpaired {
 		expect = Expect
-		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
 	}
 	expect(err).To(Succeed(), "node should have joined the cluster successfully")
-	Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
+
+	if n.OS.ShouldRunNodeadmDebug() && !isImpaired {
+		debugErr := n.OS.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.nodeInstance.IP)
+		Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
+	}
 }
 
 func (n *testNode) NewVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode {
@@ -166,15 +165,15 @@ func (n *testNode) It(name string, f func()) {
 	n.serialOutput.It(name, f)
 }
 
-func (n *testNode) PeerdNode() *peered.PeerdNode {
-	return n.node
+func (n *testNode) NodeInstance() *peered.NodeInstance {
+	return n.nodeInstance
 }
 
 func (n *testNode) isImpaired(ctx context.Context, waitErr error) bool {
 	if waitErr == nil {
 		return false
 	}
-	isImpaired, err := ec2.IsEC2InstanceImpaired(ctx, n.EC2Client, n.node.Instance.ID)
+	isImpaired, err := ec2.IsEC2InstanceImpaired(ctx, n.EC2Client, n.nodeInstance.ID)
 	n.Logger.Error(err, "describing instance status")
 	return isImpaired
 }

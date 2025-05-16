@@ -26,8 +26,8 @@ type Network struct {
 }
 
 // CreateRoutesForNode creates routes in the VPC route table for the node's pod CIDRs.
-func (n *Network) CreateRoutesForNode(ctx context.Context, peerdNode *PeerdNode) error {
-	node, err := kubernetes.CheckForNodeWithE2ELabel(ctx, n.K8s, peerdNode.Name)
+func (n *Network) CreateRoutesForNode(ctx context.Context, nodeInstance *NodeInstance) error {
+	node, err := kubernetes.CheckForNodeWithE2ELabel(ctx, n.K8s, nodeInstance.Name)
 	if err != nil {
 		return fmt.Errorf("reading node: %w", err)
 	}
@@ -37,7 +37,7 @@ func (n *Network) CreateRoutesForNode(ctx context.Context, peerdNode *PeerdNode)
 		return fmt.Errorf("getting node pod CIDRs: %w", err)
 	}
 
-	if err := n.addRoutesForCIDRs(ctx, peerdNode.Instance, podCIDRs); err != nil {
+	if err := n.addRoutesForCIDRs(ctx, nodeInstance.Instance, podCIDRs); err != nil {
 		return fmt.Errorf("adding routes for node pod CIDRs: %w", err)
 	}
 

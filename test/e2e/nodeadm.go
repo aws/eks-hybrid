@@ -9,14 +9,23 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/creds"
+	"github.com/aws/eks-hybrid/test/e2e/commands"
 )
 
 // NodeadmOS defines an interface for operating system-specific behavior.
 type NodeadmOS interface {
 	Name() string
-	AMIName(ctx context.Context, awsConfig aws.Config) (string, error)
+	AMIName(ctx context.Context, awsConfig aws.Config, kubernetesVersion string) (string, error)
 	BuildUserData(userDataInput UserDataInput) ([]byte, error)
 	InstanceType(region string, instanceSize InstanceSize) string
+	RebootInstance(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error
+	CollectLogs(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, logBundleUrl string) error
+	Uninstall(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error
+	GetNodeadmVersion(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) (string, error)
+	RunNodeadmDebug(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error
+	ShouldRunNodeadmDebug() bool
+	Upgrade(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, kubernetesVersion string) error
+	PodIdentityAgentDaemonsetName() string
 }
 
 type InstanceSize int
@@ -31,12 +40,18 @@ type UserDataInput struct {
 	EKSEndpoint       string
 	KubernetesVersion string
 	NodeadmUrls       NodeadmURLs
+	NodeadmConfig     *api.NodeConfig
 	NodeadmConfigYaml string
 	Provider          string
 	PublicKey         string
 	Region            string
 	RootPasswordHash  string
 	Files             []File
+
+	KubernetesAPIServer string
+	HostName            string
+	ClusterName         string
+	ClusterCert         []byte
 }
 
 type NodeadmURLs struct {
