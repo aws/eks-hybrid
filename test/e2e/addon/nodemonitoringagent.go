@@ -248,7 +248,13 @@ func isMonitoringAgentEvent(event v1.Event) bool {
 }
 
 func (n NodeMonitoringAgentTest) CollectLogs(ctx context.Context) error {
-	return n.addon.FetchLogs(ctx, n.K8S, n.Logger)
+	logs, err := kubernetes.FetchLogs(ctx, n.K8S, n.addon.Name, n.addon.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to collect logs for %s: %v", n.addon.Name, err)
+	}
+
+	n.Logger.Info("Logs for node monitoring agent", "controller", logs)
+	return nil
 }
 
 func (n NodeMonitoringAgentTest) Delete(ctx context.Context) error {

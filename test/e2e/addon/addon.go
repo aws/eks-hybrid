@@ -8,13 +8,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgo "k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/test/e2e/errors"
-	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 type Addon struct {
@@ -126,47 +123,4 @@ func (a Addon) Delete(ctx context.Context, client *eks.Client, logger logr.Logge
 		return nil
 	}
 	return err
-}
-
-func (a Addon) FetchLogs(ctx context.Context, k8s clientgo.Interface, logger logr.Logger) error {
-	var pods *corev1.PodList
-	AddonListOptions := getAddonListOptions(a.Name)
-	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
-		var err error
-		pods, err = k8s.CoreV1().Pods(a.Namespace).List(ctx, AddonListOptions)
-		if err != nil {
-			// Log error and return false to retry
-			logger.Error(err, "Failed to list pods", "namespace", a.Namespace, "addon", a.Name)
-			return false, nil
-		}
-		return true, nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to get pods for %s after retries: %v", a.Name, err)
-	}
-
-	for _, pod := range pods.Items {
-		logs, err := kubernetes.GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace, &corev1.PodLogOptions{})
-		if err != nil {
-			return err
-		}
-
-		logger.Info("Logs for:\n\n", "pod", pod.Name, "msg", fmt.Sprintf("%s\n\n", logs))
-	}
-
-	return nil
-}
-
-func getPodLogOptions(containerName string, lines *int64) *corev1.PodLogOptions {
-	return &corev1.PodLogOptions{
-		Container: containerName, // specify container name if multiple containers
-		TailLines: lines,         // get last N lines
-	}
-}
-
-func getAddonListOptions(addonName string) v1.ListOptions {
-	return v1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/instance", addonName),
-	}
 }

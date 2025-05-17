@@ -254,6 +254,22 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 	}
 }
 
+// Add this method to PeeredVPCTest
+func (t *PeeredVPCTest) NewAddonTests() *addon.AddonEc2Test {
+	return addon.NewAddonEc2Test(
+		t.Cluster.Name,
+		t.k8sClient.Interface,
+		t.k8sClient.Dynamic,
+		t.eksClient,
+		t.iamClient,
+		t.s3Client,
+		t.Logger,
+		t.K8sClientConfig,
+		t.Cluster.Region,
+		t.podIdentityS3Bucket,
+	)
+}
+
 func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName, k8sVersion string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, instanceSize e2e.InstanceSize) *testNode {
 	return &testNode{
 		ArtifactsPath:   t.ArtifactsPath,

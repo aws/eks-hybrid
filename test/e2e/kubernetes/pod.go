@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -151,22 +152,58 @@ func DeletePod(ctx context.Context, k8s kubernetes.Interface, name, namespace st
 	return waitForPodToBeDeleted(ctx, k8s, name, namespace)
 }
 
+func getAddonListOptions(addonName string) v1.ListOptions {
+	return v1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/instance", addonName),
+	}
+}
+
+func FetchLogs(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (string, error) {
+	var pods *corev1.PodList
+
+	listOpts := v1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/name", name),
+	}
+
+	err := retry.OnError(retry.DefaultRetry, func(err error) bool {
+		return true
+	}, func() error {
+		var err error
+		pods, err = k8s.CoreV1().Pods(namespace).List(ctx, listOpts)
+		return err
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to get pods for %s after retries: %v", name, err)
+	}
+
+	var logs string
+	for _, pod := range pods.Items {
+		logs, err = GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return logs, err
+}
+
 // Retries up to 5 times to avoid connection errors
-func GetPodLogsWithRetries(ctx context.Context, k8s kubernetes.Interface, name, namespace string, opts *corev1.PodLogOptions) (logs string, err error) {
+func GetPodLogsWithRetries(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (logs string, err error) {
 	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
 		// Retry any error type
 		return true
 	}, func() error {
 		var err error
-		logs, err = getPodLogs(ctx, k8s, name, namespace, opts)
+		logs, err = getPodLogs(ctx, k8s, name, namespace)
 		return err
 	})
 
 	return logs, err
 }
 
-func getPodLogs(ctx context.Context, k8s kubernetes.Interface, name, namespace string, opts *corev1.PodLogOptions) (string, error) {
-	req := k8s.CoreV1().Pods(namespace).GetLogs(name, opts)
+func getPodLogs(ctx context.Context, k8s kubernetes.Interface, name, namespace string) (string, error) {
+	req := k8s.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{})
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
 		return "", fmt.Errorf("opening log stream: %w", err)
