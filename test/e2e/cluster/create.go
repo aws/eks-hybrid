@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -28,8 +29,10 @@ import (
 )
 
 const (
-	clusterLogRetentionDays = 14
-	clusterLogGroupName     = "/aws/eks/%s/cluster"
+	clusterLogRetentionDays  = 14
+	clusterLogGroupName      = "/aws/eks/%s/cluster"
+	logGroupWaitTimeout      = 5 * time.Minute
+	logGroupWaitSleepTimeout = 10 * time.Second
 )
 
 type TestResources struct {
@@ -247,23 +250,42 @@ func SetTestResourcesDefaults(testResources TestResources) TestResources {
 }
 
 func (c *Create) tagClusterLogGroup(ctx context.Context, clusterName string) error {
-	describeLogGroups, err := c.cloudWatchLogs.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
-		LogGroupNamePrefix: aws.String(fmt.Sprintf(clusterLogGroupName, clusterName)),
+	c.logger.Info("Waiting for cluster log group to be available", "clusterName", clusterName)
+
+	err := wait.PollUntilContextTimeout(ctx, logGroupWaitSleepTimeout, logGroupWaitTimeout, true, func(ctx context.Context) (bool, error) {
+		describeLogGroups, err := c.cloudWatchLogs.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
+			LogGroupNamePrefix: aws.String(fmt.Sprintf(clusterLogGroupName, clusterName)),
+		})
+		if err != nil {
+			return false, fmt.Errorf("describing log groups: %w", err)
+		}
+
+		if len(describeLogGroups.LogGroups) > 0 {
+			c.logger.Info("Found cluster log group", "logGroupName", *describeLogGroups.LogGroups[0].LogGroupName)
+
+			_, tagErr := c.cloudWatchLogs.TagResource(ctx, &cloudwatchlogs.TagResourceInput{
+				ResourceArn: describeLogGroups.LogGroups[0].LogGroupArn,
+				Tags: map[string]string{
+					constants.TestClusterTagKey: clusterName,
+				},
+			})
+
+			if tagErr != nil {
+				return false, fmt.Errorf("tagging log group: %w", tagErr)
+			}
+
+			c.logger.Info("Successfully tagged cluster log group", "clusterName", clusterName)
+			return true, nil
+		}
+
+		c.logger.Info("Log group not found yet, retrying", "clusterName", clusterName)
+		return false, nil
 	})
 	if err != nil {
-		return fmt.Errorf("describing log groups: %w", err)
-	}
-	if len(describeLogGroups.LogGroups) == 0 {
-		return fmt.Errorf("log group not found")
+		return fmt.Errorf("waiting for or tagging log group: %w", err)
 	}
 
-	_, err = c.cloudWatchLogs.TagResource(ctx, &cloudwatchlogs.TagResourceInput{
-		ResourceArn: describeLogGroups.LogGroups[0].LogGroupArn,
-		Tags: map[string]string{
-			constants.TestClusterTagKey: clusterName,
-		},
-	})
-	return err
+	return nil
 }
 
 func (c *Create) setClusterLogRetention(ctx context.Context, clusterName string) error {
