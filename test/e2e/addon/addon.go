@@ -62,21 +62,21 @@ func (a Addon) WaitUntilActive(ctx context.Context, client *eks.Client, logger l
 	for {
 		addon, err := a.describe(ctx, client)
 		if err != nil {
-			logger.Info("Failed to describe cluster add-on", "Error", err)
+			logger.Error(err, "Failed to describe cluster add-on")
+		} else if addon.Status == types.AddonStatusCreateFailed ||
+			addon.Status == types.AddonStatusDeleteFailed ||
+			addon.Status == types.AddonStatusUpdateFailed {
+			return fmt.Errorf("add-on %s is in errored terminal status: %s", a.Name, addon.Status)
+		} else if addon.Status == types.AddonStatusCreating || addon.Status == types.AddonStatusUpdating {
+			logger.Info("Add-on is still in creating or updating status", "ClusterAddon", a.Name, "Status", addon.Status)
 		} else {
-			if addon.Status == types.AddonStatusActive {
-				return nil
-			}
-
-			if addon.Status == types.AddonStatusCreateFailed ||
-				addon.Status == types.AddonStatusDegraded ||
-				addon.Status == types.AddonStatusDeleteFailed ||
-				addon.Status == types.AddonStatusUpdateFailed {
-				return fmt.Errorf("add-on %s is in errored terminal status: %s", a.Name, addon.Status)
-			}
+			// Add-on is either active or degraded
+			// in our case degraded is acceptable since this is usually due to there not being enough replicas
+			// which happens as we create and delete nodes
+			return nil
 		}
 
-		logger.Info("Wait for add-on to be ACTIVE", "ClusterAddon", a.Name)
+		logger.Info("Waiting for add-on to be ACTIVE", "ClusterAddon", a.Name)
 
 		select {
 		case <-ctx.Done():

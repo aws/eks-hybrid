@@ -9,13 +9,12 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/util/retry"
+	kRetry "k8s.io/client-go/util/retry"
 	"k8s.io/kubectl/pkg/drain"
 
+	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
+	"github.com/aws/eks-hybrid/internal/retry"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
@@ -25,35 +24,30 @@ const (
 	hybridNodeUpgradeTimeout = 2 * time.Minute
 	nodeCordonDelayInterval  = 1 * time.Second
 	nodeCordonTimeout        = 30 * time.Second
+	nodeDrainTimeout         = 1 * time.Minute
 )
 
 // WaitForNode wait for the node to join the cluster and fetches the node info which has the nodeName label
 func WaitForNode(ctx context.Context, k8s kubernetes.Interface, nodeName string, logger logr.Logger) (*corev1.Node, error) {
-	foundNode := &corev1.Node{}
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, hybridNodeDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := getNodeByE2ELabelName(ctx, k8s, nodeName)
-		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
-				return false, err
-			}
-			logger.Info("Retryable error listing nodes when looking for node with name. Continuing to poll", "nodeName", nodeName, "error", err)
-			return false, nil // continue polling
+	nodes, err := ik8s.ListAndWait(ctx, hybridNodeWaitTimeout, k8s.CoreV1().Nodes(), func(nodes *corev1.NodeList) bool {
+		if len(nodes.Items) == 0 {
+			logger.Info("Node with e2e label doesn't exist yet", "nodeName", nodeName)
+			return false
 		}
-		consecutiveErrors = 0
-		if node != nil {
-			foundNode = node
-			return true, nil // node found, stop polling
-		}
-
-		logger.Info("Node with e2e label doesn't exist yet", "nodeName", nodeName)
-		return false, nil // continue polling
+		logger.Info("Node with e2e label exists", "nodeName", nodeName)
+		return true
+	}, func(opts *ik8s.ListOptions) {
+		opts.LabelSelector = constants.TestInstanceNameKubernetesLabel + "=" + nodeName
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("waiting for node %s to join the cluster: %w", nodeName, err)
 	}
-	return foundNode, nil
+
+	if len(nodes.Items) > 1 {
+		return nil, fmt.Errorf("found multiple nodes with e2e label %s: %v", nodeName, nodes.Items)
+	}
+
+	return &nodes.Items[0], nil
 }
 
 func GetNodeInternalIP(node *corev1.Node) string {
@@ -66,29 +60,17 @@ func GetNodeInternalIP(node *corev1.Node) string {
 }
 
 func CheckForNodeWithE2ELabel(ctx context.Context, k8s kubernetes.Interface, nodeName string) (*corev1.Node, error) {
-	var node *corev1.Node
-	err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
-		return true
-	}, func() error {
-		var err error
-		node, err = getNodeByE2ELabelName(ctx, k8s, nodeName)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	return node, err
+	return getNodeByE2ELabelName(ctx, k8s, nodeName)
 }
 
 func getNodeByE2ELabelName(ctx context.Context, k8s kubernetes.Interface, nodeName string) (*corev1.Node, error) {
-	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{
-		LabelSelector: constants.TestInstanceNameKubernetesLabel + "=" + nodeName,
+	nodes, err := ik8s.ListRetry(ctx, k8s.CoreV1().Nodes(), func(opts *ik8s.ListOptions) {
+		opts.LabelSelector = constants.TestInstanceNameKubernetesLabel + "=" + nodeName
 	})
 	if err != nil {
 		return nil, fmt.Errorf("listing nodes when looking for node with e2e label %s: %w", nodeName, err)
 	}
 
-	// return nil if no node is found to retry
 	if len(nodes.Items) == 0 {
 		return nil, nil
 	}
@@ -106,24 +88,7 @@ func getNodeByE2ELabelName(ctx context.Context, k8s kubernetes.Interface, nodeNa
 // - nodeNetworkAvailable is true
 // - internal IP address is set
 func WaitForHybridNodeToBeReady(ctx context.Context, k8s kubernetes.Interface, nodeName string, logger logr.Logger) (*corev1.Node, error) {
-	foundNode := &corev1.Node{}
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			logger.Info("Node does not exist yet", "node", nodeName)
-			return false, nil
-		}
-		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
-			}
-			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
+	node, err := ik8s.GetAndWait(ctx, hybridNodeWaitTimeout, k8s.CoreV1().Nodes(), nodeName, func(node *corev1.Node) bool {
 		if !nodeReady(node) {
 			logger.Info("Node is not ready yet", "node", nodeName)
 		} else if !nodeCiliumAgentReady(node) {
@@ -134,46 +99,28 @@ func WaitForHybridNodeToBeReady(ctx context.Context, k8s kubernetes.Interface, n
 			logger.Info("Node is ready, but internal IP address is not set", "node", nodeName)
 		} else {
 			logger.Info("Node is ready", "node", nodeName)
-			foundNode = node
-			return true, nil // node is ready, stop polling
+			return true
 		}
-
-		return false, nil // continue polling
+		return false
 	})
 	if err != nil {
 		return nil, fmt.Errorf("waiting for node %s to be ready: %w", nodeName, err)
 	}
-
-	return foundNode, nil
+	return node, nil
 }
 
 func WaitForHybridNodeToBeNotReady(ctx context.Context, k8s kubernetes.Interface, nodeName string, logger logr.Logger) error {
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
-			}
-			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
+	_, err := ik8s.GetAndWait(ctx, hybridNodeWaitTimeout, k8s.CoreV1().Nodes(), nodeName, func(node *corev1.Node) bool {
 		if !nodeReady(node) {
 			logger.Info("Node is not ready", "node", nodeName)
-			return true, nil // node is not ready, stop polling
-		} else {
-			logger.Info("Node is still ready", "node", nodeName)
+			return true
 		}
-
-		return false, nil // continue polling
+		logger.Info("Node is still ready", "node", nodeName)
+		return false
 	})
 	if err != nil {
 		return fmt.Errorf("waiting for node %s to be not ready: %w", nodeName, err)
 	}
-
 	return nil
 }
 
@@ -196,7 +143,7 @@ func nodeCiliumAgentReady(node *corev1.Node) bool {
 }
 
 func DeleteNode(ctx context.Context, k8s kubernetes.Interface, name string) error {
-	err := k8s.CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
+	err := ik8s.DeleteRetry(ctx, k8s.CoreV1().Nodes(), name)
 	if err != nil {
 		return fmt.Errorf("deleting node: %w", err)
 	}
@@ -204,17 +151,7 @@ func DeleteNode(ctx context.Context, k8s kubernetes.Interface, name string) erro
 }
 
 func EnsureNodeWithE2ELabelIsDeleted(ctx context.Context, k8s kubernetes.Interface, nodeName string) error {
-	var node *corev1.Node
-	err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
-		return true // retry on all errors
-	}, func() error {
-		var err error
-		node, err = getNodeByE2ELabelName(ctx, k8s, nodeName)
-		if err != nil {
-			return fmt.Errorf("getting node by e2e label: %w", err)
-		}
-		return nil
-	})
+	node, err := getNodeByE2ELabelName(ctx, k8s, nodeName)
 	if err != nil {
 		return err
 	}
@@ -231,36 +168,19 @@ func EnsureNodeWithE2ELabelIsDeleted(ctx context.Context, k8s kubernetes.Interfa
 }
 
 func WaitForNodeToHaveVersion(ctx context.Context, k8s kubernetes.Interface, nodeName, targetVersion string, logger logr.Logger) (*corev1.Node, error) {
-	foundNode := &corev1.Node{}
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeUpgradeTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			consecutiveErrors += 1
-			logger.Info("consecutiveErrors", "consecutiveErrors", consecutiveErrors)
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
-			}
-			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
+	node, err := ik8s.GetAndWait(ctx, hybridNodeUpgradeTimeout, k8s.CoreV1().Nodes(), nodeName, func(node *corev1.Node) bool {
 		kubernetesVersion := strings.TrimPrefix(node.Status.NodeInfo.KubeletVersion, "v")
 		// If the current version matches the target version of kubelet, return true to stop polling
 		if strings.HasPrefix(kubernetesVersion, targetVersion) {
-			foundNode = node
 			logger.Info("Node successfully upgraded to desired kubernetes version", "version", targetVersion)
-			return true, nil
+			return true
 		}
-
-		return false, nil // continue polling
+		return false
 	})
 	if err != nil {
 		return nil, fmt.Errorf("waiting for node %s kubernetes version to be upgraded to %s: %w", nodeName, targetVersion, err)
 	}
-
-	return foundNode, nil
+	return node, nil
 }
 
 func DrainNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node) error {
@@ -276,7 +196,7 @@ func DrainNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node)
 		Out:                             os.Stdout,
 		ErrOut:                          os.Stderr,
 	}
-	return retry.OnError(retry.DefaultBackoff, func(err error) bool {
+	return kRetry.OnError(kRetry.DefaultBackoff, func(err error) bool {
 		return true
 	}, func() error {
 		err := drain.RunNodeDrain(helper, node.Name)
@@ -292,9 +212,7 @@ func UncordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.No
 		Ctx:    ctx,
 		Client: k8s,
 	}
-	return retry.OnError(retry.DefaultBackoff, func(err error) bool {
-		return true
-	}, func() error {
+	return retry.NetworkRequest(ctx, func(ctx context.Context) error {
 		err := drain.RunCordonOrUncordon(helper, node, false)
 		if err != nil {
 			return fmt.Errorf("cordoning node %s: %v", node.Name, err)
@@ -308,9 +226,7 @@ func CordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node
 		Ctx:    ctx,
 		Client: k8s,
 	}
-	err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
-		return true
-	}, func() error {
+	err := retry.NetworkRequest(ctx, func(ctx context.Context) error {
 		err := drain.RunCordonOrUncordon(helper, node, true)
 		if err != nil {
 			return fmt.Errorf("cordoning node %s: %v", node.Name, err)
@@ -325,30 +241,15 @@ func CordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node
 	// drain, its possible (common) during our tests that pods get scheduled on the node after
 	// drain gets the list of pods to evict and before the taint has been fully applied
 	// leading to an error during nodeadm upgrade/uninstall due to non-daemonset pods running
-	nodeName := node.Name
-	consecutiveErrors := 0
-	err = wait.PollUntilContextTimeout(ctx, nodeCordonDelayInterval, nodeCordonTimeout, true, func(ctx context.Context) (done bool, err error) {
-		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			consecutiveErrors += 1
-			logger.Info("consecutiveErrors", "consecutiveErrors", consecutiveErrors)
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting node %s: %w", nodeName, err)
-			}
-			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
+	_, err = ik8s.GetAndWait(ctx, nodeCordonTimeout, k8s.CoreV1().Nodes(), node.Name, func(node *corev1.Node) bool {
 		if nodeCordon(node) {
 			logger.Info("Node successfully cordoned")
-			return true, nil
+			return true
 		}
-
-		return false, nil // continue polling
+		return false
 	})
 	if err != nil {
-		return fmt.Errorf("waiting for node %s to be cordoned: %w", nodeName, err)
+		return fmt.Errorf("waiting for node %s to be cordoned: %w", node.Name, err)
 	}
 
 	return nil

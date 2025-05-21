@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -15,8 +16,10 @@ import (
 )
 
 var (
-	errInternalGetter = errors.New("internal getter error")
-	errInternalLister = errors.New("internal lister error")
+	errInternalGetter  = errors.New("internal getter error")
+	errInternalLister  = errors.New("internal lister error")
+	errInternalDeleter = errors.New("internal deleter error")
+	errInternalCreator = errors.New("internal creator error")
 )
 
 func TestGetRetry(t *testing.T) {
@@ -203,4 +206,190 @@ func (m *mockLister[O]) List(ctx context.Context, options metav1.ListOptions) (O
 	}
 	var zero O
 	return zero, errors.New("mockLister.List not implemented or called unexpectedly")
+}
+
+// mockDeleter is a mock implementation of the Deleter interface.
+type mockDeleter struct {
+	deleteFunc func(ctx context.Context, name string, options metav1.DeleteOptions) error
+	callCount  int
+}
+
+func (m *mockDeleter) Delete(ctx context.Context, name string, options metav1.DeleteOptions) error {
+	m.callCount++
+	if m.deleteFunc != nil {
+		return m.deleteFunc(ctx, name, options)
+	}
+	return errors.New("mockDeleter.Delete not implemented or called unexpectedly")
+}
+
+func TestDeleteRetry(t *testing.T) {
+	tests := []struct {
+		name         string
+		podName      string
+		setupDeleter func(g Gomega, md *mockDeleter)
+		ctxTimeout   time.Duration
+		expectedErr  string
+	}{
+		{
+			name:    "success on first try",
+			podName: "my-pod",
+			setupDeleter: func(g Gomega, md *mockDeleter) {
+				md.deleteFunc = func(ctx context.Context, name string, options metav1.DeleteOptions) error {
+					g.Expect(name).To(Equal("my-pod"))
+					return nil
+				}
+			},
+		},
+		{
+			name:    "not found error should not be retried",
+			podName: "not-found-pod",
+			setupDeleter: func(g Gomega, md *mockDeleter) {
+				md.deleteFunc = func(ctx context.Context, name string, options metav1.DeleteOptions) error {
+					g.Expect(name).To(Equal("not-found-pod"))
+					return apierrors.NewNotFound(corev1.Resource("pod"), name)
+				}
+			},
+			expectedErr: "pod \"not-found-pod\" not found",
+		},
+		{
+			name:    "other errors should be retried",
+			podName: "error-pod",
+			setupDeleter: func(g Gomega, md *mockDeleter) {
+				md.deleteFunc = func(ctx context.Context, name string, options metav1.DeleteOptions) error {
+					g.Expect(name).To(Equal("error-pod"))
+					return errInternalDeleter
+				}
+			},
+			ctxTimeout:  2 * time.Second,
+			expectedErr: errInternalDeleter.Error(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			deleter := &mockDeleter{}
+			tt.setupDeleter(g, deleter)
+
+			ctx := context.Background()
+			if tt.ctxTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tt.ctxTimeout)
+				defer cancel()
+			}
+
+			err := kubernetes.DeleteRetry(ctx, deleter, tt.podName)
+
+			if tt.expectedErr == "" {
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(deleter.callCount).To(Equal(1))
+			} else {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err).To(MatchError(ContainSubstring(tt.expectedErr)))
+				// For not found errors, we expect exactly one call
+				// For other errors, we expect multiple calls due to retries
+				if apierrors.IsNotFound(err) {
+					g.Expect(deleter.callCount).To(Equal(1))
+				} else {
+					g.Expect(deleter.callCount).To(BeNumerically(">", 1))
+				}
+			}
+		})
+	}
+}
+
+// mockCreator is a mock implementation of the Creator interface.
+type mockCreator[O runtime.Object] struct {
+	createFunc func(ctx context.Context, obj O, options metav1.CreateOptions) (O, error)
+	callCount  int
+}
+
+func (m *mockCreator[O]) Create(ctx context.Context, obj O, options metav1.CreateOptions) (O, error) {
+	m.callCount++
+	if m.createFunc != nil {
+		return m.createFunc(ctx, obj, options)
+	}
+	var zero O
+	return zero, errors.New("mockCreator.Create not implemented or called unexpectedly")
+}
+
+func TestCreateRetry(t *testing.T) {
+	type PodCreator = mockCreator[*corev1.Pod]
+
+	tests := []struct {
+		name         string
+		pod          *corev1.Pod
+		setupCreator func(g Gomega, mc *PodCreator)
+		ctxTimeout   time.Duration
+		expectedPod  *corev1.Pod
+		expectedErr  string
+	}{
+		{
+			name: "success on first try",
+			pod:  &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "my-pod"}},
+			setupCreator: func(g Gomega, mc *PodCreator) {
+				mc.createFunc = func(ctx context.Context, obj *corev1.Pod, options metav1.CreateOptions) (*corev1.Pod, error) {
+					g.Expect(obj.Name).To(Equal("my-pod"))
+					return obj, nil
+				}
+			},
+			expectedPod: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "my-pod"}},
+		},
+		{
+			name: "already exists error should not be retried",
+			pod:  &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "existing-pod"}},
+			setupCreator: func(g Gomega, mc *PodCreator) {
+				mc.createFunc = func(ctx context.Context, obj *corev1.Pod, options metav1.CreateOptions) (*corev1.Pod, error) {
+					g.Expect(obj.Name).To(Equal("existing-pod"))
+					return nil, apierrors.NewAlreadyExists(corev1.Resource("pod"), obj.Name)
+				}
+			},
+			expectedErr: "pod \"existing-pod\" already exists",
+		},
+		{
+			name: "other errors should be retried",
+			pod:  &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "error-pod"}},
+			setupCreator: func(g Gomega, mc *PodCreator) {
+				mc.createFunc = func(ctx context.Context, obj *corev1.Pod, options metav1.CreateOptions) (*corev1.Pod, error) {
+					g.Expect(obj.Name).To(Equal("error-pod"))
+					return nil, errInternalCreator
+				}
+			},
+			ctxTimeout:  2 * time.Second,
+			expectedErr: errInternalCreator.Error(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			creator := &PodCreator{}
+			tt.setupCreator(g, creator)
+
+			ctx := context.Background()
+			if tt.ctxTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tt.ctxTimeout)
+				defer cancel()
+			}
+
+			pod, err := kubernetes.CreateRetry(ctx, creator, tt.pod)
+
+			if tt.expectedErr == "" {
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(pod).To(BeComparableTo(tt.expectedPod))
+				g.Expect(creator.callCount).To(Equal(1))
+			} else {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err).To(MatchError(ContainSubstring(tt.expectedErr)))
+				// For already exists errors, we expect exactly one call
+				// For other errors, we expect multiple calls due to retries
+				if apierrors.IsAlreadyExists(err) {
+					g.Expect(creator.callCount).To(Equal(1))
+				} else {
+					g.Expect(creator.callCount).To(BeNumerically(">", 1))
+				}
+			}
+		})
+	}
 }

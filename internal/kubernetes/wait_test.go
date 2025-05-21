@@ -249,4 +249,40 @@ func TestListAndWait(t *testing.T) {
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(err.Error()).To(ContainSubstring(errInternalLister.Error()))
 	})
+
+	t.Run("list options are properly applied", func(t *testing.T) {
+		g := NewWithT(t)
+		lister := &mockLister[*corev1.PodList]{}
+		expectedLabelSelector := "app=test"
+		expectedFieldSelector := "metadata.name=pod1"
+		expectedLimit := int64(10)
+
+		lister.listFunc = func(ctx context.Context, options metav1.ListOptions) (*corev1.PodList, error) {
+			g.Expect(options.LabelSelector).To(Equal(expectedLabelSelector))
+			g.Expect(options.FieldSelector).To(Equal(expectedFieldSelector))
+			g.Expect(options.Limit).To(Equal(expectedLimit))
+			return readyPodList, nil
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		// Create list options using the kubernetes package's ListOption functions
+		opts := []kubernetes.ListOption{
+			func(o *kubernetes.ListOptions) {
+				o.LabelSelector = expectedLabelSelector
+			},
+			func(o *kubernetes.ListOptions) {
+				o.FieldSelector = expectedFieldSelector
+			},
+			func(o *kubernetes.ListOptions) {
+				o.Limit = expectedLimit
+			},
+		}
+
+		list, err := kubernetes.ListRetry(ctx, lister, opts...)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(list).To(Equal(readyPodList))
+		g.Expect(lister.callCount).To(Equal(1))
+	})
 }
