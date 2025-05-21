@@ -13,6 +13,7 @@ import (
 	"github.com/go-logr/logr"
 
 	e2eCommands "github.com/aws/eks-hybrid/test/e2e/commands"
+	"github.com/aws/eks-hybrid/test/e2e/os"
 )
 
 const (
@@ -23,26 +24,32 @@ const (
 )
 
 // ssm commands run as root user on jumpbox
-func makeSshCommand(instanceIP string, commands []string) string {
-	return fmt.Sprintf("ssh %s \"%s\"", instanceIP, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
+func makeSshCommand(instanceIP, osName string, commands []string) string {
+	sshIP := instanceIP
+	if os.IsBottlerocket(osName) {
+		sshIP = fmt.Sprintf("ec2-user@%s", instanceIP)
+	}
+	return fmt.Sprintf("ssh %s \"%s\"", sshIP, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
 }
 
 type SSHOnSSM struct {
 	client            *ssm.Client
 	jumpboxInstanceId string
+	os                string
 	logger            logr.Logger
 }
 
-func NewSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
+func NewSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId, os string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
 	return &SSHOnSSM{
 		client:            client,
 		jumpboxInstanceId: jumpboxInstanceId,
+		os:                os,
 		logger:            logger,
 	}
 }
 
 func (s *SSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCommands.RemoteCommandOutput, error) {
-	command := makeSshCommand(ip, commands)
+	command := makeSshCommand(ip, s.os, commands)
 	return RunCommand(ctx, s.client, s.jumpboxInstanceId, command, s.logger)
 }
 
