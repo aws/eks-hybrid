@@ -13,6 +13,7 @@ import (
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	s3v2 "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
@@ -62,6 +63,7 @@ type PeeredVPCTest struct {
 	K8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client
+	taggingClient   *resourcegroupstaggingapi.Client
 
 	Logger        logr.Logger
 	loggerControl e2e.PausableLogger
@@ -193,6 +195,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 			SkipDelete:          t.SkipCleanup,
 			Cluster:             t.Cluster,
 			LogsBucket:          t.logsBucket,
+			TaggingClient:       t.taggingClient,
 		},
 	}
 }

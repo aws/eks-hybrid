@@ -204,7 +204,7 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 }
 
 func (c *Sweeper) cleanupSSMManagedInstances(ctx context.Context, filterInput FilterInput) error {
-	cleaner := NewSSMCleaner(c.ssm, c.logger)
+	cleaner := NewSSMCleaner(c.ssm, c.taggingClient, c.logger)
 	instanceIds, err := cleaner.ListManagedInstances(ctx, filterInput)
 	if err != nil {
 		return fmt.Errorf("listing managed instances: %w", err)
@@ -225,7 +225,7 @@ func (c *Sweeper) cleanupSSMManagedInstances(ctx context.Context, filterInput Fi
 }
 
 func (c *Sweeper) cleanupSSMHybridActivations(ctx context.Context, filterInput FilterInput) error {
-	cleaner := NewSSMCleaner(c.ssm, c.logger)
+	cleaner := NewSSMCleaner(c.ssm, c.taggingClient, c.logger)
 	activationIDs, err := cleaner.ListActivations(ctx, filterInput)
 	if err != nil {
 		return fmt.Errorf("listing activations: %w", err)
@@ -421,7 +421,7 @@ func (c *Sweeper) cleanupRolesAnywhereProfiles(ctx context.Context, filterInput 
 		c.logger.Info("Skipping Roles Anywhere profiles cleanup")
 		return nil
 	}
-	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.logger)
+	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.taggingClient, c.logger)
 
 	profiles, err := rolesAnywhereCleaner.ListProfiles(ctx, filterInput)
 	if err != nil {
@@ -447,7 +447,7 @@ func (c *Sweeper) cleanupRolesAnywhereTrustAnchors(ctx context.Context, filterIn
 		c.logger.Info("Skipping Roles Anywhere trust anchors cleanup")
 		return nil
 	}
-	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.logger)
+	rolesAnywhereCleaner := NewRolesAnywhereCleaner(c.rolesAnywhere, c.taggingClient, c.logger)
 
 	anchors, err := rolesAnywhereCleaner.ListTrustAnchors(ctx, filterInput)
 	if err != nil {
@@ -469,7 +469,7 @@ func (c *Sweeper) cleanupRolesAnywhereTrustAnchors(ctx context.Context, filterIn
 }
 
 func (c *Sweeper) cleanupSSMParameters(ctx context.Context, filterInput FilterInput) error {
-	cleaner := NewSSMCleaner(c.ssm, c.logger)
+	cleaner := NewSSMCleaner(c.ssm, c.taggingClient, c.logger)
 
 	parameterNames, err := cleaner.ListParameters(ctx, filterInput)
 	if err != nil {

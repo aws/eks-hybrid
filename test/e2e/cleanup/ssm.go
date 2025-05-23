@@ -4,27 +4,29 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
 
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 const managedInstanceResourceType = "ManagedInstance"
 
 type SSMCleaner struct {
-	ssm    *ssm.Client
-	logger logr.Logger
+	ssm           *ssm.Client
+	taggingClient *ResourceTaggingClient
+	logger        logr.Logger
 }
 
-func NewSSMCleaner(ssm *ssm.Client, logger logr.Logger) *SSMCleaner {
+func NewSSMCleaner(ssm *ssm.Client, taggingClient *ResourceTaggingClient, logger logr.Logger) *SSMCleaner {
 	return &SSMCleaner{
-		ssm:    ssm,
-		logger: logger,
+		ssm:           ssm,
+		taggingClient: taggingClient,
+		logger:        logger,
 	}
 }
 
@@ -78,49 +80,16 @@ func (s *SSMCleaner) DeleteActivation(ctx context.Context, activationID string) 
 }
 
 func (s *SSMCleaner) ListManagedInstancesByActivationID(ctx context.Context, activationIDs ...string) ([]string, error) {
-	input := &ssm.DescribeInstanceInformationInput{
+	var instanceIDs []string
+
+	paginator := ssm.NewDescribeInstanceInformationPaginator(s.ssm, &ssm.DescribeInstanceInformationInput{
 		Filters: []types.InstanceInformationStringFilter{
 			{
 				Key:    aws.String("ActivationIds"),
 				Values: activationIDs,
 			},
 		},
-	}
-
-	return s.listManagedInstances(ctx, input, func(instance *types.InstanceInformation, tags []types.Tag) bool {
-		return slices.Contains(activationIDs, *instance.ActivationId)
 	})
-}
-
-func (s *SSMCleaner) ListManagedInstances(ctx context.Context, filterInput FilterInput) ([]string, error) {
-	// These filters are mostly just to limit the number of resources returned
-	// the source of truth for filtering is done in shouldDeleteManagedInstance
-	input := &ssm.DescribeInstanceInformationInput{}
-	if filterInput.ClusterName != "" {
-		input.Filters = []types.InstanceInformationStringFilter{
-			{
-				Key:    aws.String("tag:" + constants.TestClusterTagKey),
-				Values: []string{filterInput.ClusterName},
-			},
-		}
-	} else {
-		input.Filters = []types.InstanceInformationStringFilter{
-			{
-				Key:    aws.String("tag-key"),
-				Values: []string{constants.TestClusterTagKey},
-			},
-		}
-	}
-
-	return s.listManagedInstances(ctx, input, func(instance *types.InstanceInformation, tags []types.Tag) bool {
-		return shouldDeleteManagedInstance(instance, tags, filterInput)
-	})
-}
-
-func (s *SSMCleaner) listManagedInstances(ctx context.Context, input *ssm.DescribeInstanceInformationInput, shouldDelete func(*types.InstanceInformation, []types.Tag) bool) ([]string, error) {
-	var instanceIDs []string
-
-	paginator := ssm.NewDescribeInstanceInformationPaginator(s.ssm, input)
 
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(ctx)
@@ -131,22 +100,68 @@ func (s *SSMCleaner) listManagedInstances(ctx context.Context, input *ssm.Descri
 			if instance.ResourceType != managedInstanceResourceType {
 				continue
 			}
-			output, err := s.ssm.ListTagsForResource(ctx, &ssm.ListTagsForResourceInput{
-				ResourceId:   aws.String(*instance.InstanceId),
-				ResourceType: types.ResourceTypeForTaggingManagedInstance,
-			})
-			if err != nil && errors.IsType(err, &types.InvalidResourceId{}) {
-				// skipping log since we are possiblying checking managed instances we do not
-				// intend to delete
-				continue
-			}
-			if err != nil {
-				return nil, fmt.Errorf("getting tags for managed instance %s: %w", *instance.InstanceId, err)
-			}
 
-			if shouldDelete(&instance, output.TagList) {
+			if slices.Contains(activationIDs, *instance.ActivationId) {
 				instanceIDs = append(instanceIDs, *instance.InstanceId)
 			}
+		}
+	}
+
+	return instanceIDs, nil
+}
+
+// ex: arn:aws:ssm:us-west-2:736510011942:managed-instance/mi-0f2d0b4c974837b23
+func managedInstanceIDFromARN(arn string) string {
+	parts := strings.Split(arn, "/")
+	return parts[len(parts)-1]
+}
+
+func (s *SSMCleaner) ListManagedInstances(ctx context.Context, filterInput FilterInput) ([]string, error) {
+	// we use resourcetaggingapi here since ssm list managed-instance api does not return tags for the instances
+	// this means we end up having to make a number of listtagsforresource api requests just to determine that
+	// we do not wish to delete a given instance
+	// resourcetaggingapi allows us to retrieve only the instances we want based on the filterinput
+	// and then we can make one additional request to describeinstanceinformation to get the creation times
+	resourceARNs, err := s.taggingClient.GetResourcesWithClusterTag(ctx, "ssm:managed-instance", filterInput)
+	if err != nil {
+		return nil, fmt.Errorf("listing SSM managed instances: %w", err)
+	}
+
+	instanceIDToTags := map[string][]Tag{}
+	instanceIDs := []string{}
+	for resourceARN, tags := range resourceARNs {
+		instanceID := managedInstanceIDFromARN(resourceARN)
+		instanceIDToTags[instanceID] = tags
+		instanceIDs = append(instanceIDs, instanceID)
+	}
+
+	paginator := ssm.NewDescribeInstanceInformationPaginator(s.ssm, &ssm.DescribeInstanceInformationInput{
+		Filters: []types.InstanceInformationStringFilter{
+			{
+				Key:    aws.String("InstanceIds"),
+				Values: instanceIDs,
+			},
+		},
+	})
+
+	instanceIDs = []string{}
+	for paginator.HasMorePages() {
+		output, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("listing SSM managed instances: %w", err)
+		}
+
+		for _, instance := range output.InstanceInformationList {
+			if instance.ResourceType != managedInstanceResourceType {
+				continue
+			}
+
+			tags := instanceIDToTags[*instance.InstanceId]
+			if !shouldDeleteManagedInstance(&instance, tags, filterInput) {
+				continue
+			}
+
+			instanceIDs = append(instanceIDs, *instance.InstanceId)
 		}
 	}
 
@@ -169,35 +184,47 @@ func (s *SSMCleaner) DeleteManagedInstance(ctx context.Context, instanceID strin
 	return nil
 }
 
+// ex: "ResourceARN": "arn:aws:ssm:us-west-2:<account>:parameter/ec2/keypair/key-03a251c976f96388d"
+func parameterNameFromARN(arn string) string {
+	parts := strings.Split(arn, ":")
+	part := parts[len(parts)-1]
+	return strings.TrimPrefix(part, "parameter")
+}
+
 func (s *SSMCleaner) ListParameters(ctx context.Context, filterInput FilterInput) ([]string, error) {
-	paginator := ssm.NewDescribeParametersPaginator(s.ssm, &ssm.DescribeParametersInput{})
+	// we use resourcetaggingapi here since ssm list parameters api does not support filters
+	// and does not return tags for the parameters, requiring additional api calls to listtagsforresource
+	// just to determine this is not a parameter we want to delete
+	// resourcetaggingapi allows us to retrieve only the parameters we want based on the filterinput
+	// and then we can make one additional request to get all the parameters details
+	resourceARNs, err := s.taggingClient.GetResourcesWithClusterTag(ctx, "ssm:parameter", filterInput)
+	if err != nil {
+		return nil, fmt.Errorf("listing SSM parameters: %w", err)
+	}
 
-	var parameterNames []string
-	for paginator.HasMorePages() {
-		output, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("listing SSM parameters: %w", err)
+	parameterNameToTags := map[string][]Tag{}
+	parameterNames := []string{}
+	for resourceARN, tags := range resourceARNs {
+		parameterName := parameterNameFromARN(resourceARN)
+		parameterNameToTags[parameterName] = tags
+		parameterNames = append(parameterNames, parameterName)
+	}
+
+	parameters, err := s.ssm.GetParameters(ctx, &ssm.GetParametersInput{
+		Names: parameterNames,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing SSM parameters: %w", err)
+	}
+
+	parameterNames = []string{}
+	for _, parameter := range parameters.Parameters {
+		tags := parameterNameToTags[*parameter.Name]
+		if !shouldDeleteParameter(parameter, tags, filterInput) {
+			continue
 		}
 
-		for _, parameter := range output.Parameters {
-			tags, err := s.ssm.ListTagsForResource(ctx, &ssm.ListTagsForResourceInput{
-				ResourceId:   aws.String(*parameter.Name),
-				ResourceType: types.ResourceTypeForTaggingParameter,
-			})
-
-			if err != nil && errors.IsType(err, &types.InvalidResourceId{}) {
-				// skipping log since we are possiblying checking parameters we do not
-				// intend to delete
-				continue
-			}
-			if err != nil {
-				return nil, fmt.Errorf("getting tags for SSM parameter %s: %w", *parameter.Name, err)
-			}
-
-			if shouldDeleteParameter(parameter, tags.TagList, filterInput) {
-				parameterNames = append(parameterNames, *parameter.Name)
-			}
-		}
+		parameterNames = append(parameterNames, *parameter.Name)
 	}
 
 	return parameterNames, nil
@@ -218,19 +245,11 @@ func (s *SSMCleaner) DeleteParameter(ctx context.Context, parameterName string) 
 	return nil
 }
 
-func shouldDeleteManagedInstance(instance *types.InstanceInformation, tags []types.Tag, input FilterInput) bool {
-	var customTags []Tag
-	for _, tag := range tags {
-		customTags = append(customTags, Tag{
-			Key:   *tag.Key,
-			Value: *tag.Value,
-		})
-	}
-
+func shouldDeleteManagedInstance(instance *types.InstanceInformation, tags []Tag, input FilterInput) bool {
 	resource := ResourceWithTags{
 		ID:           *instance.InstanceId,
 		CreationTime: aws.ToTime(instance.RegistrationDate),
-		Tags:         customTags,
+		Tags:         tags,
 	}
 
 	return shouldDeleteResource(resource, input)
@@ -253,19 +272,11 @@ func shouldDeleteActivation(activation *types.Activation, input FilterInput) boo
 	return shouldDeleteResource(resource, input)
 }
 
-func shouldDeleteParameter(parameter types.ParameterMetadata, tags []types.Tag, input FilterInput) bool {
-	customTags := []Tag{}
-	for _, tag := range tags {
-		customTags = append(customTags, Tag{
-			Key:   *tag.Key,
-			Value: *tag.Value,
-		})
-	}
-
+func shouldDeleteParameter(parameter types.Parameter, tags []Tag, input FilterInput) bool {
 	resource := ResourceWithTags{
 		ID:           *parameter.Name,
 		CreationTime: aws.ToTime(parameter.LastModifiedDate),
-		Tags:         customTags,
+		Tags:         tags,
 	}
 
 	return shouldDeleteResource(resource, input)
