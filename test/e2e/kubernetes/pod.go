@@ -9,10 +9,8 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
@@ -77,9 +75,9 @@ func CreatePod(ctx context.Context, k8s kubernetes.Interface, pod *corev1.Pod, l
 	podName := pod.Name
 	namespace := pod.Namespace
 
-	_, err := k8s.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
+	_, err := ik8s.CreateRetry(ctx, k8s.CoreV1().Pods(namespace), pod)
 	if err != nil {
-		return fmt.Errorf("creating the test pod: %w", err)
+		return fmt.Errorf("creating pod %s/%s: %w", namespace, podName, err)
 	}
 
 	podListOptions := metav1.ListOptions{
@@ -93,61 +91,63 @@ func CreatePod(ctx context.Context, k8s kubernetes.Interface, pod *corev1.Pod, l
 }
 
 // WaitForPodsToBeRunning waits until a pod is in running phase and all containers are ready.
+// It will return an error if any of the pods have already exited.
 func WaitForPodsToBeRunning(ctx context.Context, k8s kubernetes.Interface, listOptions metav1.ListOptions, namespace string, logger logr.Logger) error {
-	consecutiveErrors := 0
-	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		pods, err := k8s.CoreV1().Pods(namespace).List(ctx, listOptions)
-		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting test pod: %w", err)
-			}
-			logger.Info("Retryable error getting pod. Continuing to poll", "selector", listOptions.FieldSelector, "error", err)
-			return false, nil // continue polling
-		}
-		consecutiveErrors = 0
-
+	pods, err := ik8s.ListAndWait(ctx, nodePodWaitTimeout, k8s.CoreV1().Pods(namespace), func(pods *corev1.PodList) bool {
 		if len(pods.Items) == 0 {
-			return false, nil // continue polling
+			// keep polling
+			return false
 		}
 
 		for _, pod := range pods.Items {
 			if pod.Status.Phase == corev1.PodSucceeded {
-				return false, fmt.Errorf("test pod exited before containers ready")
+				// we will return an error if the pod has already exited
+				continue
 			}
 			if pod.Status.Phase != corev1.PodRunning {
-				return false, nil // continue polling
+				return false
 			}
-
 			for _, cond := range pod.Status.Conditions {
 				if cond.Type == corev1.ContainersReady && cond.Status != corev1.ConditionTrue {
-					return false, nil // continue polling
+					return false
 				}
 			}
 		}
 
-		return true, nil // pod is running, stop polling
+		// stop polling
+		return true
+	}, func(opts *ik8s.ListOptions) {
+		opts.ListOptions = listOptions
 	})
+	if err != nil {
+		return fmt.Errorf("waiting for pod to be running with selector %s: %w", listOptions.FieldSelector, err)
+	}
+
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == corev1.PodSucceeded {
+			return fmt.Errorf("pod %s/%s already exited", pod.Namespace, pod.Name)
+		}
+	}
+
+	return nil
 }
 
 func waitForPodToBeDeleted(ctx context.Context, k8s kubernetes.Interface, name, namespace string) error {
-	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		_, err = k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
-
-		if apierrors.IsNotFound(err) {
-			return true, nil
-		} else if err != nil {
-			return false, err
-		}
-
-		return false, nil
+	_, err := ik8s.ListAndWait(ctx, nodePodWaitTimeout, k8s.CoreV1().Pods(namespace), func(pods *corev1.PodList) bool {
+		return len(pods.Items) == 0
+	}, func(opts *ik8s.ListOptions) {
+		opts.FieldSelector = "metadata.name=" + name
 	})
+	if err != nil {
+		return fmt.Errorf("waiting for pod %s in namespace %s to be deleted: %w", name, namespace, err)
+	}
+	return nil
 }
 
 func DeletePod(ctx context.Context, k8s kubernetes.Interface, name, namespace string) error {
-	err := k8s.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	err := ik8s.DeleteRetry(ctx, k8s.CoreV1().Pods(namespace), name)
 	if err != nil {
-		return fmt.Errorf("deleting pod: %w", err)
+		return fmt.Errorf("deleting pod %s in namespace %s: %w", name, namespace, err)
 	}
 	return waitForPodToBeDeleted(ctx, k8s, name, namespace)
 }

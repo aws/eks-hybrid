@@ -2,23 +2,27 @@ package kubernetes
 
 import (
 	"context"
+	"fmt"
+	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+
+	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
 )
 
+const namespaceWaitTimeout = 3 * time.Minute
+
+// WaitForNamespaceToBeDeleted waits for a namespace to be deleted up to 3 minutes
 func WaitForNamespaceToBeDeleted(ctx context.Context, k8s kubernetes.Interface, name string) error {
-	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		_, err = k8s.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
-
-		if apierrors.IsNotFound(err) {
-			return true, nil
-		} else if err != nil {
-			return false, err
-		}
-
-		return false, nil
+	_, err := ik8s.ListAndWait(ctx, namespaceWaitTimeout, k8s.CoreV1().Namespaces(), func(nsList *corev1.NamespaceList) bool {
+		// Return true when list is empty, indicating deletion is complete
+		return len(nsList.Items) == 0
+	}, func(opts *ik8s.ListOptions) {
+		opts.FieldSelector = "metadata.name=" + name
 	})
+	if err != nil {
+		return fmt.Errorf("waiting for namespace %s to be deleted: %w", name, err)
+	}
+	return nil
 }

@@ -7,41 +7,24 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+
+	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
 )
 
 const (
-	daemonSetWaitTimeout   = 3 * time.Minute
-	daemonSetDelayInternal = 5 * time.Second
+	daemonSetWaitTimeout = 3 * time.Minute
 )
 
+// GetDaemonSet returns a daemonset by name in a specific namespace
+// It will wait for the daemonset to exist up to 3 minutes
 func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string) (*appsv1.DaemonSet, error) {
-	var foundDaemonSet *appsv1.DaemonSet
-	consecutiveErrors := 0
-	err := wait.PollUntilContextTimeout(ctx, daemonSetDelayInternal, daemonSetWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		daemonSet, err := k8s.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("getting daemonSet %s: %w", name, err)
-			}
-			logger.Info("Retryable error getting DaemonSet. Continuing to poll", "name", name, "error", err)
-			return false, nil // continue polling
-		}
-
-		consecutiveErrors = 0
-		if daemonSet != nil {
-			foundDaemonSet = daemonSet
-			return true, nil
-		}
-
-		return false, nil // continue polling
+	ds, err := ik8s.GetAndWait(ctx, daemonSetWaitTimeout, k8s.AppsV1().DaemonSets(namespace), name, func(ds *appsv1.DaemonSet) bool {
+		// Return true to stop polling as soon as we get the daemonset
+		return true
 	})
 	if err != nil {
-		return nil, fmt.Errorf("waiting for DaemonSet %s to be ready: %w", name, err)
+		return nil, fmt.Errorf("waiting daemonset %s in namespace %s: %w", name, namespace, err)
 	}
-
-	return foundDaemonSet, nil
+	return ds, nil
 }
