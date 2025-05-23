@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ec2sdk "github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
@@ -239,6 +240,7 @@ type NodeCleanup struct {
 	SSM                 *ssm.Client
 	S3                  *s3sdk.Client
 	EC2                 *ec2sdk.Client
+	TaggingClient       *resourcegroupstaggingapi.Client
 	K8s                 clientgo.Interface
 	Logger              logr.Logger
 	RemoteCommandRunner commands.RemoteCommandRunner
@@ -254,7 +256,7 @@ func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, cluste
 		c.Logger.Info("Skipping SSM activation cleanup", "nodeName", nodeName)
 		return nil
 	}
-	cleaner := cleanup.NewSSMCleaner(c.SSM, c.Logger)
+	cleaner := cleanup.NewSSMCleaner(c.SSM, cleanup.NewResourceTaggingClient(c.TaggingClient), c.Logger)
 	activationIDs, err := cleaner.ListActivationsForNode(ctx, nodeName, clusterName)
 	if err != nil {
 		return fmt.Errorf("listing activations: %w", err)
