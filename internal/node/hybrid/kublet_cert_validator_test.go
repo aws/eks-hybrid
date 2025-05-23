@@ -1,14 +1,6 @@
 package hybrid
 
 import (
-	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,14 +11,15 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/test"
 )
 
 func TestValidateKubeletCert(t *testing.T) {
 	g := NewGomegaWithT(t)
 	logger := zap.NewNop()
 
-	caBytes, ca, caKey := generateCA(g)
-	_, wrongCA, wrongCAKey := generateCA(g)
+	caBytes, ca, caKey := test.GenerateCA(g)
+	_, wrongCA, wrongCAKey := test.GenerateCA(g)
 
 	tests := []struct {
 		name          string
@@ -42,25 +35,25 @@ func TestValidateKubeletCert(t *testing.T) {
 		},
 		{
 			name:          "valid existing cert",
-			cert:          generateKubeletCert(g, ca, caKey, time.Now(), time.Now().AddDate(10, 0, 0)),
+			cert:          test.GenerateKubeletCert(g, ca, caKey, time.Now(), time.Now().AddDate(10, 0, 0)),
 			ca:            caBytes,
 			expectedError: "",
 		},
 		{
 			name:          "expired certificate",
-			cert:          generateKubeletCert(g, ca, caKey, time.Now().AddDate(0, 0, -1), time.Now().AddDate(0, 0, -1)),
+			cert:          test.GenerateKubeletCert(g, ca, caKey, time.Now().AddDate(0, 0, -1), time.Now().AddDate(0, 0, -1)),
 			ca:            caBytes,
 			expectedError: "",
 		},
 		{
 			name:          "wrong CA",
-			cert:          generateKubeletCert(g, wrongCA, wrongCAKey, time.Now(), time.Now().AddDate(10, 0, 0)),
+			cert:          test.GenerateKubeletCert(g, wrongCA, wrongCAKey, time.Now(), time.Now().AddDate(10, 0, 0)),
 			ca:            caBytes,
 			expectedError: "kubelet certificate is not valid for the current cluster",
 		},
 		{
 			name:          "skip validation",
-			cert:          generateKubeletCert(g, wrongCA, wrongCAKey, time.Now(), time.Now().AddDate(10, 0, 0)),
+			cert:          test.GenerateKubeletCert(g, wrongCA, wrongCAKey, time.Now(), time.Now().AddDate(10, 0, 0)),
 			ca:            caBytes,
 			skipPhases:    []string{kubeletCertValidation},
 			expectedError: "",
@@ -82,7 +75,7 @@ func TestValidateKubeletCert(t *testing.T) {
 		},
 		{
 			name:          "invalid CA format",
-			cert:          generateKubeletCert(g, ca, caKey, time.Now(), time.Now().AddDate(10, 0, 0)),
+			cert:          test.GenerateKubeletCert(g, ca, caKey, time.Now(), time.Now().AddDate(10, 0, 0)),
 			ca:            []byte("invalid ca data"),
 			expectedError: "parsing cluster CA certificate",
 		},
@@ -130,64 +123,4 @@ func TestValidateKubeletCert(t *testing.T) {
 			}
 		})
 	}
-}
-
-func generateCA(g *WithT) ([]byte, *x509.Certificate, *ecdsa.PrivateKey) {
-	cert := &x509.Certificate{
-		SerialNumber: big.NewInt(2025),
-		Subject: pkix.Name{
-			Organization: []string{"Test CA"},
-			CommonName:   "test-ca",
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(10, 0, 0),
-		IsCA:                  true,
-		BasicConstraintsValid: true,
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-
-	privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	certBytes, err := x509.CreateCertificate(rand.Reader, cert, cert, &privateKey.PublicKey, privateKey)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	certPEM := new(bytes.Buffer)
-	g.Expect(pem.Encode(certPEM, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: certBytes,
-	})).NotTo(HaveOccurred())
-
-	return certPEM.Bytes(), cert, privateKey
-}
-
-func generateKubeletCert(g *WithT, issuer *x509.Certificate, issuerKey *ecdsa.PrivateKey, validFrom, validTo time.Time) []byte {
-	cert := &x509.Certificate{
-		SerialNumber: big.NewInt(2025),
-		Subject: pkix.Name{
-			Organization: []string{"Test Kubelet"},
-			CommonName:   "test-kubelet",
-		},
-		NotBefore:             validFrom,
-		NotAfter:              validTo,
-		IsCA:                  false,
-		BasicConstraintsValid: true,
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-
-	privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	certBytes, err := x509.CreateCertificate(rand.Reader, cert, issuer, &privateKey.PublicKey, issuerKey)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	certPEM := new(bytes.Buffer)
-	g.Expect(pem.Encode(certPEM, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: certBytes,
-	})).NotTo(HaveOccurred())
-
-	return certPEM.Bytes()
 }

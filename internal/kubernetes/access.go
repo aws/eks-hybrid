@@ -3,37 +3,23 @@ package kubernetes
 import (
 	"context"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 type AccessValidator struct {
-	aws aws.Config
+	clusterProvider ClusterProvider
 }
 
-func NewAccessValidator(config aws.Config) AccessValidator {
+func NewAccessValidator(clusterProvider ClusterProvider) AccessValidator {
 	return AccessValidator{
-		aws: config,
+		clusterProvider: clusterProvider,
 	}
 }
 
 func (a AccessValidator) Run(ctx context.Context, informer validation.Informer, node *api.NodeConfig) error {
-	// APIServerEndpoint, CertificateAuthority are required for the validations we want to run here but are optional in the config
-	// When not specified, we need to read them from the EKS API.
-	cluster, err := eks.ReadClusterDetails(ctx, a.aws, node)
+	cluster, err := a.clusterProvider.ReadClusterDetails(ctx, node, informer)
 	if err != nil {
-		err = validation.WithRemediation(err,
-			"Either provide the Kubernetes API server endpoint or ensure the node has access and permissions to call DescribeCluster EKS API.",
-		)
-
-		// Only if reading the EKS fail is when we "start" a validation and signal it as failed.
-		// Otherwise, there is no need to surface we are reading from the EKS API.
-		informer.Starting(ctx, "kubernetes-endpoint-access", "Validating access to Kubernetes API endpoint")
-		informer.Done(ctx, "kubernetes-endpoint-access", err)
-
 		return err
 	}
 

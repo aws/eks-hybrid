@@ -91,16 +91,17 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	runner := validation.NewRunner[*api.NodeConfig](printer)
 	apiServerValidator := node.NewAPIServerValidator(kubelet.New())
-
+	clusterProvider := kubernetes.NewClusterProvider(awsConfig)
 	runner.Register(creds.Validations(awsConfig, nodeConfig)...)
 	runner.Register(
 		validation.New("aws-auth", sts.NewAuthenticationValidator(awsConfig).Run),
 		runner.UntilError(
-			validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(awsConfig).Run),
+			validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(clusterProvider).Run),
 			validation.New("k8s-authentication", apiServerValidator.MakeAuthenticatedRequest),
 			validation.New("k8s-identity", apiServerValidator.CheckIdentity),
 			validation.New("k8s-vpc-network", apiServerValidator.CheckVPCEndpointAccess),
 		),
+		validation.New("k8s-certificate", kubernetes.NewKubeletCertificateValidator(clusterProvider).Run),
 	)
 
 	if err := runner.Sequentially(ctx, nodeConfig); err != nil {

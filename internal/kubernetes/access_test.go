@@ -43,7 +43,7 @@ func TestAccessValidatorRunFailSuccess(t *testing.T) {
 
 	config := aws.Config{}
 
-	v := kubernetes.NewAccessValidator(config)
+	v := kubernetes.NewAccessValidator(kubernetes.NewClusterProvider(config))
 
 	g.Expect(v.Run(ctx, informer, node)).To(Succeed())
 	g.Expect(informer.Started).To(BeTrue())
@@ -82,7 +82,7 @@ func TestAccessValidatorRunFailReadingClusterDetails(t *testing.T) {
 		HTTPClient:   eksAPI.Client(),
 	}
 
-	v := kubernetes.NewAccessValidator(config)
+	v := kubernetes.NewAccessValidator(kubernetes.NewClusterProvider(config))
 
 	err := v.Run(ctx, informer, node)
 	g.Expect(err).To(HaveOccurred())
@@ -118,7 +118,7 @@ func TestAccessValidatorRunFailValidatingAccess(t *testing.T) {
 
 	config := aws.Config{}
 
-	v := kubernetes.NewAccessValidator(config)
+	v := kubernetes.NewAccessValidator(kubernetes.NewClusterProvider(config))
 
 	err := v.Run(ctx, informer, node)
 	g.Expect(err).To(HaveOccurred())

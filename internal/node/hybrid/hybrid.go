@@ -28,7 +28,7 @@ type HybridNodeProvider struct {
 	skipPhases    []string
 	network       Network
 	// InstallRoot is optionally the root directory of the installation
-	// If not provided, the cert
+	// If not provided, the installRoot will be empty representing the root (/) of the fs
 	installRoot string
 }
 
@@ -96,7 +96,14 @@ func (hnp *HybridNodeProvider) Validate() error {
 	}
 
 	if !slices.Contains(hnp.skipPhases, kubeletCertValidation) {
-		if err := ValidateKubeletCert(hnp.logger, hnp.installRoot, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
+		hnp.logger.Info("Validating kubelet certificate...")
+		if err := ValidateKubeletCert(hnp.installRoot, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
+			// Ignore date validation errors in the hybrid provider since kubelet will regenerate them
+			// Ignore no cert errors since we expect it to not exist
+			if IsDateValidationError(err) || IsNoCertError(err) {
+				return nil
+			}
+
 			return err
 		}
 	}
