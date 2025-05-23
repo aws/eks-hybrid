@@ -39,3 +39,14 @@ func (a *AddonEc2Test) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyP
 		Region:              a.Cluster.Region,
 	}
 }
+
+// NewKubeStateMetricsTest creates a new KubeStateMetricsTest
+func (a *AddonEc2Test) NewKubeStateMetricsTest() *addon.KubeStateMetricsTest {
+	return &addon.KubeStateMetricsTest{
+		Cluster:   a.Cluster.Name,
+		K8S:       a.k8sClient,
+		EKSClient: a.eksClient,
+		K8SConfig: a.K8sClientConfig,
+		Logger:    a.Logger,
+	}
+}

@@ -112,6 +112,34 @@ var _ = Describe("Hybrid Nodes", func() {
 					Succeed(), "node monitoring agent should have been validated successfully",
 				)
 			}, Label("node-monitoring-agent"))
+
+			It("runs kube state metrics tests", func(ctx context.Context) {
+				kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(kubeStateMetrics.Delete(ctx)).To(Succeed(), "should cleanup kube state metrics successfully")
+				})
+
+				Expect(kubeStateMetrics.Create(ctx)).To(
+					Succeed(), "kube state metrics should have created successfully",
+				)
+
+				DeferCleanup(func(ctx context.Context) {
+					// only print logs after addon successfully created
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := kubeStateMetrics.PrintLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to get kube state metrics logs: %v\n", err)
+						}
+					}
+				})
+
+				Expect(kubeStateMetrics.Validate(ctx)).To(
+					Succeed(), "kube state metrics should have been validated successfully",
+				)
+			}, Label("kube-state-metrics"))
 		})
 	})
 })
