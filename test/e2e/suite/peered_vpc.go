@@ -81,6 +81,7 @@ type PeeredVPCTest struct {
 	publicKey string
 
 	podIdentityS3Bucket string
+	podIdentityRoleArn  string
 
 	// failureMessageLogged tracks if a terminal error due to a failed gomega
 	// expectation has already been registered and logged . It avoids logging
@@ -159,6 +160,11 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	test.nodeadmURLs = *urls
 
 	test.podIdentityS3Bucket, err = addon.PodIdentityBucket(ctx, test.s3Client, test.Cluster.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	test.podIdentityRoleArn, err = addon.PodIdentityRole(ctx, test.iamClient, test.Cluster.Name)
 	if err != nil {
 		return nil, err
 	}

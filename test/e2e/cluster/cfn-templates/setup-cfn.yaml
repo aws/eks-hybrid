@@ -286,6 +286,24 @@ Resources:
       FromPort: 10250
       ToPort: 10250
       CidrIp: !Ref ClusterVPCCidr
+      
+  HybridNodeCertManagerSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 10260
+      ToPort: 10260
+      CidrIp: !Ref ClusterVPCCidr
+      
+  HybridNodePCAIssuerSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8082
+      ToPort: 8082
+      CidrIp: !Ref ClusterVPCCidr
 
   HybridNodeAllowWebhooksIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -559,6 +577,17 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${PodIdentityS3Bucket}
                   - !Sub arn:aws:s3:::${PodIdentityS3Bucket}/*
+        - PolicyName: pca-issuer-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - acm-pca:IssueCertificate
+                  - acm-pca:GetCertificate
+                  - acm-pca:DescribeCertificateAuthority
+                Resource:
+                  - !Sub arn:aws:acm-pca:${AWS::Region}:${AWS::AccountId}:certificate-authority/*
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName

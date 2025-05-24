@@ -6,17 +6,12 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
-	"strings"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/util/retry"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 // For kubernetes versions less than 1.30, the cilium template uses
@@ -71,58 +66,14 @@ func (c Cilium) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	objs, err := yamlToUnstructured(installation.Bytes())
+	objs, err := kubernetes.YamlToUnstructured(installation.Bytes())
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("Applying cilium installation")
 
-	return upsertManifestsWithRetries(ctx, c.k8s, objs)
-}
-
-// Creates, or Updates existing CR, foreach manifest
-// Retries each up to 5 times
-func upsertManifestsWithRetries(ctx context.Context, k8s dynamic.Interface, manifests []unstructured.Unstructured) error {
-	for _, obj := range manifests {
-		err := retry.OnError(retry.DefaultRetry, func(err error) bool {
-			// Retry any error type
-			return true
-		}, func() error {
-			return upsertManifest(ctx, k8s, obj)
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func upsertManifest(ctx context.Context, k8s dynamic.Interface, obj unstructured.Unstructured) error {
-	groupVersion := obj.GroupVersionKind()
-	resource := schema.GroupVersionResource{
-		Group:    groupVersion.Group,
-		Version:  groupVersion.Version,
-		Resource: strings.ToLower(groupVersion.Kind + "s"),
-	}
-	k8sResource := k8s.Resource(resource).Namespace(obj.GetNamespace())
-	if _, err := k8sResource.Get(ctx, obj.GetName(), metav1.GetOptions{}); apierrors.IsNotFound(err) {
-		fmt.Printf("Creating custom object %s (%s)\n", obj.GetName(), groupVersion)
-		_, err := k8sResource.Create(ctx, &obj, metav1.CreateOptions{})
-		if err != nil {
-			return fmt.Errorf("creating custom object %s (%s): %w", obj.GetName(), groupVersion, err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("reading custom object %s (%s): %w", obj.GetName(), groupVersion, err)
-	} else {
-		fmt.Printf("Updating custom object %s (%s)\n", obj.GetName(), groupVersion)
-		_, err := k8sResource.Update(ctx, &obj, metav1.UpdateOptions{})
-		if err != nil {
-			return fmt.Errorf("updating custom object %s (%s): %w", obj.GetName(), groupVersion, err)
-		}
-	}
-
-	return nil
+	return kubernetes.UpsertManifestsWithRetries(ctx, c.k8s, objs)
 }
 
 func ciliumTemplate(kubernetesVersion string) ([]byte, error) {

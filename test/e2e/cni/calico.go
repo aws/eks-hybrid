@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 //go:embed testdata/calico/tigera-operator.yaml
@@ -62,12 +63,12 @@ func (c Calico) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	objs, err := yamlToUnstructured(append(tigera.Bytes(), installation.Bytes()...))
+	objs, err := kubernetes.YamlToUnstructured(append(tigera.Bytes(), installation.Bytes()...))
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("Applying calico installation")
 
-	return upsertManifestsWithRetries(ctx, c.K8s, objs)
+	return kubernetes.UpsertManifestsWithRetries(ctx, c.K8s, objs)
 }
