@@ -46,7 +46,7 @@ func (a AmazonLinux2023) InstanceType(region string, instanceSize e2e.InstanceSi
 }
 
 func (a AmazonLinux2023) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
-	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-"+a.amiArchitecture)
+	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.12-"+a.amiArchitecture)
 	return *amiId, err
 }
 
