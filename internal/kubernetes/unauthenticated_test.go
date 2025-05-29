@@ -59,7 +59,7 @@ func TestMakeUnauthenticatedRequestBadCA(t *testing.T) {
 	server := test.NewHTTPSServerForJSON(t, http.StatusForbidden, resp)
 
 	err := kubernetes.MakeUnauthenticatedRequest(ctx, server.URL, nil)
-	g.Expect(err).To(MatchError(ContainSubstring("failed to parse Cluster CA certificate")))
+	g.Expect(err).To(MatchError(ContainSubstring("invalid Cluster CA certificate, could not parse it")))
 	g.Expect(validation.Remediation(err)).To(Equal("Ensure the Cluster CA certificate provided is correct."))
 }
 

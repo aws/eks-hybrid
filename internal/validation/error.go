@@ -1,6 +1,9 @@
 package validation
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Remediable is an error that provides a possible remediation.
 type Remediable interface {
@@ -49,4 +52,16 @@ func Remediation(err error) string {
 	}
 
 	return fixable.Remediation()
+}
+
+// FlattenRemediation flattens a [Remediable] error into a simple error
+// by appending the remediation to the error message.
+// If the error is not [Remediable], it returns the original error.
+func FlattenRemediation(err error) error {
+	rem, ok := err.(*remediableError)
+	if !ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: %s", rem.error, rem.remediation)
 }

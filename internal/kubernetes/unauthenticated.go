@@ -18,7 +18,7 @@ import (
 func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertificate []byte) error {
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM(caCertificate) {
-		return validation.WithRemediation(errors.New("failed to parse Cluster CA certificate"),
+		return validation.WithRemediation(errors.New("invalid Cluster CA certificate, could not parse it"),
 			"Ensure the Cluster CA certificate provided is correct.",
 		)
 	}
@@ -34,7 +34,10 @@ func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertific
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return validation.WithRemediation(err, "Ensure the Kubernetes API server endpoint provided is correct.")
+		return validation.WithRemediation(
+			fmt.Errorf("making unauthenticated request to Kubernetes API endpoint: %w", err),
+			"Ensure the Kubernetes API server endpoint provided is correct.",
+		)
 	}
 
 	var resp *http.Response
@@ -50,12 +53,15 @@ func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertific
 
 		body, err = io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("reading unauthenticated request response body: %w", err)
+			return fmt.Errorf("reading unauthenticated request to Kubernetes API endpoint response body: %w", err)
 		}
 		return nil
 	})
 	if err != nil {
-		return validation.WithRemediation(err, "Ensure the provided Kubernetes API server endpoint is correct and the CA certificate is valid for that endpoint.")
+		return validation.WithRemediation(
+			fmt.Errorf("making unauthenticated request to Kubernetes API endpoint: %w", err),
+			"Ensure the provided Kubernetes API server endpoint is correct and the CA certificate is valid for that endpoint.",
+		)
 	}
 
 	apiServerResp := &apiServerResponse{}
