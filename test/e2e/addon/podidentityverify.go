@@ -17,14 +17,16 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	"github.com/aws/eks-hybrid/test/e2e/os"
 )
 
 const (
-	getAddonTimeout           = 10 * time.Minute
-	podIdentityDaemonSet      = "eks-pod-identity-agent-hybrid"
-	podIdentityToken          = "eks-pod-identity-token"
-	policyName                = "pod-identity-association-role-policy"
-	PodIdentityS3BucketPrefix = "podid"
+	getAddonTimeout                  = 10 * time.Minute
+	bottlerocketPodIdentityDaemonSet = "eks-pod-identity-agent-hybrid-bottlerocket"
+	defaultPodIdentityDaemonSet      = "eks-pod-identity-agent-hybrid"
+	podIdentityToken                 = "eks-pod-identity-token"
+	policyName                       = "pod-identity-association-role-policy"
+	PodIdentityS3BucketPrefix        = "podid"
 )
 
 type VerifyPodIdentityAddon struct {
@@ -38,6 +40,7 @@ type VerifyPodIdentityAddon struct {
 	Logger              logr.Logger
 	K8SConfig           *rest.Config
 	Region              string
+	OS                  string
 }
 
 type PolicyDocument struct {
@@ -66,6 +69,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return fmt.Errorf("waiting for pod identity add-on to be active: %w", err)
 	}
 
+	podIdentityDaemonSet := v.getPodIdentityDaemonset()
 	v.Logger.Info("Check if daemon set exists", "daemonSet", podIdentityDaemonSet)
 	if _, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet); err != nil {
 		return fmt.Errorf("getting daemon set %s: %w", podIdentityDaemonSet, err)
@@ -146,4 +150,11 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (v VerifyPodIdentityAddon) getPodIdentityDaemonset() string {
+	if os.IsBottlerocket(v.OS) {
+		return bottlerocketPodIdentityDaemonSet
+	}
+	return defaultPodIdentityDaemonSet
 }

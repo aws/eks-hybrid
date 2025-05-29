@@ -42,38 +42,18 @@ func RunNodeadmUpgrade(ctx context.Context, runner commands.RemoteCommandRunner,
 	return nil
 }
 
-func RebootInstance(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
-	commands := []string{
-		"set -eux",
-		"rm -rf /var/lib/cloud/instances",
-		"cloud-init clean --logs --reboot",
-	}
-
-	// the ssh command will exit with an error because the machine reboots after cloud-init clean
-	// ignoring output
-	_, err := runner.Run(ctx, instanceIP, commands)
-	if err != nil {
-		return fmt.Errorf("running remote command: %w", err)
-	}
-
-	return nil
+// RebootInstance reboots the remote instance
+// DEPRECATED: Use NewNodeRebootter(osName).Reboot() instead
+func RebootInstance(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, osName string) error {
+	rebootter := NewNodeRebootter(osName)
+	return rebootter.Reboot(ctx, runner, instanceIP)
 }
 
-func RunLogCollector(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, logBundleUrl string) error {
-	commands := []string{
-		fmt.Sprintf("/tmp/log-collector.sh '%s'", logBundleUrl),
-	}
-
-	output, err := runner.Run(ctx, instanceIP, commands)
-	if err != nil {
-		return fmt.Errorf("running remote command: %w", err)
-	}
-
-	if output.Status != "Success" {
-		return fmt.Errorf("log collector remote command did not succeed")
-	}
-
-	return nil
+// RunLogCollector runs the log collector on the remote instance
+// DEPRECATED: Use NewNodeLogCollector(osName).CollectLogs() instead
+func RunLogCollector(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP, osName, logBundleUrl string) error {
+	collector := NewNodeLogCollector(osName)
+	return collector.CollectLogs(ctx, runner, instanceIP, logBundleUrl)
 }
 
 func RunNodeadmDebug(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
@@ -108,4 +88,21 @@ func RunNodeadmVersion(ctx context.Context, runner commands.RemoteCommandRunner,
 	}
 
 	return strings.TrimSpace(output.StandardOutput), nil
+}
+
+func StopKubelet(ctx context.Context, runner commands.RemoteCommandRunner, instanceIP string) error {
+	commands := []string{
+		"sudo /usr/sbin/chroot /.bottlerocket/rootfs systemctl stop kubelet",
+	}
+
+	output, err := runner.Run(ctx, instanceIP, commands)
+	if err != nil {
+		return fmt.Errorf("running remote command: %w", err)
+	}
+
+	if output.Status != "Success" {
+		return fmt.Errorf("systemctl remote command did not succeed")
+	}
+
+	return nil
 }

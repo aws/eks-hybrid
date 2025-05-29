@@ -46,7 +46,7 @@ type testNode struct {
 	SerialOutputWriter io.Writer
 
 	flakyCode    *FlakyCode
-	node         *peered.PeerdNode
+	node         *peered.PeeredNode
 	serialOutput peered.ItBlockCloser
 	verifyNode   *kubernetes.VerifyNode
 }
@@ -99,7 +99,6 @@ func (n *testNode) Start(ctx context.Context) error {
 		n.serialOutput.It(fmt.Sprintf("joins the cluster: %s", n.NodeName), func() {
 			n.waitForNodeToJoin(ctx, flakeRun)
 		})
-
 		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.node)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
 	})
 	return nil
@@ -129,22 +128,25 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	// if the node joined successfully and debug fails, the test will fail
 	expect := flakeRun.RetryableExpect
 	isImpaired := n.isImpaired(ctx, err)
-	var debugErr error
 	if !isImpaired {
 		expect = Expect
-		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
-	}
-
-	// attempt to get the nodeadm version regardless of previous errors
-	version, versionErr := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
-	if versionErr == nil && version != "" {
-		AddReportEntry(constants.TestNodeadmVersion, version)
 	}
 
 	expect(err).To(Succeed(), "node should have joined the cluster successfully")
-	Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
-	Expect(versionErr).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
-	Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
+
+	versioner := nodeadm.NewNodeadmVersionGetter(n.OS.Name())
+	if versioner.ShouldGetVersion() {
+		version, versionErr := versioner.GetVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+		Expect(versionErr).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
+		Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
+		AddReportEntry(constants.TestNodeadmVersion, version)
+	}
+
+	debugger := nodeadm.NewNodeDebugger(n.OS.Name())
+	if debugger.ShouldRunDebug() && !isImpaired {
+		debugErr := debugger.RunDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+		Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
+	}
 }
 
 func (n *testNode) NewVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode {
@@ -170,7 +172,7 @@ func (n *testNode) It(name string, f func()) {
 	n.serialOutput.It(name, f)
 }
 
-func (n *testNode) PeerdNode() *peered.PeerdNode {
+func (n *testNode) GetPeeredNode() *peered.PeeredNode {
 	return n.node
 }
 

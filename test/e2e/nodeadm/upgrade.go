@@ -21,6 +21,7 @@ type UpgradeNode struct {
 
 	NodeIP           string
 	NodeName         string
+	OS               string
 	TargetK8sVersion string
 }
 
@@ -44,7 +45,8 @@ func (u UpgradeNode) Run(ctx context.Context) error {
 	}
 
 	u.Logger.Info("Upgrading hybrid node...")
-	if err = RunNodeadmUpgrade(ctx, u.RemoteCommandRunner, u.NodeIP, u.TargetK8sVersion); err != nil {
+	upgrader := NewNodeUpgrader(u.OS)
+	if err = upgrader.Upgrade(ctx, u.RemoteCommandRunner, u.NodeIP, u.TargetK8sVersion); err != nil {
 		return err
 	}
 

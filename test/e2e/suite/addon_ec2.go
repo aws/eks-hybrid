@@ -13,7 +13,7 @@ type AddonEc2Test struct {
 
 // NewNodeMonitoringAgentTest creates a new NodeMonitoringAgentTest
 func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTest {
-	commandRunner := ssm.NewSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, a.Logger)
+	commandRunner := ssm.NewSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, "", a.Logger)
 	return &addon.NodeMonitoringAgentTest{
 		Cluster:       a.Cluster.Name,
 		K8S:           a.k8sClient,
