@@ -138,9 +138,9 @@ func GetKubeClientFromKubeConfig(opts ...KubeClientOption) (kubernetes.Interface
 	}
 
 	// Use the current context in the kubeconfig file
-	config, err := clientcmd.LoadFromFile(KubeconfigPath())
+	config, err := clientcmd.BuildConfigFromFlags("", KubeconfigPath())
 	if err != nil {
-		return nil, errors.Wrap(err, "loading kubeconfig")
+		return nil, errors.Wrap(err, "building client for kubelet from default kubeconfig path")
 	}
 
 	// Apply AWS environment variables if provided

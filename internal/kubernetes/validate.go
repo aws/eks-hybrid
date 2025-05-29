@@ -14,10 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
-<<<<<<< HEAD:internal/node/validate.go
 	k8s "github.com/aws/eks-hybrid/internal/kubernetes"
-=======
->>>>>>> 5c97d1f (Add 4th validation to verify kubernetes credentials after configuring the kubelet):internal/kubernetes/validate.go
 	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/retry"
 	"github.com/aws/eks-hybrid/internal/validation"
@@ -67,7 +64,10 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 
 	_, err = k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
-		err = validation.WithRemediation(err, badPermissionsRemediation)
+		err = validation.WithRemediation(
+			fmt.Errorf("making authenticated request to Kubernetes API endpoint: %w", err),
+			badPermissionsRemediation,
+		)
 		return err
 	}
 
