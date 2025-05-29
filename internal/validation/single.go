@@ -52,7 +52,7 @@ func (r *SingleRunner[O]) Run(ctx context.Context, obj O, validations ...Validat
 
 		err := validation.Validate(ctx, r.informer, copyObj)
 		if err != nil {
-			return err
+			return FlattenRemediation(err)
 		}
 	}
 
