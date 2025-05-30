@@ -284,7 +284,7 @@ Resources:
       GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
       IpProtocol: tcp
       FromPort: 10250
-      ToPort: 10250
+      ToPort: 10251 # required for metrics-server
       CidrIp: !Ref ClusterVPCCidr
 
   HybridNodeAllowWebhooksIngress:

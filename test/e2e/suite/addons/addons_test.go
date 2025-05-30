@@ -112,6 +112,34 @@ var _ = Describe("Hybrid Nodes", func() {
 					Succeed(), "node monitoring agent should have been validated successfully",
 				)
 			}, Label("node-monitoring-agent"))
+
+			It("runs metrics server tests", func(ctx context.Context) {
+				metricsServer := addonEc2Test.NewMetricsServerTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
+				})
+
+				Expect(metricsServer.Create(ctx)).To(
+					Succeed(), "metrics server should have created successfully",
+				)
+
+				DeferCleanup(func(ctx context.Context) {
+					// only print logs after addon successfully created
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := metricsServer.PrintLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to get metrics server logs: %v\n", err)
+						}
+					}
+				})
+
+				Expect(metricsServer.Validate(ctx)).To(
+					Succeed(), "metrics server should have been validated successfully",
+				)
+			}, Label("metrics-server"))
 		})
 	})
 })
