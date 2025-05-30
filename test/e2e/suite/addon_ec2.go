@@ -39,3 +39,14 @@ func (a *AddonEc2Test) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyP
 		Region:              a.Cluster.Region,
 	}
 }
+
+// NewPrometheusNodeExporterTest creates a new PrometheusNodeExporterTest
+func (a *AddonEc2Test) NewPrometheusNodeExporterTest() *addon.PrometheusNodeExporterTest {
+	return &addon.PrometheusNodeExporterTest{
+		Cluster:   a.Cluster.Name,
+		K8S:       a.k8sClient,
+		EKSClient: a.eksClient,
+		K8SConfig: a.K8sClientConfig,
+		Logger:    a.Logger,
+	}
+}
