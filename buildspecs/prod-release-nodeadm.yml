@@ -3,14 +3,13 @@ version: 0.2
 phases:
   pre_build:
     commands:
+      # ensure staging release artifacts are valid before starting prod release
+      - ./hack/validate-release-artifacts.sh $STAGING_BUCKET latest
       - echo "Downloading artifacts from staging bucket..."
-      - aws s3 sync --no-progress s3://${STAGING_BUCKET}/latest/linux/amd64/ _bin/amd64/
-      - aws s3 sync --no-progress s3://${STAGING_BUCKET}/latest/linux/arm64/ _bin/arm64/
-      - aws s3 cp --no-progress s3://${STAGING_BUCKET}/latest/GIT_VERSION _bin/GIT_VERSION
-
-      - export VERSION=$(cat _bin/GIT_VERSION)
+      - aws s3 sync --no-progress s3://${STAGING_BUCKET}/latest/ ./latest
+      - export VERSION=$(cat latest/GIT_VERSION)
       - echo "Using version:"
-      - cat _bin/GIT_VERSION
+      - cat latest/GIT_VERSION
 
       - echo "Setting up AWS config for role assumption..."
       - |
@@ -25,8 +24,10 @@ phases:
 
   build:
     commands:
-      - ./hack/release-nodeadm.sh "${PROD_BUCKET}" "artifacts-production" "${VERSION}"
+      - AWS_PROFILE=artifacts-production ./hack/release-nodeadm.sh "${PROD_BUCKET}" "${VERSION}"
 
   post_build:
     commands:
-      - ./hack/validate-release.sh "${CLOUDFRONT_DISTRIBUTION_ID}" "artifacts-production" "_bin/GIT_VERSION"
+      - AWS_PROFILE=artifacts-production ./hack/validate-release-artifacts.sh $PROD_BUCKET releases/${VERSION}
+      - AWS_PROFILE=artifacts-production ./hack/validate-release-artifacts.sh $PROD_BUCKET releases/latest
+      - AWS_PROFILE=artifacts-production ./hack/validate-release.sh "${CLOUDFRONT_DISTRIBUTION_ID}" "latest/GIT_VERSION"

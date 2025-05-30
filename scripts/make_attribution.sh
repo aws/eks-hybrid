@@ -24,7 +24,7 @@ if [ "$CI" = "true" ]; then
     # Prow clone process does not add remote so we have to explicitly add
     # it. Setting it to HTTPS URL for go-licenses 
     git remote add origin https://github.com/$REPO_OWNER/eks-hybrid.git
-else
+elif [ "$CODEBUILD_CI" = false ]; then
     # go-licenses supports only HTTPS URLs so if the CLI repo is cloned locally 
     # with SSH URL, we need to temporarily override the remote URL for go-licenses
     # to work as expected
@@ -44,7 +44,11 @@ source "$REPO_ROOT/scripts/attribution_helpers.sh"
 function build::attribution::generate(){
     cd $REPO_ROOT
     $(get_go_path "$GOLANG_VERSION")/go mod vendor
-    build::create_git_tag
+    if [ -n "$GIT_VERSION" ]; then
+        echo $GIT_VERSION > GIT_TAG
+    else
+        build::create_git_tag
+    fi    
     gather_licenses "$GOLANG_VERSION" _output "./cmd/nodeadm"
     build::exclude_own
     build::generate_attribution $GOLANG_VERSION

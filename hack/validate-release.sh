@@ -5,19 +5,18 @@ set -o pipefail
 
 # Required arguments
 CLOUDFRONT_ID=$1
-PROFILE=$2
-VERSION_FILE=$3
+VERSION_FILE=$2
 
 echo "Starting release validation..."
 
 # Create and wait for CloudFront invalidation
 echo "Invalidating CloudFront cache..."
-INVALIDATION_ID=$(aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_ID}" --paths "/releases/latest/bin/*" --profile "${PROFILE}" --query 'Invalidation.Id' --output text)
+INVALIDATION_ID=$(aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_ID}" --paths "/releases/latest/bin/*" --query 'Invalidation.Id' --output text)
 echo "Created invalidation with ID: ${INVALIDATION_ID}"
 
 echo "Waiting for CloudFront invalidation to complete..."
 while true; do
-    STATUS=$(aws cloudfront get-invalidation --distribution-id "${CLOUDFRONT_ID}" --id "${INVALIDATION_ID}" --profile "${PROFILE}" --query 'Invalidation.Status' --output text)
+    STATUS=$(aws cloudfront get-invalidation --distribution-id "${CLOUDFRONT_ID}" --id "${INVALIDATION_ID}" --query 'Invalidation.Status' --output text)
     echo "Current invalidation status: ${STATUS}"
     if [ "${STATUS}" = "Completed" ]; then
         break

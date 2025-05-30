@@ -3,6 +3,8 @@ version: 0.2
 phases:
   build:
     commands:
-    - aws s3 sync --no-progress --exclude "*nodeadm.gz" _bin/ s3://$ARTIFACTS_BUCKET/latest/linux/ --acl public-read
-    - aws s3 sync --no-progress --include "*nodeadm.gz" --content-encoding gzip _bin/ s3://$ARTIFACTS_BUCKET/latest/linux/ --acl public-read
-    - aws s3 cp _bin/GIT_VERSION s3://$ARTIFACTS_BUCKET/latest/GIT_VERSION --acl public-read
+    - ./hack/upload-dev-release-artifacts.sh $ARTIFACTS_BUCKET
+
+  post_build:
+    commands:
+    - ./hack/validate-release-artifacts.sh $ARTIFACTS_BUCKET latest

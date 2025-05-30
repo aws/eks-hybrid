@@ -3,10 +3,7 @@ version: 0.2
 phases:
   build:
     commands:
-    - make build-cross-platform build-cross-e2e-tests-binary build-cross-e2e-test install-cross-ginkgo
-    - gzip --best < _bin/amd64/nodeadm > _bin/amd64/nodeadm.gz
-    - gzip --best < _bin/arm64/nodeadm > _bin/arm64/nodeadm.gz
-    - echo $GIT_VERSION >> _bin/GIT_VERSION
+    - ./hack/build-nodeadm.sh $GIT_VERSION
 
 cache:
   paths:
