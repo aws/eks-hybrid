@@ -38,6 +38,7 @@ type testNode struct {
 	LoggerControl      e2e.PausableLogger
 	Logger             logr.Logger
 	NodeName           string
+	GpuInstance        bool
 	OS                 e2e.NodeadmOS
 	PeeredNode         *peered.Node
 	Provider           e2e.NodeadmCredentialsProvider
@@ -69,6 +70,7 @@ func (n *testNode) Start(ctx context.Context) error {
 			NodeName:       n.NodeName,
 			OS:             n.OS,
 			Provider:       n.Provider,
+			GpuInstance: 	n.GpuInstance,
 		})
 		Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 		flakeRun.DeferCleanup(func(ctx context.Context) {

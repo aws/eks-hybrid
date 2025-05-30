@@ -41,8 +41,8 @@ func (a AmazonLinux2023) Name() string {
 	return "al23-" + a.architecture.String()
 }
 
-func (a AmazonLinux2023) InstanceType(region string, instanceSize e2e.InstanceSize) string {
-	return getInstanceTypeFromRegionAndArch(region, a.architecture, instanceSize)
+func (a AmazonLinux2023) InstanceType(region string, instanceSize e2e.InstanceSize, gpuInstance bool) string {
+	return getInstanceTypeFromRegionAndArch(region, a.architecture, instanceSize, gpuInstance)
 }
 
 func (a AmazonLinux2023) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
