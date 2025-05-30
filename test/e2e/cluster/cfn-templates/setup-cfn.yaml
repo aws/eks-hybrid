@@ -287,6 +287,15 @@ Resources:
       ToPort: 10250
       CidrIp: !Ref ClusterVPCCidr
 
+  HybridNodeKubeStateSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      CidrIp: !Ref ClusterVPCCidr
+
   HybridNodeAllowWebhooksIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
