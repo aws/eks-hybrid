@@ -26,5 +26,6 @@ write_files:
 runcmd:
   - systemctl enable rsyslog --now
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}"
+  - /tmp/nvidia-driver-install.sh
 
 final_message: "The system is prepped, after $UPTIME seconds"

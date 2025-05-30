@@ -20,18 +20,6 @@ var ubuntu2204CloudInit []byte
 //go:embed testdata/ubuntu/2404/cloud-init.txt
 var ubuntu2404CloudInit []byte
 
-//go:embed testdata/nodeadm-init.sh
-var nodeAdmInitScript []byte
-
-//go:embed testdata/log-collector.sh
-var logCollectorScript []byte
-
-//go:embed testdata/nodeadm-wrapper.sh
-var nodeadmWrapperScript []byte
-
-//go:embed testdata/install-containerd.sh
-var installContainerdScript []byte
-
 type ubuntuCloudInitData struct {
 	e2e.UserDataInput
 	NodeadmUrl            string
