@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::LanguageExtensions'
 Description: CloudFormation template to create resources needed to run E2E tests
 
 Parameters:
@@ -33,6 +34,10 @@ Parameters:
   HybridNodePublicSubnetCidr:
     Type: String
     Description: EKS Hybrid Nodes public subnet VPC CIDR block
+
+  AddonPorts:
+    Type: CommaDelimitedList
+    Description: EKS addon port list
 
   TestClusterTagKey:
     Type: String
@@ -295,6 +300,19 @@ Resources:
       FromPort: 9443
       ToPort: 9443
       CidrIp: !Ref ClusterVPCCidr
+
+  # Security Group Ingress rules for addon services
+  'Fn::ForEach::AddonLoop':
+    - Port
+    - !Ref AddonPorts
+    - "HybridNode${Port}SecurityGroupIngress":
+        Type: AWS::EC2::SecurityGroupIngress
+        Properties:
+          GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+          IpProtocol: tcp
+          FromPort: !Ref Port
+          ToPort: !Ref Port
+          CidrIp: !Ref ClusterVPCCidr
 
   ClusterToHybridTGW:
     Type: AWS::EC2::TransitGateway
