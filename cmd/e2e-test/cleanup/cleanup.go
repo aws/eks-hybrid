@@ -34,6 +34,13 @@ func NewCommand() *Command {
 	return &cmd
 }
 
+func NewCommandWithParams(resourcesFilePath string) *Command {
+	cmd := Command{
+		resourcesFilePath: resourcesFilePath,
+	}
+	return &cmd
+}
+
 func (c *Command) Flaggy() *flaggy.Subcommand {
 	return c.flaggy
 }
