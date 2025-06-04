@@ -38,9 +38,7 @@ type HybridNodeProvider struct {
 	// CertPath is the path to the kubelet certificate
 	// If not provided, defaults to kubelet.KubeletCurrentCertPath
 	certPath string
-	// installRoot is optionally the root directory of the installation
-	installRoot string
-	runner      ValidationRunner
+	runner   ValidationRunner
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
@@ -125,10 +123,10 @@ func (hnp *HybridNodeProvider) Validate() error {
 
 	if !slices.Contains(hnp.skipPhases, kubeletCertValidation) {
 		hnp.logger.Info("Validating kubelet certificate...")
-		if err := ValidateKubeletCert(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
+		if err := kubelet.ValidateKubeletCert(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
 			// Ignore date validation errors in the hybrid provider since kubelet will regenerate them
 			// Ignore no cert errors since we expect it to not exist
-			if IsDateValidationError(err) || IsNoCertError(err) {
+			if kubelet.IsDateValidationError(err) || kubelet.IsNoCertError(err) {
 				return nil
 			}
 

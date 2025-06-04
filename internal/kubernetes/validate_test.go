@@ -1,3 +1,8 @@
+// corev1.Endpoints is deprecated, but we still need to use the endpoints api from
+// the validation code since the kubelet kubeconfig/role only has permissions to endpoints
+// and not endpointslices
+//
+//nolint:staticcheck
 package kubernetes_test
 
 import (
@@ -71,7 +76,7 @@ func TestAPIServerValidator_MakeAuthenticatedRequest(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, "v1.28.0")
 
-			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client})
+			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client}, kubelet)
 			err := v.MakeAuthenticatedRequest(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -94,7 +99,7 @@ func TestAPIServerValidator_MakeAuthenticatedRequest_FailBuildingClient(t *testi
 	kubelet := newMockKubelet(nil, "v1.28.0")
 	kubelet.clientError = errors.New("can't build client")
 
-	v := kubernetes.NewAPIServerValidator(fakeKubeconfig{err: errors.New("can't build client")})
+	v := kubernetes.NewAPIServerValidator(fakeKubeconfig{err: errors.New("can't build client")}, kubelet)
 	err := v.MakeAuthenticatedRequest(ctx, informer, nodeConfig)
 
 	g.Expect(err).To(MatchError(ContainSubstring("can't build client")))
@@ -225,7 +230,7 @@ func TestAPIServerValidator_CheckVPCEndpointAccess(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, "v1.28.0")
 
-			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client})
+			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client}, kubelet)
 			err := v.CheckVPCEndpointAccess(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -340,7 +345,7 @@ func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, tc.kubeletVersion)
 
-			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client})
+			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client}, kubelet)
 			err := v.CheckIdentity(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -371,14 +376,14 @@ func mockSelfSubjectReview(client *fake.Clientset, selfReview *authenticationv1.
 
 // mockKubelet implements the Kubelet interface for testing
 type mockKubelet struct {
-	client         kubernetes.Interface
+	client         clientgo.Interface
 	version        string
 	versionError   error
 	clientError    error
 	kubeconfigPath string
 }
 
-func newMockKubelet(client kubernetes.Interface, version string) *mockKubelet {
+func newMockKubelet(client clientgo.Interface, version string) *mockKubelet {
 	return &mockKubelet{
 		client:         client,
 		version:        version,
@@ -386,7 +391,7 @@ func newMockKubelet(client kubernetes.Interface, version string) *mockKubelet {
 	}
 }
 
-func (m *mockKubelet) BuildClient() (kubernetes.Interface, error) {
+func (m *mockKubelet) BuildClient() (clientgo.Interface, error) {
 	if m.clientError != nil {
 		return nil, m.clientError
 	}
