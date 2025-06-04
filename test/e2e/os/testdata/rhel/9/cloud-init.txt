@@ -37,5 +37,6 @@ runcmd:
   - /tmp/install-containerd.sh
 {{- end }}
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source {{ .ContainerdSource }}"
+  - /tmp/nvidia-driver-install.sh
 
 final_message: "The system is prepped, after $UPTIME seconds"

@@ -26,5 +26,6 @@ write_files:
 
 runcmd:
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source docker"
+  - /tmp/nvidia-driver-install.sh
 
 final_message: "The system is prepped, after $UPTIME seconds"
