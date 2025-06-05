@@ -593,6 +593,17 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${PodIdentityS3Bucket}
                   - !Sub arn:aws:s3:::${PodIdentityS3Bucket}/*
+        - PolicyName: pca-issuer-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - acm-pca:IssueCertificate
+                  - acm-pca:GetCertificate
+                  - acm-pca:DescribeCertificateAuthority
+                Resource:
+                  - !Sub arn:aws:acm-pca:${AWS::Region}:${AWS::AccountId}:certificate-authority/*
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
