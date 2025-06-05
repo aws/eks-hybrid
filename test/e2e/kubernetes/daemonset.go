@@ -28,3 +28,12 @@ func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s kubernetes.Interf
 	}
 	return ds, nil
 }
+
+func DaemonSetWaitForReady(ctx context.Context, logger logr.Logger, k8s kubernetes.Interface, namespace, name string) error {
+	if _, err := ik8s.GetAndWait(ctx, daemonSetWaitTimeout, k8s.AppsV1().DaemonSets(namespace), name, func(ds *appsv1.DaemonSet) bool {
+		return ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
+	}); err != nil {
+		return fmt.Errorf("daemonset %s replicas never became ready: %v", name, err)
+	}
+	return nil
+}

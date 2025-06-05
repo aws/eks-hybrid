@@ -10,7 +10,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -50,9 +49,7 @@ func (n *NodeMonitoringAgentTest) Create(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := ik8s.GetAndWait(ctx, nodeMonitoringAgentWaitTimeout, n.K8S.AppsV1().DaemonSets(n.addon.Namespace), n.addon.Name, func(ds *appsv1.DaemonSet) bool {
-		return ds.Status.DesiredNumberScheduled == ds.Status.NumberReady
-	}); err != nil {
+	if err := kubernetes.DaemonSetWaitForReady(ctx, n.Logger, n.K8S, nodeMonitoringAgentNamespace, nodeMonitoringAgentName); err != nil {
 		return err
 	}
 

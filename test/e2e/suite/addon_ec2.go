@@ -67,3 +67,14 @@ func (a *AddonEc2Test) NewMetricsServerTest() *addon.MetricsServerTest {
 		MetricsClient: metricsClient,
 	}
 }
+
+// NewPrometheusNodeExporterTest creates a new PrometheusNodeExporterTest
+func (a *AddonEc2Test) NewPrometheusNodeExporterTest() *addon.PrometheusNodeExporterTest {
+	return &addon.PrometheusNodeExporterTest{
+		Cluster:   a.Cluster.Name,
+		K8S:       a.k8sClient,
+		EKSClient: a.eksClient,
+		K8SConfig: a.K8sClientConfig,
+		Logger:    a.Logger,
+	}
+}

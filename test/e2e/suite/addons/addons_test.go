@@ -168,6 +168,34 @@ var _ = Describe("Hybrid Nodes", func() {
 					Succeed(), "metrics server should have been validated successfully",
 				)
 			}, Label("metrics-server"))
+
+			It("runs prometheus node exporter tests", func(ctx context.Context) {
+				prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(prometheusNodeExporter.Delete(ctx)).To(Succeed(), "should cleanup prometheus node exporter successfully")
+				})
+
+				Expect(prometheusNodeExporter.Create(ctx)).To(
+					Succeed(), "prometheus node exporter should have created successfully",
+				)
+
+				DeferCleanup(func(ctx context.Context) {
+					// only print logs after addon successfully created
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := prometheusNodeExporter.PrintLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to get prometheus node exporter logs: %v\n", err)
+						}
+					}
+				})
+
+				Expect(prometheusNodeExporter.Validate(ctx)).To(
+					Succeed(), "prometheus node exporter should have been validated successfully",
+				)
+			}, Label("prometheus-node-exporter"))
 		})
 	})
 })
