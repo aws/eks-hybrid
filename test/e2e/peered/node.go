@@ -50,6 +50,7 @@ type NodeSpec struct {
 	InstanceProfileARN string
 	NodeK8sVersion     string
 	NodeName           string
+	ComputeType        e2e.ComputeType
 	OS                 e2e.NodeadmOS
 	Provider           e2e.NodeadmCredentialsProvider
 }
@@ -137,7 +138,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 
 	instanceType := spec.InstanceType
 	if instanceType == "" {
-		instanceType = spec.OS.InstanceType(c.Cluster.Region, spec.InstanceSize)
+		instanceType = spec.OS.InstanceType(c.Cluster.Region, spec.InstanceSize, spec.ComputeType)
 	}
 
 	ec2Input := ec2.InstanceConfig{

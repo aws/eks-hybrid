@@ -36,6 +36,17 @@ var instanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
 	},
 }
 
+var gpuInstanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
+	amd64: {
+		e2e.XLarge: "g4dn.2xlarge",
+		e2e.Large:  "g4dn.xlarge",
+	},
+	arm64: {
+		e2e.XLarge: "g5g.2xlarge",
+		e2e.Large:  "g5g.xlarge",
+	},
+}
+
 func (a architecture) String() string {
 	return string(a)
 }
@@ -94,8 +105,16 @@ func getAmiIDFromSSM(ctx context.Context, client *ssm.Client, amiName string) (*
 }
 
 // an unknown size and arch combination is a coding error, so we panic
-func getInstanceTypeFromRegionAndArch(_ string, arch architecture, instanceSize e2e.InstanceSize) string {
-	instanceType, ok := instanceSizeToType[arch][instanceSize]
+func getInstanceTypeFromRegionAndArch(_ string, arch architecture, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
+	var instanceType string
+	var ok bool
+
+	if computeType == e2e.GPUInstance {
+		instanceType, ok = gpuInstanceSizeToType[arch][instanceSize]
+	} else {
+		instanceType, ok = instanceSizeToType[arch][instanceSize]
+	}
+
 	if !ok {
 		panic(fmt.Errorf("unknown instance size %d for architecture %s", instanceSize, arch))
 	}

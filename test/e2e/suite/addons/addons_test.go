@@ -79,9 +79,11 @@ var _ = SynchronizedBeforeSuite(
 var _ = Describe("Hybrid Nodes", func() {
 	When("using peered VPC", func() {
 		var addonEc2Test *suite.AddonEc2Test
+		credentialProviders := suite.CredentialProviders()
 
 		BeforeEach(func(ctx context.Context) {
 			addonEc2Test = &suite.AddonEc2Test{PeeredVPCTest: suite.BeforeVPCTest(ctx, suiteConfig)}
+			credentialProviders = suite.AddClientsToCredentialProviders(credentialProviders, addonEc2Test.PeeredVPCTest)
 		})
 
 		When("using ec2 instance as hybrid nodes", func() {
@@ -168,6 +170,24 @@ var _ = Describe("Hybrid Nodes", func() {
 					Succeed(), "metrics server should have been validated successfully",
 				)
 			}, Label("metrics-server"))
+
+			It("runs nvidia device plugin tests", func(ctx context.Context) {
+				osList := suite.OSProviderList(credentialProviders)
+				Expect(osList).ToNot(BeEmpty(), "OS list should not be empty")
+
+				// randomly pick one os/provider combination to provision GPU nodes
+				rand.Shuffle(len(osList), func(i, j int) {
+					osList[i], osList[j] = osList[j], osList[i]
+				})
+
+				os := osList[0].OS
+				provider := osList[0].Provider
+				instanceName := addonEc2Test.InstanceName("addon-nvidia-test", os, provider)
+				nodeName := fmt.Sprintf("addon-nvidia-node-%s-%s", provider.Name(), os.Name())
+				testNode := addonEc2Test.NewTestNode(ctx, instanceName, nodeName, addonEc2Test.Cluster.KubernetesVersion, os, provider, e2e.Large, e2e.GPUInstance)
+				Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+				Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
+			}, Label("nvidia-device-plugin"))
 		})
 	})
 })

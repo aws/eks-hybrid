@@ -26,6 +26,7 @@ import (
 type testNode struct {
 	ArtifactsPath      string
 	ClusterName        string
+	ComputeType        e2e.ComputeType
 	EC2Client          *ec2v2.Client
 	EKSEndpoint        string
 	FailHandler        func(message string, callerSkip ...int)
@@ -69,6 +70,7 @@ func (n *testNode) Start(ctx context.Context) error {
 			NodeName:       n.NodeName,
 			OS:             n.OS,
 			Provider:       n.Provider,
+			ComputeType:    n.ComputeType,
 		})
 		Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 		flakeRun.DeferCleanup(func(ctx context.Context) {

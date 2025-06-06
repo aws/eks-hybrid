@@ -263,7 +263,7 @@ func WithLogging(loggerControl e2e.PausableLogger, serialOutputWriter io.Writer)
 	}
 }
 
-func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName, k8sVersion string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, instanceSize e2e.InstanceSize, opts ...TestNodeOption) *testNode {
+func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName, k8sVersion string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, instanceSize e2e.InstanceSize, computeType e2e.ComputeType, opts ...TestNodeOption) *testNode {
 	node := &testNode{
 		ArtifactsPath:   t.ArtifactsPath,
 		ClusterName:     t.Cluster.Name,
@@ -282,6 +282,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		OS:              os,
 		Provider:        provider,
 		Region:          t.Cluster.Region,
+		ComputeType:     computeType,
 	}
 
 	for _, opt := range opts {
@@ -458,6 +459,7 @@ type NodeCreate struct {
 	NodeName     string
 	OS           e2e.NodeadmOS
 	Provider     e2e.NodeadmCredentialsProvider
+	ComputeType  e2e.ComputeType
 }
 
 func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeCreate) {
@@ -480,7 +482,7 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 
 			// Create a new logger that uses our SwitchWriter
 			controlledLogger := e2e.NewPausableLogger(e2e.WithWriter(outputControl))
-			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize,
+			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize, entry.ComputeType,
 				WithLogging(controlledLogger, outputControl))
 
 			Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")

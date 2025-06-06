@@ -16,7 +16,7 @@ type NodeadmOS interface {
 	Name() string
 	AMIName(ctx context.Context, awsConfig aws.Config) (string, error)
 	BuildUserData(userDataInput UserDataInput) ([]byte, error)
-	InstanceType(region string, instanceSize InstanceSize) string
+	InstanceType(region string, instanceSize InstanceSize, computeType ComputeType) string
 }
 
 type InstanceSize int
@@ -24,6 +24,13 @@ type InstanceSize int
 const (
 	Large InstanceSize = iota
 	XLarge
+)
+
+type ComputeType int
+
+const (
+	CPUInstance ComputeType = iota
+	GPUInstance
 )
 
 type UserDataInput struct {

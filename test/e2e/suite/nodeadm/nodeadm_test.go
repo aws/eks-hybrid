@@ -98,7 +98,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						k8sVersion = test.OverrideNodeK8sVersion
 					}
 
-					testNode := test.NewTestNode(ctx, instanceName, nodeName, k8sVersion, nodeOS, provider, e2e.Large)
+					testNode := test.NewTestNode(ctx, instanceName, nodeName, k8sVersion, nodeOS, provider, e2e.Large, e2e.CPUInstance)
 					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
@@ -155,7 +155,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.Cluster.KubernetesVersion)
 					Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
 
-					testNode := test.NewTestNode(ctx, instanceName, nodeName, nodeKubernetesVersion, nodeOS, provider, e2e.Large)
+					testNode := test.NewTestNode(ctx, instanceName, nodeName, nodeKubernetesVersion, nodeOS, provider, e2e.Large, e2e.CPUInstance)
 					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
