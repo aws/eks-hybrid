@@ -1,11 +1,22 @@
 package hybrid
 
 import (
+	"context"
 	"fmt"
+	"regexp"
 	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/util/file"
+	"github.com/aws/eks-hybrid/internal/validation"
+)
+
+const (
+	// https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_CreateActivation.html#systemsmanager-CreateActivation-response-ActivationId
+	ssmActivationIDPattern   = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	ssmActivationCodePattern = `^.{20,250}$`
 )
 
 func extractFlagValue(args []string, flag string) string {
@@ -51,13 +62,33 @@ func (hnp *HybridNodeProvider) withHybridValidators() {
 			if cfg.Spec.Hybrid.SSM.ActivationID == "" {
 				return fmt.Errorf("ActivationID is missing in hybrid ssm configuration")
 			}
+
+			// Compile the activation code pattern
+			reCode, err := regexp.Compile(ssmActivationCodePattern)
+			if err != nil {
+				return fmt.Errorf("internal error: invalid ActivationCode pattern: %v", err)
+			}
+			// Check if ActivationCode matches the pattern
+			if !reCode.MatchString(cfg.Spec.Hybrid.SSM.ActivationCode) {
+				return fmt.Errorf("invalid ActivationCode format: %s. Must be 20-250 characters", cfg.Spec.Hybrid.SSM.ActivationCode)
+			}
+
+			// Compile the regex patterns
+			reID, err := regexp.Compile(ssmActivationIDPattern)
+			if err != nil {
+				return fmt.Errorf("internal error: invalid ActivationID pattern: %v", err)
+			}
+			// Check if ActivationID matches the pattern
+			if !reID.MatchString(cfg.Spec.Hybrid.SSM.ActivationID) {
+				return fmt.Errorf("invalid ActivationID format: %s. Must be in format: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", cfg.Spec.Hybrid.SSM.ActivationID)
+			}
 		}
 		return nil
 	}
 }
 
 func (hnp *HybridNodeProvider) ValidateConfig() error {
-	hnp.logger.Info("Validating configuration...")
+	hnp.logger.Debug("Validating configuration...")
 	if err := hnp.validator(hnp.nodeConfig); err != nil {
 		return err
 	}
@@ -96,4 +127,27 @@ func validateRolesAnywhereNode(node *api.NodeConfig) error {
 	}
 
 	return nil
+}
+
+// Hybrid Node Config Validator returns a validation for hybrid node configuration
+func NewHybridNodeConfigValidator(node *api.NodeConfig, log *zap.Logger) validation.Validation[*api.NodeConfig] {
+	return validation.New("hybrid-node-config", func(ctx context.Context, informer validation.Informer, nodeConfig *api.NodeConfig) error {
+		var err error
+		informer.Starting(ctx, "hybrid-node-config", "Validating hybrid node configuration")
+		defer func() {
+			informer.Done(ctx, "hybrid-node-config", err)
+		}()
+
+		hybridNodeProvider, err := NewHybridNodeProvider(node, []string{}, log)
+		if err != nil {
+			err = validation.WithRemediation(err, "Ensure hybrid node has correct aws configuration")
+		}
+
+		if err = hybridNodeProvider.ValidateConfig(); err != nil {
+			err = validation.WithRemediation(err, "Ensure correct information in hybrid node configuration file (file://nodeConfig.yaml)")
+			return err
+		}
+
+		return nil
+	})
 }
