@@ -9,11 +9,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/test/e2e"
-)
-
-const (
-	rolesAnywhereCertPath = "/etc/roles-anywhere/pki/node.crt"
-	rolesAnywhereKeyPath  = "/etc/roles-anywhere/pki/node.key"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 type IamRolesAnywhereProvider struct {
@@ -44,8 +40,8 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, node e2e.N
 					RoleARN:         i.RoleARN,
 					TrustAnchorARN:  i.TrustAnchorARN,
 					ProfileARN:      i.ProfileARN,
-					CertificatePath: rolesAnywhereCertPath,
-					PrivateKeyPath:  rolesAnywhereKeyPath,
+					CertificatePath: constants.RolesAnywhereCertPath,
+					PrivateKeyPath:  constants.RolesAnywhereKeyPath,
 				},
 				EnableCredentialsFile: true,
 			},
@@ -65,11 +61,11 @@ func (i *IamRolesAnywhereProvider) FilesForNode(node e2e.NodeSpec) ([]e2e.File, 
 	return []e2e.File{
 		{
 			Content: string(nodeCertificate.CertPEM),
-			Path:    rolesAnywhereCertPath,
+			Path:    constants.RolesAnywhereCertPath,
 		},
 		{
 			Content: string(nodeCertificate.KeyPEM),
-			Path:    rolesAnywhereKeyPath,
+			Path:    constants.RolesAnywhereKeyPath,
 		},
 	}, nil
 }

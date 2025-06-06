@@ -249,6 +249,7 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 			Capabilities: []types.Capability{
 				types.CapabilityCapabilityIam,
 				types.CapabilityCapabilityNamedIam,
+				types.CapabilityCapabilityAutoExpand,
 			},
 			TemplateBody: aws.String(string(setupTemplateBody)),
 			Parameters:   params,

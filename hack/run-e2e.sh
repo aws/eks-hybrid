@@ -36,6 +36,7 @@ ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
 BIN_DIR="$REPO_ROOT/_bin/$ARCH"
 
 SUITE_BIN="$BIN_DIR/${E2E_SUITE:-nodeadm.test}"
+BOTTLEROCKET_SUITE_BIN="$BIN_DIR/bottlerocket.test"
 FILTER="${E2E_FILTER:-(simpleflow) || (upgradeflow && (ubuntu2204-amd64 || rhel8-amd64 || al23-amd64))}"
 
 mkdir -p $CONFIG_DIR
@@ -75,5 +76,15 @@ build::common::echo_and_run $BIN_DIR/e2e-test run-e2e \
   --logs-bucket=$LOGS_BUCKET \
   --artifacts-dir=$ARTIFACTS_FOLDER \
   --procs=64 \
+  --skip-cleanup=true \
+  --no-color
+
+build::common::echo_and_run $BIN_DIR/e2e-test run-e2e \
+  --setup-config=$RESOURCES_YAML \
+  --tests-binary=$BOTTLEROCKET_SUITE_BIN \
+  --logs-bucket=$LOGS_BUCKET \
+  --artifacts-dir=$ARTIFACTS_FOLDER \
+  --procs=64 \
   --skip-cleanup=false \
+  --skip-setup=true \
   --no-color

@@ -21,6 +21,7 @@ type UpgradeNode struct {
 
 	NodeIP           string
 	NodeName         string
+	OS               string
 	TargetK8sVersion string
 }
 

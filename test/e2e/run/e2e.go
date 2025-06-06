@@ -99,6 +99,7 @@ type E2E struct {
 	Timeout         time.Duration
 	TestResources   cluster.TestResources
 	SkipCleanup     bool
+	SkipSetup       bool
 	SkippedTests    string
 }
 
@@ -198,6 +199,7 @@ func (e *E2E) runTests(ctx context.Context) []Phase {
 		TestProcs:       e.TestProcs,
 		TestResources:   e.TestResources,
 		SkippedTests:    e.SkippedTests,
+		SkipSetup:       e.SkipSetup,
 	}
 	return runner.Run(ctx)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
+	"github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 )
 
@@ -46,7 +47,7 @@ type testNode struct {
 	SerialOutputWriter io.Writer
 
 	flakyCode    *FlakyCode
-	node         *peered.PeerdNode
+	node         *peered.PeeredNode
 	serialOutput peered.ItBlockCloser
 	verifyNode   *kubernetes.VerifyNode
 }
@@ -97,9 +98,8 @@ func (n *testNode) Start(ctx context.Context) error {
 		}, NodeTimeout(constants.DeferCleanupTimeout))
 
 		n.serialOutput.It(fmt.Sprintf("joins the cluster: %s", n.NodeName), func() {
-			n.waitForNodeToJoin(ctx, flakeRun)
+			n.getNodeWaiter()(ctx, flakeRun)
 		})
-
 		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.node)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
 	})
 	return nil
@@ -147,6 +147,25 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
 }
 
+func (n *testNode) waitForBottlerocketNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
+	n.Logger.Info("Waiting for EC2 Instance to be Running...")
+	flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, n.EC2Client, n.node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+	_, err := n.verifyNode.WaitForNodeReady(ctx)
+
+	// if the node is impaired, we want to trigger a retryable expect
+	// if the node is not impaired, we run nodeadm debug regardless of whether the node joined the cluster successfully
+	// if the node joined successfully and debug fails, the test will fail
+	expect := flakeRun.RetryableExpect
+	isImpaired := n.isImpaired(ctx, err)
+	if !isImpaired {
+		expect = Expect
+	}
+
+	expect(err).To(Succeed(), "node should have joined the cluster successfully")
+
+	AddReportEntry(constants.TestNodeadmVersion, "N/A")
+}
+
 func (n *testNode) NewVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode {
 	return &kubernetes.VerifyNode{
 		ClientConfig: n.K8sClientConfig,
@@ -170,7 +189,7 @@ func (n *testNode) It(name string, f func()) {
 	n.serialOutput.It(name, f)
 }
 
-func (n *testNode) PeerdNode() *peered.PeerdNode {
+func (n *testNode) GetPeeredNode() *peered.PeeredNode {
 	return n.node
 }
 
@@ -181,4 +200,11 @@ func (n *testNode) isImpaired(ctx context.Context, waitErr error) bool {
 	isImpaired, err := ec2.IsEC2InstanceImpaired(ctx, n.EC2Client, n.node.Instance.ID)
 	n.Logger.Error(err, "describing instance status")
 	return isImpaired
+}
+
+func (n *testNode) getNodeWaiter() func(context.Context, FlakeRun) {
+	if os.IsBottlerocket(n.OS.Name()) {
+		return n.waitForBottlerocketNodeToJoin
+	}
+	return n.waitForNodeToJoin
 }
