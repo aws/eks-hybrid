@@ -144,11 +144,13 @@ export function createNodeadmTestsCreationCleanupPolicy(
         effect: iam.Effect.ALLOW,
       }),
       new iam.PolicyStatement({
+        actions: ['ec2:CreateInternetGateway', 'ec2:CreateKeyPair', 'ec2:CreateTags', 'ec2:CreateVpc'],
+        resources: ['*'],
+        effect: iam.Effect.ALLOW,
+        conditions: requestTagCondition,
+      }),
+      new iam.PolicyStatement({
         actions: [
-          'ec2:CreateInternetGateway', 
-          'ec2:CreateKeyPair',
-          'ec2:CreateTags',
-          'ec2:CreateVpc',
           'ec2:DeleteInternetGateway',
           'ec2:DeleteRoute',
           'ec2:DeleteSubnet',
@@ -160,10 +162,6 @@ export function createNodeadmTestsCreationCleanupPolicy(
           'ec2:StopInstances',
           'ec2:TerminateInstances',
           'ec2-instance-connect:SendSerialConsoleSSHPublicKey',
-          'rolesanywhere:CreateTrustAnchor',
-          'rolesanywhere:CreateProfile',
-          'ssm:CreateActivation',
-          'ssm:AddTagsToResource',
         ],
         resources: ['*'],
         effect: iam.Effect.ALLOW,
@@ -182,6 +180,12 @@ export function createNodeadmTestsCreationCleanupPolicy(
         actions: ['ssm:GetCommandInvocation'],
         resources: [`arn:aws:ssm:*:${stack.account}:*`],
         effect: iam.Effect.ALLOW,
+      }),
+      new iam.PolicyStatement({
+        actions: ['ssm:CreateActivation', 'ssm:AddTagsToResource'],
+        resources: ['*'],
+        effect: iam.Effect.ALLOW,
+        conditions: requestTagCondition,
       }),
       new iam.PolicyStatement({
         actions: ['ssm:DeregisterManagedInstance'],
@@ -229,9 +233,15 @@ export function createNodeadmTestsCreationCleanupPolicy(
       }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['eks:CreateCluster', 'eks:DeleteCluster', 'eks:ListUpdates', 'eks:DescribeUpdate'],
+        actions: ['eks:CreateCluster'],
         resources: [`arn:aws:eks:${stack.region}:${stack.account}:cluster/*`],
         conditions: requestTagCondition,
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['eks:DeleteCluster', 'eks:ListUpdates', 'eks:DescribeUpdate'],
+        resources: [`arn:aws:eks:${stack.region}:${stack.account}:cluster/*`],
+        conditions: resourceTagCondition,
       }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -263,8 +273,20 @@ export function createNodeadmTestsCreationCleanupPolicy(
       }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['cloudformation:CreateStack', 'cloudformation:DeleteStack'],
+        actions: ['cloudformation:CreateStack'],
         resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
+        conditions: requestTagCondition,
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['cloudformation:DeleteStack'],
+        resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
+        conditions: resourceTagCondition,
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['rolesanywhere:CreateTrustAnchor', 'rolesanywhere:CreateProfile'],
+        resources: ['*'],
         conditions: requestTagCondition,
       }),
       new iam.PolicyStatement({
@@ -278,7 +300,6 @@ export function createNodeadmTestsCreationCleanupPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          'rolesanywhere:TagResource',
           'rolesanywhere:DeleteProfile',
           'rolesanywhere:DeleteTrustAnchor',
           'rolesanywhere:GetTrustAnchor',
@@ -292,7 +313,16 @@ export function createNodeadmTestsCreationCleanupPolicy(
       }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['logs:TagResource', 'logs:DeleteLogGroup'],
+        actions: ['rolesanywhere:TagResource'],
+        resources: [
+          `arn:aws:rolesanywhere:${stack.region}:${stack.account}:trust-anchor/*`,
+          `arn:aws:rolesanywhere:${stack.region}:${stack.account}:profile/*`,
+        ],
+        conditions: requestTagCondition,
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['logs:TagResource'],
         resources: [`arn:aws:logs:${stack.region}:${stack.account}:log-group:/aws/eks/*`],
         conditions: requestTagCondition,
       }),
@@ -300,6 +330,12 @@ export function createNodeadmTestsCreationCleanupPolicy(
         effect: iam.Effect.ALLOW,
         actions: ['logs:PutRetentionPolicy'],
         resources: [`arn:aws:logs:${stack.region}:${stack.account}:log-group:/aws/eks/*`],
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['logs:DeleteLogGroup'],
+        resources: [`arn:aws:logs:${stack.region}:${stack.account}:log-group:/aws/eks/*`],
+        conditions: resourceTagCondition,
       }),
     ],
   });
