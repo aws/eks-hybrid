@@ -35,6 +35,7 @@ type create struct {
 	credsProvider string
 	os            string
 	arch          string
+	proxyOnly     bool
 }
 
 func NewCreateCommand() cli.Command {
@@ -53,6 +54,7 @@ func NewCreateCommand() cli.Command {
 	createCmd.String(&cmd.arch, "a", "arch", "Architecture to use (amd64, arm64).")
 	createCmd.String(&cmd.instanceSize, "s", "instance-size", "Instance size to use (Large, XLarge).")
 	createCmd.String(&cmd.instanceType, "t", "instance-type", "Instance type to use (t3.large, g4dn.xlarge, etc). If provided, instance size would be ignored.")
+	createCmd.Bool(&cmd.proxyOnly, "p", "proxy-only", "Use proxy-only security group and configure proxy settings.")
 
 	cmd.flaggy = createCmd
 
@@ -110,6 +112,20 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	var proxy string
+	if c.proxyOnly {
+		jumpbox, err := peered.JumpboxInstance(ctx, ec2Client, config.ClusterName)
+		if err != nil {
+			return fmt.Errorf("getting jumpbox instance: %w", err)
+		}
+		proxy = fmt.Sprintf("http://%s:3128", *jumpbox.PrivateIpAddress)
+
+		logger.Info("***************** Ensure kube-proxy configuration has HTTP_PROXY environment variable *****************")
+		fmt.Printf("kubectl -n kube-system set env ds/kube-proxy HTTP_PROXY=%s HTTPS_PROXY=%s NO_PROXY=169.254.170.23\n", proxy, proxy)
+		fmt.Printf("kubectl -n kube-system set env ds/eks-pod-identity-agent-hybrid HTTP_PROXY=%s HTTPS_PROXY=%s NO_PROXY=169.254.170.23,fd00:ec2::23\n", proxy, proxy)
+		logger.Info("*******************************************************************************************************")
+	}
+
 	node := peered.NodeCreate{
 		AWS:     aws,
 		Cluster: cluster,
@@ -119,6 +135,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 		NodeadmURLs: *urls,
 		PublicKey:   infra.NodesPublicSSHKey,
+		Proxy:       proxy,
 	}
 
 	nodeOS, err := buildOS(c.os, c.arch)

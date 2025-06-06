@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	smithytime "github.com/aws/smithy-go/time"
@@ -57,8 +58,20 @@ func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command str
 		},
 		InstanceIds: []string{instanceId},
 	}
+	// when running e2e tests in the CI account, we occasionally see throttling errors from
+	// the SSM SendCommand operation which exhaust our standard 40 attempts
+	// this usually happens when we are running multiple pipelines in parallel
+	// we increase the max attempts to 120 and set the max backoff to 40 seconds
+	// to give the operation more time to complete
 	optsFn := func(opts *ssm.Options) {
-		opts.RetryMaxAttempts = 60
+		opts.Retryer = retry.NewAdaptiveMode(func(o *retry.AdaptiveModeOptions) {
+			o.StandardOptions = []func(*retry.StandardOptions){
+				func(o *retry.StandardOptions) {
+					o.MaxAttempts = 120
+					o.MaxBackoff = 40 * time.Second
+				},
+			}
+		})
 	}
 	output, err := client.SendCommand(ctx, input, optsFn)
 	if err != nil {

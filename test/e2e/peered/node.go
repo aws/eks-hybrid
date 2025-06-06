@@ -64,6 +64,7 @@ type NodeCreate struct {
 	SetRootPassword bool
 	NodeadmURLs     e2e.NodeadmURLs
 	PublicKey       string
+	Proxy           string
 }
 
 // PeerdNode represents a Hybrid node running as an EC2 instance in a peered VPC
@@ -125,6 +126,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		Region:            c.Cluster.Region,
 		Files:             files,
 		PublicKey:         c.PublicKey,
+		Proxy:             c.Proxy,
 	})
 	if err != nil {
 		return PeerdNode{}, fmt.Errorf("expected to successfully build user data: %w", err)
@@ -140,6 +142,11 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		instanceType = spec.OS.InstanceType(c.Cluster.Region, spec.InstanceSize)
 	}
 
+	securityGroupID := c.Cluster.SecurityGroupID
+	if c.Proxy != "" {
+		securityGroupID = c.Cluster.ProxyOnlySecurityGroupID
+	}
+
 	ec2Input := ec2.InstanceConfig{
 		ClusterName:        c.Cluster.Name,
 		InstanceName:       spec.InstanceName,
@@ -147,7 +154,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		InstanceType:       instanceType,
 		VolumeSize:         ec2VolumeSize,
 		SubnetID:           c.Cluster.SubnetID,
-		SecurityGroupID:    c.Cluster.SecurityGroupID,
+		SecurityGroupID:    securityGroupID,
 		UserData:           userdata,
 		InstanceProfileARN: spec.InstanceProfileARN,
 	}

@@ -3,7 +3,6 @@ package packagemanager
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
@@ -134,13 +133,12 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	}
 
 	// Download docker gpg key and write it to file
-	resp, err := http.Get(ubuntuDockerGpgKey)
+	data, err := util.GetHttpFile(ctx, ubuntuDockerGpgKey)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "downloading docker gpg key")
 	}
-	defer resp.Body.Close()
 
-	if err := util.WriteFileWithDirFromReader(ubuntuDockerGpgKeyPath, resp.Body, ubuntuDockerGpgKeyFilePerms); err != nil {
+	if err := util.WriteFileWithDir(ubuntuDockerGpgKeyPath, data, ubuntuDockerGpgKeyFilePerms); err != nil {
 		return err
 	}
 

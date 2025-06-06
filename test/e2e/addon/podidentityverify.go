@@ -38,6 +38,7 @@ type VerifyPodIdentityAddon struct {
 	Logger              logr.Logger
 	K8SConfig           *rest.Config
 	Region              string
+	Proxy               string
 }
 
 type PolicyDocument struct {
@@ -80,6 +81,22 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return fmt.Errorf("waiting for pod identity daemon set to be running on pod: %w", err)
 	}
 
+	envVars := []corev1.EnvVar{}
+	if v.Proxy != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "HTTP_PROXY",
+			Value: v.Proxy,
+		})
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "HTTPS_PROXY",
+			Value: v.Proxy,
+		})
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "NO_PROXY",
+			Value: "169.254.170.23",
+		})
+	}
+
 	podName := fmt.Sprintf("awscli-%s", node.Name)
 	v.Logger.Info("Creating a test pod on the hybrid node for pod identity add-on to access aws resources")
 	pod := &corev1.Pod{
@@ -97,6 +114,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 						"-c",
 						"sleep infinity",
 					},
+					Env: envVars,
 					ReadinessProbe: &corev1.Probe{
 						ProbeHandler: corev1.ProbeHandler{
 							Exec: &corev1.ExecAction{

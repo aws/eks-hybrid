@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+source /etc/proxy-vars.sh
+
 LOGS_UPLOAD_URL="$1"
 
 LOG_SCRIPT_URL="https://raw.githubusercontent.com/awslabs/amazon-eks-ami/refs/heads/main/log-collector-script/linux/eks-log-collector.sh"
