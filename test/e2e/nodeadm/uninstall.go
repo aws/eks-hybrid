@@ -16,6 +16,7 @@ type CleanNode struct {
 	K8s                   clientgo.Interface
 	RemoteCommandRunner   commands.RemoteCommandRunner
 	Verifier              UninstallVerifier
+	OS                    string
 	InfrastructureCleaner NodeInfrastructureCleaner
 	Logger                logr.Logger
 
@@ -54,9 +55,11 @@ func (u CleanNode) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err = RunNodeadmUninstall(ctx, u.RemoteCommandRunner, u.NodeIP); err != nil {
+	uninstaller := NewNodeUninstaller(u.OS)
+	if err = uninstaller.Uninstall(ctx, u.RemoteCommandRunner, u.NodeIP); err != nil {
 		return err
 	}
+
 	u.Logger.Info("Waiting for hybrid node to be not ready...")
 	if err = kubernetes.WaitForHybridNodeToBeNotReady(ctx, u.K8s, node.Name, u.Logger); err != nil {
 		return err
@@ -82,5 +85,6 @@ func (u CleanNode) Run(ctx context.Context) error {
 }
 
 func (u CleanNode) RebootInstance(ctx context.Context) error {
-	return RebootInstance(ctx, u.RemoteCommandRunner, u.NodeIP)
+	rebootter := NewNodeRebootter(u.OS)
+	return rebootter.Reboot(ctx, u.RemoteCommandRunner, u.NodeIP)
 }

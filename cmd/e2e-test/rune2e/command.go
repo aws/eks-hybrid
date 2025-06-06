@@ -45,6 +45,7 @@ type command struct {
 	region            string
 	setupConfigFile   string
 	skipCleanup       bool
+	skipSetup         bool
 	skippedTests      string
 	subCmd            *flaggy.Subcommand
 	testConfigFile    string
@@ -62,6 +63,7 @@ func NewCommand() *command {
 		nodeadmAMDURL:     defaultNodeadmAMDURL,
 		nodeadmARMURL:     defaultNodeadmARMURL,
 		skipCleanup:       false,
+		skipSetup:         false,
 		subCmd:            flaggy.NewSubcommand("run-e2e"),
 		testProcs:         defaultTestProcs,
 		timeout:           defaultTimeout,
@@ -80,6 +82,7 @@ func NewCommand() *command {
 	cmd.subCmd.Duration(&cmd.timeout, "", "timeout", "Timeout for the test (optional)")
 	cmd.subCmd.String(&cmd.testLabelFilter, "f", "test-filter", "Filter for the test (optional)")
 	cmd.subCmd.Bool(&cmd.skipCleanup, "", "skip-cleanup", "Skip cleanup (optional)")
+	cmd.subCmd.Bool(&cmd.skipSetup, "", "skip-setup", "Skip infrastructure setup (optional)")
 	cmd.subCmd.String(&cmd.testsBinaryOrPath, "", "tests-binary", "Path to the tests binary (optional)")
 	cmd.subCmd.Bool(&cmd.noColor, "", "no-color", "Disable color output (optional)")
 	cmd.subCmd.Int(&cmd.testProcs, "p", "procs", "Number of processes to run (optional)")
@@ -151,6 +154,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		Timeout:         c.timeout,
 		TestResources:   testResources,
 		SkipCleanup:     c.skipCleanup,
+		SkipSetup:       c.skipSetup,
 		SkippedTests:    c.skippedTests,
 	}
 

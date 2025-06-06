@@ -33,6 +33,7 @@ type E2ERunner struct {
 	TestTimeout     string
 	TestResources   cluster.TestResources
 	SkippedTests    string
+	SkipSetup       bool
 }
 
 // Run runs the E2E tests and returns the failure phase with the error
@@ -62,6 +63,10 @@ func (e *E2ERunner) Run(ctx context.Context) []Phase {
 }
 
 func (e *E2ERunner) setupTestInfrastructure(ctx context.Context) error {
+	if e.SkipSetup {
+		e.Logger.Info("Skipping cluster and infrastructure setup")
+		return nil
+	}
 	logger := newFileLogger(e.Paths.SetupLog, e.NoColor)
 	create := cluster.NewCreate(e.AwsCfg, logger, e.TestResources.EKS.Endpoint)
 

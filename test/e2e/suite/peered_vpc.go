@@ -127,6 +127,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	}
 	test.RolesAnywhereCA = ca
 
+	// TODO: ideally this should be an input to the tests and not just
+	// assume same name/path used by the setup command.
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(suite.TestConfig.ClusterName))
 	if err != nil {
 		return nil, err
@@ -171,12 +173,13 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	return test, nil
 }
 
-func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
+func (t *PeeredVPCTest) NewPeeredNode(osName string, logger logr.Logger) *peered.Node {
 	return &peered.Node{
 		NodeCreate: peered.NodeCreate{
 			AWS:             t.aws,
 			EC2:             t.ec2Client,
 			SSM:             t.SSMClient,
+			K8sClientConfig: t.K8sClientConfig,
 			Logger:          logger,
 			Cluster:         t.Cluster,
 			NodeadmURLs:     t.nodeadmURLs,
@@ -184,7 +187,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 			SetRootPassword: t.setRootPassword,
 		},
 		NodeCleanup: peered.NodeCleanup{
-			RemoteCommandRunner: ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, logger),
+			RemoteCommandRunner: ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, osName, logger),
 			EC2:                 t.ec2Client,
 			SSM:                 t.SSMClient,
 			S3:                  t.s3Client,
@@ -193,6 +196,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 			SkipDelete:          t.SkipCleanup,
 			Cluster:             t.Cluster,
 			LogsBucket:          t.logsBucket,
+			OS:                  osName,
 		},
 	}
 }
@@ -206,10 +210,11 @@ func (t *PeeredVPCTest) NewPeeredNetwork(logger logr.Logger) *peered.Network {
 	}
 }
 
-func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string) *nodeadm.CleanNode {
+func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP, osName string) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
 		K8s:                   t.k8sClient,
-		RemoteCommandRunner:   ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
+		RemoteCommandRunner:   ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, osName, t.Logger),
+		OS:                    osName,
 		Verifier:              provider,
 		Logger:                t.Logger,
 		InfrastructureCleaner: infraCleaner,
@@ -218,13 +223,14 @@ func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, in
 	}
 }
 
-func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
+func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP, osName string) *nodeadm.UpgradeNode {
 	return &nodeadm.UpgradeNode{
 		K8s:                 t.k8sClient,
-		RemoteCommandRunner: ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
+		RemoteCommandRunner: ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, osName, t.Logger),
 		Logger:              t.Logger,
 		NodeName:            nodeName,
 		NodeIP:              nodeIP,
+		OS:                  osName,
 		TargetK8sVersion:    t.Cluster.KubernetesVersion,
 	}
 }
@@ -238,7 +244,7 @@ func (t *PeeredVPCTest) InstanceName(testName string, os e2e.NodeadmOS, provider
 	)
 }
 
-func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
+func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName, osName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
 		Cluster:             t.Cluster.Name,
 		NodeName:            nodeName,
@@ -250,6 +256,7 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		Logger:              t.Logger,
 		K8SConfig:           t.K8sClientConfig,
 		Region:              t.Cluster.Region,
+		OS:                  osName,
 	}
 }
 
@@ -288,7 +295,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		opt(node)
 	}
 
-	node.PeeredNode = t.NewPeeredNode(node.Logger)
+	node.PeeredNode = t.NewPeeredNode(os.Name(), node.Logger)
 	node.PeeredNetwork = t.NewPeeredNetwork(node.Logger)
 	return node
 }
@@ -413,6 +420,23 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9NoDockerSource(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+	}
+	osProviderList := []OSProvider{}
+	for _, nodeOS := range osList {
+	providerLoop:
+		for _, provider := range credentialProviders {
+			if notSupported.Matches(nodeOS.Name(), provider.Name()) {
+				continue providerLoop
+			}
+			osProviderList = append(osProviderList, OSProvider{OS: nodeOS, Provider: provider})
+		}
+	}
+	return osProviderList
+}
+
+func BottlerocketProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSProvider {
+	osList := []e2e.NodeadmOS{
+		osystem.NewBottleRocket(),
 	}
 	osProviderList := []OSProvider{}
 	for _, nodeOS := range osList {

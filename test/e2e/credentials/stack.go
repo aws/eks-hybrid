@@ -164,6 +164,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 			Parameters:      params,
 			Capabilities: []cfnTypes.Capability{
 				"CAPABILITY_NAMED_IAM",
+				"CAPABILITY_AUTO_EXPAND",
 			},
 			Tags: []cfnTypes.Tag{{
 				Key:   aws.String(constants.TestClusterTagKey),
@@ -188,6 +189,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 			StackName:       aws.String(s.Name),
 			Capabilities: []cfnTypes.Capability{
 				"CAPABILITY_NAMED_IAM",
+				"CAPABILITY_AUTO_EXPAND",
 			},
 			TemplateBody: aws.String(buf.String()),
 			Parameters:   params,

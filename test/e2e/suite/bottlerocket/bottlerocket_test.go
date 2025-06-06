@@ -17,7 +17,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/aws/eks-hybrid/test/e2e"
-	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
@@ -76,13 +75,11 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 
 		When("using ec2 instance as hybrid nodes", func() {
-			upgradeEntries := []TableEntry{}
 			initEntries := []TableEntry{}
-			for _, osProvider := range suite.OSProviderList(credentialProviders) {
+			for _, osProvider := range suite.BottlerocketProviderList(credentialProviders) {
 				os := osProvider.OS
 				provider := osProvider.Provider
 				initEntries = append(initEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow", "init")))
-				upgradeEntries = append(upgradeEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")))
 			}
 
 			DescribeTable("Joining a node",
@@ -129,59 +126,13 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
 					if test.SkipCleanup {
-						test.Logger.Info("Skipping nodeadm uninstall from the hybrid node...")
+						test.Logger.Info("Skipping cleanup of the hybrid node...")
 						return
 					}
 
 					Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 				},
 				initEntries,
-			)
-
-			DescribeTable("Upgrade nodeadm flow",
-				func(ctx context.Context, nodeOS e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
-					Expect(nodeOS).NotTo(BeNil())
-					Expect(provider).NotTo(BeNil())
-
-					// Skip upgrade flow for cluster with the minimum kubernetes version
-					isPreviousVersionSupported, err := kubernetes.IsPreviousVersionSupported(test.Cluster.KubernetesVersion)
-					Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-					if !isPreviousVersionSupported {
-						Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
-					}
-
-					instanceName := test.InstanceName("upgrade", nodeOS, provider)
-					nodeName := "upgradeflow" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
-
-					nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.Cluster.KubernetesVersion)
-					Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-
-					testNode := test.NewTestNode(ctx, instanceName, nodeName, nodeKubernetesVersion, nodeOS, provider, e2e.Large)
-					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
-					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
-
-					Expect(test.NewUpgradeNode(testNode.GetPeeredNode().Name, testNode.GetPeeredNode().Instance.IP, testNode.OS.Name()).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
-
-					Expect(testNode.Verify(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
-
-					if test.SkipCleanup {
-						test.Logger.Info("Skipping nodeadm uninstall from the hybrid node...")
-						return
-					}
-
-					n := testNode.GetPeeredNode()
-					cleanNode := test.NewCleanNode(
-						provider,
-						testNode.PeeredNode.NodeInfrastructureCleaner(*n),
-						n.Name,
-						n.Instance.IP,
-						testNode.OS.Name(),
-					)
-					Expect(cleanNode.Run(ctx)).To(
-						Succeed(), "node should have been reset successfully",
-					)
-				},
-				upgradeEntries,
 			)
 		})
 	})
