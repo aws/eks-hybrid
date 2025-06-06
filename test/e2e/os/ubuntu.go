@@ -3,6 +3,7 @@ package os
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -31,6 +32,16 @@ var nodeadmWrapperScript []byte
 
 //go:embed testdata/install-containerd.sh
 var installContainerdScript []byte
+
+//go:embed testdata/proxy/systemd-proxy.conf
+var systemdProxyConf []byte
+
+//go:embed testdata/proxy/proxy-vars.sh
+var proxyVarsScript []byte
+
+const (
+	ubuntuSSMAgentProxyPath = "/etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service.d/http-proxy.conf"
+)
 
 type ubuntuCloudInitData struct {
 	e2e.UserDataInput
@@ -96,8 +107,24 @@ func (u Ubuntu2004) AMIName(ctx context.Context, awsConfig aws.Config) (string, 
 	return *amiId, err
 }
 
+func addProxyConfigFiles(userDataInput *e2e.UserDataInput) error {
+	if userDataInput.Proxy == "" {
+		return nil
+	}
+
+	if err := addSystemdProxyConfig(userDataInput, ubuntuSSMAgentProxyPath); err != nil {
+		return fmt.Errorf("adding ssm agent proxy config: %w", err)
+	}
+
+	return nil
+}
+
 func (u Ubuntu2004) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	if err := addProxyConfigFiles(&userDataInput); err != nil {
 		return nil, err
 	}
 
@@ -166,6 +193,10 @@ func (u Ubuntu2204) AMIName(ctx context.Context, awsConfig aws.Config) (string, 
 
 func (u Ubuntu2204) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	if err := addProxyConfigFiles(&userDataInput); err != nil {
 		return nil, err
 	}
 
@@ -245,6 +276,10 @@ func (u Ubuntu2404) AMIName(ctx context.Context, awsConfig aws.Config) (string, 
 
 func (u Ubuntu2404) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	if err := addProxyConfigFiles(&userDataInput); err != nil {
 		return nil, err
 	}
 

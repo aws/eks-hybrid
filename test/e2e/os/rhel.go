@@ -15,7 +15,10 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 )
 
-const rhelAWSAccount = "309956199498"
+const (
+	rhelAWSAccount        = "309956199498"
+	rhelSSMAgentProxyPath = "/etc/systemd/system/amazon-ssm-agent.service.d/http-proxy.conf"
+)
 
 //go:embed testdata/rhel/8/cloud-init.txt
 var rhel8CloudInit []byte
@@ -79,6 +82,10 @@ func (r RedHat8) AMIName(ctx context.Context, awsConfig aws.Config) (string, err
 
 func (r RedHat8) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	if err := addSystemdProxyConfig(&userDataInput, rhelSSMAgentProxyPath); err != nil {
 		return nil, err
 	}
 
@@ -152,6 +159,10 @@ func (r RedHat9) AMIName(ctx context.Context, awsConfig aws.Config) (string, err
 
 func (r RedHat9) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	if err := addSystemdProxyConfig(&userDataInput, rhelSSMAgentProxyPath); err != nil {
 		return nil, err
 	}
 

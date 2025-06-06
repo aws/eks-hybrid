@@ -13,8 +13,12 @@ import (
 // Infrastructure represents the necessary infrastructure for peered VPCs to be used by nodeadm.
 type Infrastructure struct {
 	Credentials       credentials.Infrastructure
-	JumpboxInstanceId string
+	Jumpbox           Jumpbox
 	NodesPublicSSHKey string
+}
+type Jumpbox struct {
+	Id string
+	IP string
 }
 
 // Setup creates the necessary infrastructure for credentials providers to be used by nodeadm.
@@ -37,8 +41,11 @@ func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterNa
 	}
 
 	return &Infrastructure{
-		Credentials:       *credsInfra,
-		JumpboxInstanceId: *jumpbox.InstanceId,
+		Credentials: *credsInfra,
+		Jumpbox: Jumpbox{
+			Id: *jumpbox.InstanceId,
+			IP: *jumpbox.PrivateIpAddress,
+		},
 		NodesPublicSSHKey: *keypair.PublicKey,
 	}, nil
 }

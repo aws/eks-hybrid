@@ -37,6 +37,7 @@ type UserDataInput struct {
 	Region            string
 	RootPasswordHash  string
 	Files             []File
+	Proxy             string
 }
 
 type NodeadmURLs struct {
