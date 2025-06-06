@@ -36,6 +36,8 @@ ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
 BIN_DIR="$REPO_ROOT/_bin/$ARCH"
 
 SUITE_BIN="$BIN_DIR/${E2E_SUITE:-nodeadm.test}"
+# Use - instead of :- below to differentiate env var not set vs being empty string
+# Substitute only if E2E_FILTER is not set
 FILTER="${E2E_FILTER-(simpleflow) || (upgradeflow && (ubuntu2204-amd64 || rhel8-amd64 || al23-amd64))}"
 
 mkdir -p $CONFIG_DIR
