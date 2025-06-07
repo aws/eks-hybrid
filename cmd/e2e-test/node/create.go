@@ -59,6 +59,20 @@ func NewCreateCommand() cli.Command {
 	return &cmd
 }
 
+func NewCreateCommandWithParams(name, configFile, credsProvider, osType, arch, instanceSize, instanceType string) cli.Command {
+	cmd := create{
+		os:            osType,
+		arch:          arch,
+		instanceSize:  instanceSize,
+		instanceType:  instanceType,
+		credsProvider: credsProvider,
+		instanceName:  name,
+		configFile:    configFile,
+	}
+
+	return &cmd
+}
+
 func (c *create) Flaggy() *flaggy.Subcommand {
 	return c.flaggy
 }
