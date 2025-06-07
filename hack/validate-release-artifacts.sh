@@ -35,7 +35,7 @@ EOF
 echo "Validating release artifacts..."
 
 # get a list of files via s3 cli
-if ! S3_FILES=$(aws s3 ls s3://${ARTIFACTS_BUCKET}/${BUCKET_PREFIX}/ --recursive | awk '{print $4}' | sed -e "s#^${BUCKET_PREFIX}/##"); then
+if ! S3_FILES=$(aws s3 ls s3://${ARTIFACTS_BUCKET}/${BUCKET_PREFIX}/ --recursive | awk '{print $4}' | sed -e "s#^${BUCKET_PREFIX}/##" | grep -Pv '^$|.*/$'); then
     echo "Failed to get list of files from S3"
     exit 1
 fi
