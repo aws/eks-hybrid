@@ -33,7 +33,7 @@ assert::birth-match /usr/bin/containerd
 
 # mock iam-ra update service credentials file
 mock::iamra_aws_credentials
-nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
+nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-endpoint-network-validation --config-source file://config.yaml
 
 # In integration test environment, the aws_signing_helper_update will run
 # but stuck in a loop of failure which prevents the next nodeadm init call
@@ -43,6 +43,6 @@ systemctl disable aws_signing_helper_update.service
 systemctl daemon-reload
 systemctl reset-failed
 
-nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,node-ip-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,node-ip-validation,aws-auth-validation,k8s-endpoint-network-validation --config-source file://config.yaml
 
 assert::birth-match /usr/bin/containerd
