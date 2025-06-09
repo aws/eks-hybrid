@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
@@ -25,4 +26,17 @@ func WaitForNamespaceToBeDeleted(ctx context.Context, k8s kubernetes.Interface, 
 		return fmt.Errorf("waiting for namespace %s to be deleted: %w", name, err)
 	}
 	return nil
+}
+
+func CreateNamespace(ctx context.Context, k8s kubernetes.Interface, namespace string) error {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	return ik8s.IdempotentCreate(ctx, k8s.CoreV1().Namespaces(), ns)
+}
+
+func DeleteNamespace(ctx context.Context, k8s kubernetes.Interface, namespace string) error {
+	return ik8s.IdempotentDelete(ctx, k8s.CoreV1().Namespaces(), namespace)
 }

@@ -1,6 +1,7 @@
 package suite
 
 import (
+	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/aws/eks-hybrid/test/e2e/addon"
@@ -76,5 +77,23 @@ func (a *AddonEc2Test) NewPrometheusNodeExporterTest() *addon.PrometheusNodeExpo
 		EKSClient: a.eksClient,
 		K8SConfig: a.K8sClientConfig,
 		Logger:    a.Logger,
+	}
+}
+
+// NewCertManagerTest creates a new CertManagerTest
+func (a *AddonEc2Test) NewCertManagerTest() *addon.CertManagerTest {
+	// Create cert-manager client
+	certClient, err := certmanagerclientset.NewForConfig(a.K8sClientConfig)
+	if err != nil {
+		a.Logger.Error(err, "Failed to create cert-manager client")
+	}
+
+	return &addon.CertManagerTest{
+		Cluster:    a.Cluster.Name,
+		K8S:        a.k8sClient,
+		EKSClient:  a.eksClient,
+		K8SConfig:  a.K8sClientConfig,
+		Logger:     a.Logger,
+		CertClient: certClient,
 	}
 }

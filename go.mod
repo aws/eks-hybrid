@@ -20,6 +20,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.59.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.20
 	github.com/aws/smithy-go v1.22.3
+	github.com/cert-manager/cert-manager v1.17.2
 	github.com/containerd/containerd v1.7.27
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/go-ini/ini v1.67.0
@@ -75,7 +76,9 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
+	k8s.io/apiextensions-apiserver v0.33.0 // indirect
 	k8s.io/cli-runtime v0.33.1 // indirect
+	sigs.k8s.io/gateway-api v1.1.0 // indirect
 	sigs.k8s.io/kustomize/api v0.19.0 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.19.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
