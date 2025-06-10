@@ -11,12 +11,13 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	awsinternal "github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/aws/ecr"
 )
 
-func (hnp *HybridNodeProvider) Enrich(ctx context.Context) error {
+func (hnp *HybridNodeProvider) Enrich(ctx context.Context, regionConfig *awsinternal.RegionData) error {
 	hnp.logger.Info("Enriching configuration...")
-	eksRegistry, err := ecr.GetEKSHybridRegistry(hnp.nodeConfig.Spec.Cluster.Region)
+	eksRegistry, err := ecr.GetEKSHybridRegistry(hnp.nodeConfig.Spec.Cluster.Region, regionConfig)
 	if err != nil {
 		return err
 	}

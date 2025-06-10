@@ -1,0 +1,62 @@
+iam_roles_anywhere_releases:
+- artifacts:
+  - arch: amd64
+    checksum_uri: https://dummy-assets.example.com/releases/M.m.p/X86_64/Linux/dummy_signing_helper.sha256
+    name: dummy_signing_helper
+    os: linux
+    uri: https://dummy-assets.example.com/releases/M.m.p/X86_64/Linux/dummy_signing_helper
+  - arch: arm64
+    checksum_uri: https://dummy-assets.example.com/releases/M.m.p/Aarch64/Linux/dummy_signing_helper.sha256
+    name: dummy_signing_helper
+    os: linux
+    uri: https://dummy-assets.example.com/releases/M.m.p/Aarch64/Linux/dummy_signing_helper
+  version: M.m.p
+region_config:
+  us-east-1:
+    cred_providers:
+      iam-ra: true
+      ssm: true
+    ecr_account_id: "123456789012"
+  us-west-2:
+    cred_providers:
+      iam-ra: true
+      ssm: true
+    ecr_account_id: "123456789012"
+  eu-west-1:
+    cred_providers:
+      iam-ra: true
+      ssm: true
+    ecr_account_id: "123456789012"
+ssm_releases: null
+supported_eks_releases:
+- latest_patch_version: "2"
+  major_minor_version: "M.m"
+  patch_releases:
+  - artifacts:
+    - arch: amd64
+      checksum_uri: https://dummy-assets.example.com/artifacts/M.m.p/YYYY-MM-DD/bin/linux/amd64/kubectl.sha256
+      name: kubectl
+      os: linux
+      uri: https://dummy-assets.example.com/artifacts/M.m.p/YYYY-MM-DD/bin/linux/amd64/kubectl
+    - arch: amd64
+      checksum_uri: https://dummy-assets.example.com/artifacts/M.m.p/YYYY-MM-DD/bin/linux/amd64/kubelet.sha256
+      name: kubelet
+      os: linux
+      uri: https://dummy-assets.example.com/artifacts/M.m.p/YYYY-MM-DD/bin/linux/amd64/kubelet
+    patch_version: "1"
+    release_date: "YYYY-MM-DD"
+    version: M.m.p
+  - artifacts:
+    - arch: amd64
+      checksum_uri: https://dummy-assets.example.com/artifacts/M.m.p/YYYY-MM-DD/bin/linux/amd64/kubectl.sha256
+      name: kubectl
+      os: linux
+      uri: https://dummy-assets.example.com/artifacts/M.m.p/YYYY-MM-DD/bin/linux/amd64/kubectl
+    - arch: amd64
+      checksum_uri: https://dummy-assets.example.com/artifacts/M.m.p/YYYY-MM-DD/bin/linux/amd64/kubelet.sha256
+      name: kubelet
+      os: linux
+      uri: https://dummy-assets.example.com/artifacts/M.m.p/YYYY-MM-DD/bin/linux/amd64/kubelet
+    patch_version: "2"
+    release_date: "YYYY-MM-DD"
+    version: M.m.p
