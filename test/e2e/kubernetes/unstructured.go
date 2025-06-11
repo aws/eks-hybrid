@@ -77,6 +77,7 @@ func UpsertManifestsWithRetries(ctx context.Context, k8s dynamic.Interface, mani
 
 func upsertManifest(ctx context.Context, k8s dynamic.Interface, obj unstructured.Unstructured) error {
 	groupVersion := obj.GroupVersionKind()
+	// ignore singular GroupVersionResource
 	resource, _ := meta.UnsafeGuessKindToResource(groupVersion)
 	k8sResource := k8s.Resource(resource).Namespace(obj.GetNamespace())
 	if _, err := k8sResource.Get(ctx, obj.GetName(), metav1.GetOptions{}); apierrors.IsNotFound(err) {
@@ -115,6 +116,7 @@ func DeleteManifestsWithRetries(ctx context.Context, k8s dynamic.Interface, mani
 
 func deleteManifest(ctx context.Context, k8s dynamic.Interface, obj unstructured.Unstructured) error {
 	groupVersion := obj.GroupVersionKind()
+	// ignore singular GroupVersionResource
 	resource, _ := meta.UnsafeGuessKindToResource(groupVersion)
 	k8sResource := k8s.Resource(resource).Namespace(obj.GetNamespace())
 	if err := k8sResource.Delete(ctx, obj.GetName(), metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
