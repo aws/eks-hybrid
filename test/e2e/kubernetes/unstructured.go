@@ -7,12 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
@@ -78,11 +77,7 @@ func UpsertManifestsWithRetries(ctx context.Context, k8s dynamic.Interface, mani
 
 func upsertManifest(ctx context.Context, k8s dynamic.Interface, obj unstructured.Unstructured) error {
 	groupVersion := obj.GroupVersionKind()
-	resource := schema.GroupVersionResource{
-		Group:    groupVersion.Group,
-		Version:  groupVersion.Version,
-		Resource: strings.ToLower(groupVersion.Kind + "s"),
-	}
+	resource, _ := meta.UnsafeGuessKindToResource(groupVersion)
 	k8sResource := k8s.Resource(resource).Namespace(obj.GetNamespace())
 	if _, err := k8sResource.Get(ctx, obj.GetName(), metav1.GetOptions{}); apierrors.IsNotFound(err) {
 		fmt.Printf("Creating custom object %s (%s)\n", obj.GetName(), groupVersion)
@@ -120,11 +115,7 @@ func DeleteManifestsWithRetries(ctx context.Context, k8s dynamic.Interface, mani
 
 func deleteManifest(ctx context.Context, k8s dynamic.Interface, obj unstructured.Unstructured) error {
 	groupVersion := obj.GroupVersionKind()
-	resource := schema.GroupVersionResource{
-		Group:    groupVersion.Group,
-		Version:  groupVersion.Version,
-		Resource: strings.ToLower(groupVersion.Kind + "s"),
-	}
+	resource, _ := meta.UnsafeGuessKindToResource(groupVersion)
 	k8sResource := k8s.Resource(resource).Namespace(obj.GetNamespace())
 	if err := k8sResource.Delete(ctx, obj.GetName(), metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("deleting custom object %s (%s): %w", obj.GetName(), groupVersion, err)
