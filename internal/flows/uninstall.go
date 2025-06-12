@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"go.uber.org/zap"
@@ -83,7 +85,14 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 		}
 
 		ssmClient := awsSsm.NewFromConfig(awsConfig, func(o *awsSsm.Options) {
-			o.RetryMaxAttempts = 6
+			o.Retryer = retry.NewAdaptiveMode(func(ao *retry.AdaptiveModeOptions) {
+				ao.StandardOptions = []func(*retry.StandardOptions){
+					func(so *retry.StandardOptions) {
+						so.MaxAttempts = 6
+						so.MaxBackoff = 30 * time.Second
+					},
+				}
+			})
 		})
 		if err := ssm.Uninstall(ctx, ssm.UninstallOptions{
 			Logger:          u.Logger,
