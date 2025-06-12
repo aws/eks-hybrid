@@ -47,7 +47,7 @@ func (v KubeletCertificateValidator) Run(ctx context.Context, informer validatio
 	defer func() {
 		informer.Done(ctx, name, err)
 	}()
-	if err = hybrid.ValidateKubeletCert(v.certPath, cluster.CertificateAuthority); err != nil {
+	if err = hybrid.ValidateCertificate(v.certPath, cluster.CertificateAuthority, hybrid.CertTypeKubelet); err != nil {
 		return err
 	}
 
