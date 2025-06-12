@@ -223,6 +223,9 @@ var _ = Describe("Hybrid Nodes", func() {
 				addonEc2Test.Logger.Info("Checking NVIDIA drivers on node")
 				devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(nodeName)
 				Expect(devicePluginTest.WaitForNvidiaDriverReady(ctx)).NotTo(HaveOccurred(), "NVIDIA drivers should be ready")
+				Expect(devicePluginTest.Create(ctx)).To(Succeed(), "nvidia device plugin should have created successfully")
+				Expect(devicePluginTest.Validate(ctx)).To(Succeed(), "nvidia device plugin should have been validated successfully")
+				Expect(devicePluginTest.Delete(ctx)).To(Succeed(), "should clean up nvidia device plugin")
 
 				// clean up node
 				addonEc2Test.Logger.Info("Resetting hybrid node...")

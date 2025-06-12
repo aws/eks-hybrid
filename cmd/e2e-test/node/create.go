@@ -23,6 +23,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
+	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
 )
 
@@ -198,7 +199,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	network := peered.Network{
 		EC2:    ec2Client,
 		Logger: logger,
-		K8s: peered.K8s{
+		K8s: peeredtypes.K8s{
 			Interface: k8s,
 			Dynamic:   k8sDynamic,
 		},

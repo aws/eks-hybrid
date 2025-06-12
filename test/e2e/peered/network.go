@@ -8,19 +8,17 @@ import (
 	ec2sdk "github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	clientgo "k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/test/e2e/cni"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 )
 
 type Network struct {
 	EC2    *ec2sdk.Client
 	Logger logr.Logger
-	K8s    K8s
+	K8s    peeredtypes.K8s
 
 	Cluster *HybridCluster
 }
@@ -70,18 +68,4 @@ func (n *Network) addRoutesForCIDRs(ctx context.Context, instance ec2.Instance, 
 	}
 
 	return nil
-}
-
-var (
-	_ clientgo.Interface = K8s{}
-	_ dynamic.Interface  = K8s{}
-)
-
-type K8s struct {
-	clientgo.Interface
-	Dynamic dynamic.Interface
-}
-
-func (k K8s) Resource(resource schema.GroupVersionResource) dynamic.NamespaceableResourceInterface {
-	return k.Dynamic.Resource(resource)
 }
