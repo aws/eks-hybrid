@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	activeClusterTimeout = 15 * time.Minute
-	deleteClusterTimeout = 15 * time.Minute
+	activeClusterTimeout = 20 * time.Minute
+	deleteClusterTimeout = 20 * time.Minute
 )
 
 type EKSClusterCleanup struct {
