@@ -56,6 +56,7 @@ COPY test/integration/infra/systemd/kubelet.service /usr/lib/systemd/system/kube
 COPY test/integration/infra/systemd/containerd.service /usr/lib/systemd/system/containerd.service
 COPY test/integration/infra/mock/ /sys_devices_system_mock/
 COPY test/integration/helpers.sh /helpers.sh
+COPY test/integration/test-constants.sh /test-constants.sh
 
 RUN mkdir -p /etc/eks/image-credential-provider/
 RUN touch /etc/eks/image-credential-provider/ecr-credential-provider

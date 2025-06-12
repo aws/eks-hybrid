@@ -4,8 +4,6 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source /helpers.sh
-
 mock::aws
 mock::kubelet 1.30.0
 wait::dbus-ready

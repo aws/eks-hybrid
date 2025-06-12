@@ -4,17 +4,15 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source /helpers.sh
-
 mock::aws
-mock::kubelet 1.30.0
+mock::kubelet $CURRENT_VERSION.0
 wait::dbus-ready
 
 mkdir -p /etc/iam/pki
 touch /etc/iam/pki/server.pem
 touch /etc/iam/pki/server.key
 
-nodeadm install 1.30  --credential-provider iam-ra
+nodeadm install $CURRENT_VERSION  --credential-provider iam-ra
 
 mount --bind $(pwd)/swaps-partition /proc/swaps
 assert::path-exists /usr/bin/containerd

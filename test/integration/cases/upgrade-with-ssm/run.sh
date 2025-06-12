@@ -4,20 +4,17 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source /helpers.sh
-
 mock::aws
 wait::dbus-ready
 
-declare INITIAL_VERSION=1.27
-declare TARGET_VERSION=1.33
+# run upgrade test upgrading from initial version to target version
+declare INITIAL_VERSION=$DEFAULT_INITIAL_VERSION
+declare TARGET_VERSION=$CURRENT_VERSION
 
 # remove previously installed containerd to test installation via nodeadm
 dnf remove -y containerd
 
 # Test nodeadm upgrade with ssm as credential provider
-# initial: version 1.27
-# target: version 1.33
 nodeadm install $INITIAL_VERSION --credential-provider ssm
 # Verify all binaries are installed at correct location
 # and all generated config files have desired content
