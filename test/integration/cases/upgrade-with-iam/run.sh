@@ -14,9 +14,9 @@ wait::dbus-ready
 declare INITIAL_VERSION=$DEFAULT_INITIAL_VERSION
 declare TARGET_VERSION=$CURRENT_VERSION
 
-mkdir -p /etc/iam/pki
-touch /etc/iam/pki/server.pem
-touch /etc/iam/pki/server.key
+# Setup IAM certificate
+PKI_DIR="/etc/iam/pki"
+mock::iamra-certificate-path $PKI_DIR
 
 # remove previously installed containerd to test installation via nodeadm
 dnf remove -y containerd

@@ -10,9 +10,9 @@ source /test-constants.sh
 mock::aws
 wait::dbus-ready
 
-mkdir -p /etc/iam/pki
-touch /etc/iam/pki/server.pem
-touch /etc/iam/pki/server.key
+# Setup IAM certificate
+PKI_DIR="/etc/iam/pki"
+mock::iamra-certificate-path $PKI_DIR
 
 nodeadm install $CURRENT_VERSION --credential-provider iam-ra --containerd-source none
 assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker

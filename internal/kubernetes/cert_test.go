@@ -95,7 +95,7 @@ func TestCheckKubeletCertificate(t *testing.T) {
 				},
 			},
 			config:        aws.Config{},
-			expectedError: "no kubelet certificate found",
+			expectedError: "no certificate found",
 		},
 		{
 			name: "invalid format",
@@ -111,7 +111,7 @@ func TestCheckKubeletCertificate(t *testing.T) {
 				},
 			},
 			config:        aws.Config{},
-			expectedError: "parsing kubelet certificate",
+			expectedError: "parsing certificate",
 		},
 		{
 			name: "not yet valid certificate",
@@ -127,7 +127,7 @@ func TestCheckKubeletCertificate(t *testing.T) {
 				},
 			},
 			config:        aws.Config{},
-			expectedError: "kubelet server certificate is not yet valid",
+			expectedError: "server certificate is not yet valid",
 		},
 		{
 			name: "expired certificate",
@@ -143,7 +143,7 @@ func TestCheckKubeletCertificate(t *testing.T) {
 				},
 			},
 			config:        aws.Config{},
-			expectedError: "kubelet server certificate has expired",
+			expectedError: "server certificate has expired",
 		},
 		{
 			name: "wrong CA",
@@ -159,7 +159,7 @@ func TestCheckKubeletCertificate(t *testing.T) {
 				},
 			},
 			config:        aws.Config{},
-			expectedError: "kubelet certificate is not valid for the current cluster",
+			expectedError: "certificate is not valid for the current cluster",
 		},
 	}
 
