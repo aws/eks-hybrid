@@ -17,6 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	gssh "golang.org/x/crypto/ssh"
 	clientgo "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -25,7 +26,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
-	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	"github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
 	"github.com/aws/eks-hybrid/test/e2e/ssh"
@@ -56,29 +56,30 @@ type NodeSpec struct {
 }
 
 type NodeCreate struct {
-	AWS     aws.Config
-	Cluster *HybridCluster
-	EC2     *ec2sdk.Client
-	SSM     *ssm.Client
-	Logger  logr.Logger
+	AWS                 aws.Config
+	Cluster             *HybridCluster
+	EC2                 *ec2sdk.Client
+	SSM                 *ssm.Client
+	K8sClientConfig     *rest.Config
+	Logger              logr.Logger
+	RemoteCommandRunner commands.RemoteCommandRunner
 
 	SetRootPassword bool
 	NodeadmURLs     e2e.NodeadmURLs
 	PublicKey       string
 }
 
-// PeerdNode represents a Hybrid node running as an EC2 instance in a peered VPC
+// PeeredNode represents a Hybrid node running as an EC2 instance in a peered VPC
 // The Name is the name of the kubenretes node object
 // The Instance is the underlying EC2 instance
-type PeerdNode struct {
-	Instance ec2.Instance
-	Name     string
+type PeeredNode struct {
+	ec2.Instance
+	Name string
 }
 
 // Create spins up an EC2 instance with the proper user data to join as a Hybrid node to the cluster.
-func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, error) {
+func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredNode, error) {
 	nodeSpec := e2e.NodeSpec{
-		OS:   spec.OS,
 		Name: spec.NodeName,
 		Cluster: &e2e.Cluster{
 			Name:   c.Cluster.Name,
@@ -89,12 +90,12 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 
 	files, err := spec.Provider.FilesForNode(nodeSpec)
 	if err != nil {
-		return PeerdNode{}, err
+		return PeeredNode{}, err
 	}
 
 	nodeadmConfig, err := spec.Provider.NodeadmConfig(ctx, nodeSpec)
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("expected to build nodeconfig: %w", err)
+		return PeeredNode{}, fmt.Errorf("expected to build nodeconfig: %w", err)
 	}
 
 	nodeadmConfig.Spec.Kubelet.Flags = []string{
@@ -103,7 +104,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 
 	nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("expected to successfully marshal nodeadm config to YAML: %w", err)
+		return PeeredNode{}, fmt.Errorf("expected to successfully marshal nodeadm config to YAML: %w", err)
 	}
 
 	var rootPasswordHash string
@@ -111,7 +112,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		var rootPassword string
 		rootPassword, rootPasswordHash, err = os.GenerateOSPassword()
 		if err != nil {
-			return PeerdNode{}, fmt.Errorf("expected to successfully generate root password: %w", err)
+			return PeeredNode{}, fmt.Errorf("expected to successfully generate root password: %w", err)
 		}
 		c.Logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
 	}
@@ -120,20 +121,26 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		EKSEndpoint:       spec.EKSEndpoint,
 		KubernetesVersion: spec.NodeK8sVersion,
 		NodeadmUrls:       c.NodeadmURLs,
+		NodeadmConfig:     nodeadmConfig,
 		NodeadmConfigYaml: string(nodeadmConfigYaml),
 		Provider:          string(spec.Provider.Name()),
 		RootPasswordHash:  rootPasswordHash,
 		Region:            c.Cluster.Region,
 		Files:             files,
 		PublicKey:         c.PublicKey,
+
+		KubernetesAPIServer: c.K8sClientConfig.Host,
+		HostName:            nodeSpec.Name,
+		ClusterName:         c.Cluster.Name,
+		ClusterCert:         c.K8sClientConfig.CAData,
 	})
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("expected to successfully build user data: %w", err)
+		return PeeredNode{}, fmt.Errorf("expected to successfully build user data: %w", err)
 	}
 
-	amiId, err := spec.OS.AMIName(ctx, c.AWS)
+	amiId, err := spec.OS.AMIName(ctx, c.AWS, spec.NodeK8sVersion)
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
+		return PeeredNode{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
 	}
 
 	instanceType := spec.InstanceType
@@ -151,26 +158,27 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		SecurityGroupID:    c.Cluster.SecurityGroupID,
 		UserData:           userdata,
 		InstanceProfileARN: spec.InstanceProfileARN,
+		OS:                 spec.OS.Name(),
 	}
 
 	c.Logger.Info("Creating a hybrid EC2 Instance...")
 	instance, err := ec2Input.Create(ctx, c.EC2, c.SSM)
 	if err != nil {
-		return PeerdNode{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
+		return PeeredNode{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
 
 	c.Logger.Info("Waiting for EC2 Instance to be running...", "instanceID", instance.ID)
 	if err := ec2.WaitForEC2InstanceRunning(ctx, c.EC2, instance.ID); err != nil {
-		return PeerdNode{}, fmt.Errorf("waiting for EC2 instance for node to be running: %w", err)
+		return PeeredNode{}, fmt.Errorf("waiting for EC2 instance for node to be running: %w", err)
 	}
 
 	c.Logger.Info("Disabling source/destination check...", "instanceID", instance.ID)
 	if err := ec2.DisableSourceDestCheck(ctx, c.EC2, instance.ID); err != nil {
-		return PeerdNode{}, err
+		return PeeredNode{}, err
 	}
 
 	c.Logger.Info("A Hybrid EC2 instace is created", "instanceID", instance.ID)
-	return PeerdNode{
+	return PeeredNode{
 		Instance: instance,
 		Name:     spec.NodeName,
 	}, nil
@@ -237,12 +245,12 @@ func generateKeyPair() ([]byte, []byte, error) {
 }
 
 type NodeCleanup struct {
-	SSM                 *ssm.Client
-	S3                  *s3sdk.Client
-	EC2                 *ec2sdk.Client
-	K8s                 clientgo.Interface
-	Logger              logr.Logger
-	RemoteCommandRunner commands.RemoteCommandRunner
+	SSM          *ssm.Client
+	S3           *s3sdk.Client
+	EC2          *ec2sdk.Client
+	K8s          clientgo.Interface
+	Logger       logr.Logger
+	LogCollector NodeLogCollector
 
 	LogsBucket string
 	Cluster    *HybridCluster
@@ -285,7 +293,7 @@ func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, cluste
 }
 
 // Cleanup collects logs and deletes the EC2 instance and Node object.
-func (c *NodeCleanup) Cleanup(ctx context.Context, node PeerdNode) error {
+func (c *NodeCleanup) Cleanup(ctx context.Context, node PeeredNode) error {
 	logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	err := c.collectLogs(logCtx, constants.LogCollectorBundleFileName, node.Instance)
@@ -324,7 +332,7 @@ type NodeInfrastructureCleaner struct {
 	InstanceId string
 }
 
-func (c *NodeCleanup) NodeInfrastructureCleaner(node PeerdNode) *NodeInfrastructureCleaner {
+func (c *NodeCleanup) NodeInfrastructureCleaner(node PeeredNode) *NodeInfrastructureCleaner {
 	return &NodeInfrastructureCleaner{
 		EC2:        c.EC2,
 		Logger:     c.Logger,
@@ -359,9 +367,57 @@ func (c NodeCleanup) collectLogs(ctx context.Context, bundleName string, instanc
 	if err != nil {
 		return err
 	}
-	err = nodeadm.RunLogCollector(ctx, c.RemoteCommandRunner, instance.IP, url)
+	err = c.LogCollector.Run(ctx, instance.IP, url)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+type NodeLogCollector interface {
+	Run(ctx context.Context, instanceIP, logBundleUrl string) error
+}
+
+type StandardLinuxLogCollector struct {
+	Runner commands.RemoteCommandRunner
+}
+
+type BottlerocketLogCollector struct {
+	Runner commands.RemoteCommandRunner
+}
+
+func (s StandardLinuxLogCollector) Run(ctx context.Context, instanceIP, logBundleUrl string) error {
+	commands := []string{
+		"/tmp/log-collector.sh '" + logBundleUrl + "'",
+	}
+
+	output, err := s.Runner.Run(ctx, instanceIP, commands)
+	if err != nil {
+		return err
+	}
+
+	if output.Status != "Success" {
+		return err
+	}
+
+	return nil
+}
+
+func (b BottlerocketLogCollector) Run(ctx context.Context, instanceIP, logBundleUrl string) error {
+	commands := []string{
+		"sudo /usr/sbin/chroot /.bottlerocket/rootfs/ logdog --output /var/log/eks-hybrid-logs.tar.gz",
+		"sudo curl --retry 5 --request PUT --upload-file /.bottlerocket/rootfs/var/log/eks-hybrid-logs.tar.gz '" + logBundleUrl + "'",
+		"sudo rm /.bottlerocket/rootfs/var/log/eks-hybrid-logs.tar.gz",
+	}
+
+	output, err := b.Runner.Run(ctx, instanceIP, commands)
+	if err != nil {
+		return err
+	}
+
+	if output.Status != "Success" {
+		return err
+	}
+
 	return nil
 }

@@ -23,6 +23,30 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 )
 
+type NodeWaiter interface {
+	WaitForNodeToJoin(ctx context.Context, flakeRun FlakeRun)
+}
+
+type StandardLinuxNodeWaiter struct {
+	testNode *testNode
+}
+
+func (w *StandardLinuxNodeWaiter) WaitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
+	w.testNode.waitForNodeToJoin(ctx, flakeRun)
+}
+
+type BottlerocketNodeWaiter struct {
+	testNode *testNode
+}
+
+func (w *BottlerocketNodeWaiter) WaitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
+	w.testNode.waitForBottlerocketNodeToJoin(ctx, flakeRun)
+}
+
+func NewBottlerocketNodeWaiter(testNode *testNode) *BottlerocketNodeWaiter {
+	return &BottlerocketNodeWaiter{testNode: testNode}
+}
+
 type testNode struct {
 	ArtifactsPath      string
 	ClusterName        string
@@ -46,14 +70,20 @@ type testNode struct {
 	PeeredNetwork      *peered.Network
 	SerialOutputWriter io.Writer
 
-	flakyCode    *FlakyCode
-	node         *peered.PeerdNode
-	serialOutput peered.ItBlockCloser
-	verifyNode   *kubernetes.VerifyNode
+	flakyCode      *FlakyCode
+	peeredInstance *peered.PeeredNode
+	serialOutput   peered.ItBlockCloser
+	verifyNode     *kubernetes.VerifyNode
+	nodeWaiter     NodeWaiter
 }
 
 func (n *testNode) Start(ctx context.Context) error {
 	n.checkExistingNode(ctx)
+
+	// Initialize default NodeWaiter if not set
+	if n.nodeWaiter == nil {
+		n.nodeWaiter = &StandardLinuxNodeWaiter{testNode: n}
+	}
 
 	n.flakyCode = &FlakyCode{
 		Logger:      n.Logger,
@@ -80,7 +110,7 @@ func (n *testNode) Start(ctx context.Context) error {
 			Expect(n.PeeredNode.Cleanup(ctx, node)).To(Succeed())
 		}, NodeTimeout(constants.DeferCleanupTimeout))
 
-		n.node = &node
+		n.peeredInstance = &node
 
 		n.verifyNode = n.NewVerifyNode(node.Name, node.Instance.IP)
 		outputFile := filepath.Join(n.ArtifactsPath, n.InstanceName+"-"+constants.SerialOutputLogFile)
@@ -99,10 +129,9 @@ func (n *testNode) Start(ctx context.Context) error {
 		}, NodeTimeout(constants.DeferCleanupTimeout))
 
 		n.serialOutput.It(fmt.Sprintf("joins the cluster: %s", n.NodeName), func() {
-			n.waitForNodeToJoin(ctx, flakeRun)
+			n.nodeWaiter.WaitForNodeToJoin(ctx, flakeRun)
 		})
-
-		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.node)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
+		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.peeredInstance)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
 	})
 	return nil
 }
@@ -123,7 +152,7 @@ func (n *testNode) addReportEntries(peeredNode *peered.Node) {
 
 func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	n.Logger.Info("Waiting for EC2 Instance to be Running...")
-	flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, n.EC2Client, n.node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+	flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, n.EC2Client, n.peeredInstance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
 	_, err := n.verifyNode.WaitForNodeReady(ctx)
 
 	// if the node is impaired, we want to trigger a retryable expect
@@ -134,11 +163,11 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	var debugErr error
 	if !isImpaired {
 		expect = Expect
-		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.peeredInstance.IP)
 	}
 
 	// attempt to get the nodeadm version regardless of previous errors
-	version, versionErr := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+	version, versionErr := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.peeredInstance.IP)
 	if versionErr == nil && version != "" {
 		AddReportEntry(constants.TestNodeadmVersion, version)
 	}
@@ -147,6 +176,25 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
 	Expect(versionErr).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
 	Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
+}
+
+func (n *testNode) waitForBottlerocketNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
+	n.Logger.Info("Waiting for EC2 Instance to be Running...")
+	flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, n.EC2Client, n.peeredInstance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+	_, err := n.verifyNode.WaitForNodeReady(ctx)
+
+	// if the node is impaired, we want to trigger a retryable expect
+	// if the node is not impaired, we run nodeadm debug regardless of whether the node joined the cluster successfully
+	// if the node joined successfully and debug fails, the test will fail
+	expect := flakeRun.RetryableExpect
+	isImpaired := n.isImpaired(ctx, err)
+	if !isImpaired {
+		expect = Expect
+	}
+
+	expect(err).To(Succeed(), "node should have joined the cluster successfully")
+
+	AddReportEntry(constants.TestNodeadmVersion, "N/A")
 }
 
 func (n *testNode) NewVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode {
@@ -172,15 +220,20 @@ func (n *testNode) It(name string, f func()) {
 	n.serialOutput.It(name, f)
 }
 
-func (n *testNode) PeerdNode() *peered.PeerdNode {
-	return n.node
+func (n *testNode) PeeredInstance() *peered.PeeredNode {
+	return n.peeredInstance
 }
 
 func (n *testNode) isImpaired(ctx context.Context, waitErr error) bool {
 	if waitErr == nil {
 		return false
 	}
-	isImpaired, err := ec2.IsEC2InstanceImpaired(ctx, n.EC2Client, n.node.Instance.ID)
+	isImpaired, err := ec2.IsEC2InstanceImpaired(ctx, n.EC2Client, n.peeredInstance.ID)
 	n.Logger.Error(err, "describing instance status")
 	return isImpaired
+}
+
+// SetNodeWaiter allows setting a custom NodeWaiter for the testNode
+func (n *testNode) SetNodeWaiter(waiter NodeWaiter) {
+	n.nodeWaiter = waiter
 }

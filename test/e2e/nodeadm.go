@@ -14,7 +14,7 @@ import (
 // NodeadmOS defines an interface for operating system-specific behavior.
 type NodeadmOS interface {
 	Name() string
-	AMIName(ctx context.Context, awsConfig aws.Config) (string, error)
+	AMIName(ctx context.Context, awsConfig aws.Config, kubernetesVersion string) (string, error)
 	BuildUserData(userDataInput UserDataInput) ([]byte, error)
 	InstanceType(region string, instanceSize InstanceSize, computeType ComputeType) string
 }
@@ -38,12 +38,18 @@ type UserDataInput struct {
 	EKSEndpoint       string
 	KubernetesVersion string
 	NodeadmUrls       NodeadmURLs
+	NodeadmConfig     *api.NodeConfig
 	NodeadmConfigYaml string
 	Provider          string
 	PublicKey         string
 	Region            string
 	RootPasswordHash  string
 	Files             []File
+
+	KubernetesAPIServer string
+	HostName            string
+	ClusterName         string
+	ClusterCert         []byte
 }
 
 type NodeadmURLs struct {

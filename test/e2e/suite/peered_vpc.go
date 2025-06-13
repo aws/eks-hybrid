@@ -28,13 +28,13 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
+	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
-	"github.com/aws/eks-hybrid/test/e2e/ssm"
 )
 
 // notSupported is a collection of nodeadm config matchers for OS/Provider combinations
@@ -127,6 +127,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	}
 	test.RolesAnywhereCA = ca
 
+	// TODO: ideally this should be an input to the tests and not just
+	// assume same name/path used by the setup command.
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(suite.TestConfig.ClusterName))
 	if err != nil {
 		return nil, err
@@ -171,28 +173,30 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	return test, nil
 }
 
-func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
+func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger, remoteCommandRunner commands.RemoteCommandRunner, logCollector peered.NodeLogCollector) *peered.Node {
 	return &peered.Node{
 		NodeCreate: peered.NodeCreate{
-			AWS:             t.aws,
-			EC2:             t.ec2Client,
-			SSM:             t.SSMClient,
-			Logger:          logger,
-			Cluster:         t.Cluster,
-			NodeadmURLs:     t.nodeadmURLs,
-			PublicKey:       t.publicKey,
-			SetRootPassword: t.setRootPassword,
-		},
-		NodeCleanup: peered.NodeCleanup{
-			RemoteCommandRunner: ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, logger),
+			AWS:                 t.aws,
 			EC2:                 t.ec2Client,
 			SSM:                 t.SSMClient,
-			S3:                  t.s3Client,
-			K8s:                 t.k8sClient,
+			K8sClientConfig:     t.K8sClientConfig,
 			Logger:              logger,
-			SkipDelete:          t.SkipCleanup,
 			Cluster:             t.Cluster,
-			LogsBucket:          t.logsBucket,
+			NodeadmURLs:         t.nodeadmURLs,
+			PublicKey:           t.publicKey,
+			SetRootPassword:     t.setRootPassword,
+			RemoteCommandRunner: remoteCommandRunner,
+		},
+		NodeCleanup: peered.NodeCleanup{
+			EC2:          t.ec2Client,
+			SSM:          t.SSMClient,
+			S3:           t.s3Client,
+			K8s:          t.k8sClient,
+			Logger:       logger,
+			SkipDelete:   t.SkipCleanup,
+			Cluster:      t.Cluster,
+			LogsBucket:   t.logsBucket,
+			LogCollector: logCollector,
 		},
 	}
 }
@@ -206,10 +210,10 @@ func (t *PeeredVPCTest) NewPeeredNetwork(logger logr.Logger) *peered.Network {
 	}
 }
 
-func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string) *nodeadm.CleanNode {
+func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string, remoteCommandRunner commands.RemoteCommandRunner) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
 		K8s:                   t.k8sClient,
-		RemoteCommandRunner:   ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
+		RemoteCommandRunner:   remoteCommandRunner,
 		Verifier:              provider,
 		Logger:                t.Logger,
 		InfrastructureCleaner: infraCleaner,
@@ -218,10 +222,10 @@ func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, in
 	}
 }
 
-func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
+func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string, remoteCommandRunner commands.RemoteCommandRunner) *nodeadm.UpgradeNode {
 	return &nodeadm.UpgradeNode{
 		K8s:                 t.k8sClient,
-		RemoteCommandRunner: ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
+		RemoteCommandRunner: remoteCommandRunner,
 		Logger:              t.Logger,
 		NodeName:            nodeName,
 		NodeIP:              nodeIP,
@@ -263,7 +267,7 @@ func WithLogging(loggerControl e2e.PausableLogger, serialOutputWriter io.Writer)
 	}
 }
 
-func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName, k8sVersion string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, instanceSize e2e.InstanceSize, computeType e2e.ComputeType, opts ...TestNodeOption) *testNode {
+func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName, k8sVersion string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, instanceSize e2e.InstanceSize, computeType e2e.ComputeType, remoteCommandRunner commands.RemoteCommandRunner, logCollector peered.NodeLogCollector, opts ...TestNodeOption) *testNode {
 	node := &testNode{
 		ArtifactsPath:   t.ArtifactsPath,
 		ClusterName:     t.Cluster.Name,
@@ -289,7 +293,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		opt(node)
 	}
 
-	node.PeeredNode = t.NewPeeredNode(node.Logger)
+	node.PeeredNode = t.NewPeeredNode(node.Logger, remoteCommandRunner, logCollector)
 	node.PeeredNetwork = t.NewPeeredNetwork(node.Logger)
 	return node
 }
@@ -428,6 +432,13 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 	return osProviderList
 }
 
+func BottlerocketOSList() []e2e.NodeadmOS {
+	return []e2e.NodeadmOS{
+		osystem.NewBottleRocket(),
+		osystem.NewBottleRocketARM(),
+	}
+}
+
 func CredentialProviders() []e2e.NodeadmCredentialsProvider {
 	return []e2e.NodeadmCredentialsProvider{
 		&credentials.SsmProvider{},
@@ -462,7 +473,7 @@ type NodeCreate struct {
 	ComputeType  e2e.ComputeType
 }
 
-func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeCreate) {
+func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeCreate, remoteCommandRunner commands.RemoteCommandRunner, logCollector peered.NodeLogCollector) {
 	var wg sync.WaitGroup
 	mu := sync.Mutex{}
 
@@ -482,7 +493,7 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 
 			// Create a new logger that uses our SwitchWriter
 			controlledLogger := e2e.NewPausableLogger(e2e.WithWriter(outputControl))
-			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize, entry.ComputeType,
+			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize, entry.ComputeType, remoteCommandRunner, logCollector,
 				WithLogging(controlledLogger, outputControl))
 
 			Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")

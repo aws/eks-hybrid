@@ -24,26 +24,29 @@ const (
 )
 
 // ssm commands run as root user on jumpbox
-func makeSshCommand(instanceIP string, commands []string) string {
-	return fmt.Sprintf("ssh %s \"%s\"", instanceIP, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
+func makeSshCommand(instanceIP, username string, commands []string) string {
+	sshIP := fmt.Sprintf("%s@%s", username, instanceIP)
+	return fmt.Sprintf("ssh %s \"%s\"", sshIP, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
 }
 
 type SSHOnSSM struct {
 	client            *ssm.Client
 	jumpboxInstanceId string
+	username          string
 	logger            logr.Logger
 }
 
-func NewSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
+func NewSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId, username string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
 	return &SSHOnSSM{
 		client:            client,
 		jumpboxInstanceId: jumpboxInstanceId,
+		username:          username,
 		logger:            logger,
 	}
 }
 
 func (s *SSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCommands.RemoteCommandOutput, error) {
-	command := makeSshCommand(ip, commands)
+	command := makeSshCommand(ip, s.username, commands)
 	return RunCommand(ctx, s.client, s.jumpboxInstanceId, command, s.logger)
 }
 

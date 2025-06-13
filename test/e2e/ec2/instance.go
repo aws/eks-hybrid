@@ -33,6 +33,7 @@ type InstanceConfig struct {
 	UserData           []byte
 	SubnetID           string
 	SecurityGroupID    string
+	OS                 string
 }
 
 type Instance struct {
@@ -118,6 +119,10 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 					{
 						Key:   aws.String(constants.TestClusterTagKey),
 						Value: aws.String(e.ClusterName),
+					},
+					{
+						Key:   aws.String(constants.OSArchTagKey),
+						Value: aws.String(e.OS),
 					},
 				},
 			},
