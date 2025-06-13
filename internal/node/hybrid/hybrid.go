@@ -99,7 +99,7 @@ func (hnp *HybridNodeProvider) Validate() error {
 
 	if !slices.Contains(hnp.skipPhases, kubeletCertValidation) {
 		hnp.logger.Info("Validating kubelet certificate...")
-		if err := ValidateKubeletCert(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
+		if err := ValidateCertificate(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority, CertTypeKubelet); err != nil {
 			// Ignore date validation errors in the hybrid provider since kubelet will regenerate them
 			// Ignore no cert errors since we expect it to not exist
 			if IsDateValidationError(err) || IsNoCertError(err) {

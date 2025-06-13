@@ -12,7 +12,7 @@ FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG TARGETARCH
 
 RUN dnf -y update && \
-    dnf -y install systemd containerd jq git-core python3 tar procps zip && \
+    dnf -y install systemd containerd jq git-core python3 tar procps zip openssl openssl-devel && \
     dnf clean all
 
 RUN curl -OL https://github.com/mikefarah/yq/releases/download/v4.45.3/yq_linux_${TARGETARCH}.tar.gz && \

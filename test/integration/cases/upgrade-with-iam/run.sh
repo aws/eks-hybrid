@@ -12,9 +12,27 @@ wait::dbus-ready
 declare INITIAL_VERSION=1.27
 declare TARGET_VERSION=1.33
 
-mkdir -p /etc/iam/pki
-touch /etc/iam/pki/server.pem
-touch /etc/iam/pki/server.key
+# Define certificate and key paths
+PKI_DIR="/etc/iam/pki"
+CERT="$PKI_DIR/server.pem"
+KEY="$PKI_DIR/server.key"
+
+# Create directory if it doesn't exist
+mkdir -p $PKI_DIR
+
+# Create empty certificate and key files
+touch $CERT
+touch $KEY
+
+# Generate self-signed certificate and key using OpenSSL
+openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout $KEY \
+    -out $CERT \
+    -subj "/C=US/ST=Washington/L=Seattle/O=DummyOrg/CN=DummyCN"
+
+# Set appropriate permissions
+chmod 644 $CERT
+chmod 600 $KEY
 
 # remove previously installed containerd to test installation via nodeadm
 dnf remove -y containerd
