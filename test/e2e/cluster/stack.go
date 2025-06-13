@@ -34,7 +34,7 @@ var setupTemplateBody []byte
 
 const (
 	creationTimeParameterKey = "CreationTime"
-	stackWaitTimeout         = 7 * time.Minute
+	stackWaitTimeout         = 9 * time.Minute
 	stackWaitInterval        = 10 * time.Second
 )
 
