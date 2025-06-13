@@ -20,6 +20,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
+	"github.com/aws/eks-hybrid/internal/node/hybrid"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -92,6 +93,10 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	runner := validation.NewRunner[*api.NodeConfig](printer)
 	apiServerValidator := node.NewAPIServerValidator(kubelet.New())
 	clusterProvider := kubernetes.NewClusterProvider(awsConfig)
+
+	if nodeConfig.IsHybridNode() {
+		runner.Register(hybrid.NewHybridNodeConfigValidator(nodeConfig, log))
+	}
 	runner.Register(creds.Validations(awsConfig, nodeConfig)...)
 	runner.Register(
 		validation.New("aws-auth", sts.NewAuthenticationValidator(awsConfig).Run),

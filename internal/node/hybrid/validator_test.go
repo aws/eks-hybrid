@@ -2,6 +2,7 @@ package hybrid_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -194,6 +195,157 @@ func Test_HybridNodeProviderValidateConfig(t *testing.T) {
 				},
 			},
 			wantError: "hostname-override kubelet flag is not supported for hybrid nodes but found override: bad-config",
+		},
+		{
+			name: "invalid when both iamRoleAnywhere and ssm provided",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						IAMRolesAnywhere: &api.IAMRolesAnywhere{
+							NodeName:        "my-node",
+							TrustAnchorARN:  "trust-anchor-arn",
+							ProfileARN:      "profile-arn",
+							RoleARN:         "role-arn",
+							CertificatePath: certPath,
+							PrivateKeyPath:  keyPath,
+						},
+						SSM: &api.SSM{
+							ActivationID:   "activation-id",
+							ActivationCode: "activation-code",
+						},
+					},
+				},
+			},
+			wantError: "Only one of IAMRolesAnywhere or SSM must be provided for hybrid node configuration",
+		},
+		{
+			name: "valid ssm activation code and activation id",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						SSM: &api.SSM{
+							ActivationCode: "Fjz3/sZfSvv78EXAMPLE",
+							ActivationID:   "e488f2f6-e686-4afb-8a04-ef6dfabcdeff",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "missing ssm activation code",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						SSM: &api.SSM{
+							ActivationCode: "",
+							ActivationID:   "e488f2f6-e686-4afb-8a04-ef6dfabcdeff",
+						},
+					},
+				},
+			},
+			wantError: "ActivationCode is missing in hybrid ssm configuration",
+		},
+		{
+			name: "missing ssm activation id",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						SSM: &api.SSM{
+							ActivationCode: "Fjz3/sZfSvv78EXAMPLE",
+							ActivationID:   "",
+						},
+					},
+				},
+			},
+			wantError: "ActivationID is missing in hybrid ssm configuration",
+		},
+		{
+			name: "invalid ssm activation code (too short)",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						SSM: &api.SSM{
+							ActivationCode: "activation-code",
+							ActivationID:   "e488f2f6-e686-4afb-8a04-ef6dfabcdeff",
+						},
+					},
+				},
+			},
+			wantError: "invalid ActivationCode format: activation-code. Must be 20-250 characters",
+		},
+		{
+			name: "invalid ssm activation code (too long - 251 chars)",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						SSM: &api.SSM{
+							ActivationCode: strings.Repeat("a", 251),
+							ActivationID:   "e488f2f6-e686-4afb-8a04-ef6dfabcdeff",
+						},
+					},
+				},
+			},
+			wantError: "invalid ActivationCode format: " + strings.Repeat("a", 251) + ". Must be 20-250 characters",
+		},
+		{
+			name: "invalid ssm activation id by length",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						SSM: &api.SSM{
+							ActivationCode: "Fjz3/sZfSvv78EXAMPLE",
+							ActivationID:   "e488f2f6-e686-4afb-8a04-ef6dfabcdefff",
+						},
+					},
+				},
+			},
+			wantError: "invalid ActivationID format: e488f2f6-e686-4afb-8a04-ef6dfabcdefff. Must be in format: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+		},
+		{
+			name: "invalid ssm activation id by characters",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						SSM: &api.SSM{
+							ActivationCode: "Fjz3/sZfSvv78EXAMPLE",
+							ActivationID:   "e488f2f6-e686-4afb-8A04-ef6dfabcdefff",
+						},
+					},
+				},
+			},
+			wantError: "invalid ActivationID format: e488f2f6-e686-4afb-8A04-ef6dfabcdefff. Must be in format: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
 		},
 	}
 	for _, tc := range testCases {
