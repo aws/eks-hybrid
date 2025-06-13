@@ -18,6 +18,8 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	"github.com/aws/eks-hybrid/test/e2e/peered"
+	"github.com/aws/eks-hybrid/test/e2e/ssm"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
@@ -78,11 +80,17 @@ var _ = Describe("Hybrid Nodes", func() {
 		When("using ec2 instance as hybrid nodes", func() {
 			upgradeEntries := []TableEntry{}
 			initEntries := []TableEntry{}
+			bottlerocketInitEntries := []TableEntry{}
 			for _, osProvider := range suite.OSProviderList(credentialProviders) {
 				os := osProvider.OS
 				provider := osProvider.Provider
 				initEntries = append(initEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow", "init")))
 				upgradeEntries = append(upgradeEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")))
+			}
+			for _, os := range suite.BottlerocketOSList() {
+				for _, provider := range credentialProviders {
+					bottlerocketInitEntries = append(bottlerocketInitEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow", "init")))
+				}
 			}
 
 			DescribeTable("Joining a node",
@@ -98,21 +106,26 @@ var _ = Describe("Hybrid Nodes", func() {
 						k8sVersion = test.OverrideNodeK8sVersion
 					}
 
-					testNode := test.NewTestNode(ctx, instanceName, nodeName, k8sVersion, nodeOS, provider, e2e.Large, e2e.CPUInstance)
+					remoteCommandRunner := ssm.NewSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, "root", test.Logger)
+					logCollector := peered.StandardLinuxLogCollector{
+						Runner: remoteCommandRunner,
+					}
+					testNode := test.NewTestNode(ctx, instanceName, nodeName, k8sVersion, nodeOS, provider, e2e.Large, e2e.CPUInstance, remoteCommandRunner, logCollector)
 					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
 					test.Logger.Info("Testing Pod Identity add-on functionality")
-					verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.PeerdNode().Name)
+					verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.PeeredInstance().Name)
 					Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
 
 					test.Logger.Info("Resetting hybrid node...")
-					n := testNode.PeerdNode()
+					n := testNode.PeeredInstance()
 					cleanNode := test.NewCleanNode(
 						provider,
 						testNode.PeeredNode.NodeInfrastructureCleaner(*n),
 						n.Name,
 						n.Instance.IP,
+						remoteCommandRunner,
 					)
 					Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
@@ -143,9 +156,9 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(provider).NotTo(BeNil())
 
 					// Skip upgrade flow for cluster with the minimum kubernetes version
-					isSupport, err := kubernetes.IsPreviousVersionSupported(test.Cluster.KubernetesVersion)
+					isPreviousVersionSupported, err := kubernetes.IsPreviousVersionSupported(test.Cluster.KubernetesVersion)
 					Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
-					if !isSupport {
+					if !isPreviousVersionSupported {
 						Skip(fmt.Sprintf("Skipping upgrade test as minimum k8s version is %s", kubernetes.MinimumVersion))
 					}
 
@@ -155,11 +168,15 @@ var _ = Describe("Hybrid Nodes", func() {
 					nodeKubernetesVersion, err := kubernetes.PreviousVersion(test.Cluster.KubernetesVersion)
 					Expect(err).NotTo(HaveOccurred(), "expected to get previous k8s version")
 
-					testNode := test.NewTestNode(ctx, instanceName, nodeName, nodeKubernetesVersion, nodeOS, provider, e2e.Large, e2e.CPUInstance)
+					remoteCommandRunner := ssm.NewSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, "root", test.Logger)
+					logCollector := peered.StandardLinuxLogCollector{
+						Runner: remoteCommandRunner,
+					}
+					testNode := test.NewTestNode(ctx, instanceName, nodeName, nodeKubernetesVersion, nodeOS, provider, e2e.Large, e2e.CPUInstance, remoteCommandRunner, logCollector)
 					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
-					Expect(test.NewUpgradeNode(testNode.PeerdNode().Name, testNode.PeerdNode().Instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
+					Expect(test.NewUpgradeNode(testNode.PeeredInstance().Name, testNode.PeeredInstance().IP, remoteCommandRunner).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
 
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
 
@@ -168,18 +185,54 @@ var _ = Describe("Hybrid Nodes", func() {
 						return
 					}
 
-					n := testNode.PeerdNode()
+					n := testNode.PeeredInstance()
 					cleanNode := test.NewCleanNode(
 						provider,
 						testNode.PeeredNode.NodeInfrastructureCleaner(*n),
 						n.Name,
 						n.Instance.IP,
+						remoteCommandRunner,
 					)
 					Expect(cleanNode.Run(ctx)).To(
 						Succeed(), "node should have been reset successfully",
 					)
 				},
 				upgradeEntries,
+			)
+
+			DescribeTable("Joining a Bottlerocket node",
+				func(ctx context.Context, nodeOS e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
+					Expect(nodeOS).NotTo(BeNil())
+					Expect(provider).NotTo(BeNil())
+
+					instanceName := test.InstanceName("init", nodeOS, provider)
+					nodeName := "init" + "-node-" + string(provider.Name()) + "-" + nodeOS.Name()
+
+					k8sVersion := test.Cluster.KubernetesVersion
+					if test.OverrideNodeK8sVersion != "" {
+						k8sVersion = test.OverrideNodeK8sVersion
+					}
+
+					remoteCommandRunner := ssm.NewSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, "ec2-user", test.Logger)
+					logCollector := peered.BottlerocketLogCollector{
+						Runner: remoteCommandRunner,
+					}
+					testNode := test.NewTestNode(ctx, instanceName, nodeName, k8sVersion, nodeOS, provider, e2e.Large, e2e.CPUInstance, remoteCommandRunner, logCollector)
+					testNode.SetNodeWaiter(suite.NewBottlerocketNodeWaiter(testNode))
+					Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
+
+					test.Logger.Info("Testing Pod Identity add-on functionality")
+					verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.PeeredInstance().Name)
+					Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+
+					n := testNode.PeeredInstance()
+
+					Expect(testNode.PeeredNetwork.CreateRoutesForNode(ctx, n)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
+
+					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
+				},
+				bottlerocketInitEntries,
 			)
 		})
 	})

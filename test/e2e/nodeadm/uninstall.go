@@ -57,6 +57,7 @@ func (u CleanNode) Run(ctx context.Context) error {
 	if err = RunNodeadmUninstall(ctx, u.RemoteCommandRunner, u.NodeIP); err != nil {
 		return err
 	}
+
 	u.Logger.Info("Waiting for hybrid node to be not ready...")
 	if err = kubernetes.WaitForHybridNodeToBeNotReady(ctx, u.K8s, node.Name, u.Logger); err != nil {
 		return err

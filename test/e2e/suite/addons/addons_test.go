@@ -16,6 +16,9 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/commands"
+	"github.com/aws/eks-hybrid/test/e2e/peered"
+	"github.com/aws/eks-hybrid/test/e2e/ssm"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
@@ -39,6 +42,10 @@ var _ = SynchronizedBeforeSuite(
 	func(ctx context.Context) []byte {
 		suiteConfig := suite.BeforeSuiteCredentialSetup(ctx, filePath)
 		test := suite.BeforeVPCTest(ctx, &suiteConfig)
+		remoteCommandRunner := ssm.NewSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, "root", test.Logger)
+		logCollector := peered.BottlerocketLogCollector{
+			Runner: remoteCommandRunner,
+		}
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
 		osList := suite.OSProviderList(credentialProviders)
 
@@ -60,7 +67,7 @@ var _ = SynchronizedBeforeSuite(
 				NodeName:     fmt.Sprintf("addon-test-node-%s-%s", provider.Name(), os.Name()),
 			})
 		}
-		suite.CreateNodes(ctx, test, nodesToCreate)
+		suite.CreateNodes(ctx, test, nodesToCreate, remoteCommandRunner, logCollector)
 
 		suiteJson, err := yaml.Marshal(suiteConfig)
 		Expect(err).NotTo(HaveOccurred(), "suite config should be marshalled successfully")
@@ -79,10 +86,16 @@ var _ = SynchronizedBeforeSuite(
 var _ = Describe("Hybrid Nodes", func() {
 	When("using peered VPC", func() {
 		var addonEc2Test *suite.AddonEc2Test
+		var remoteCommandRunner commands.RemoteCommandRunner
+		var logCollector peered.NodeLogCollector
 		credentialProviders := suite.CredentialProviders()
 
 		BeforeEach(func(ctx context.Context) {
 			addonEc2Test = &suite.AddonEc2Test{PeeredVPCTest: suite.BeforeVPCTest(ctx, suiteConfig)}
+			remoteCommandRunner = ssm.NewSSHOnSSMCommandRunner(addonEc2Test.SSMClient, addonEc2Test.JumpboxInstanceId, "root", addonEc2Test.Logger)
+			logCollector = peered.BottlerocketLogCollector{
+				Runner: remoteCommandRunner,
+			}
 			credentialProviders = suite.AddClientsToCredentialProviders(credentialProviders, addonEc2Test.PeeredVPCTest)
 		})
 
@@ -215,7 +228,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 				// wait for node to join EKS cluster
 				addonEc2Test.Logger.Info("Creating GPU node for nvidia test", "nodeName", nodeName)
-				testNode := addonEc2Test.NewTestNode(ctx, instanceName, nodeName, addonEc2Test.Cluster.KubernetesVersion, os, provider, e2e.Large, e2e.GPUInstance)
+				testNode := addonEc2Test.NewTestNode(ctx, instanceName, nodeName, addonEc2Test.Cluster.KubernetesVersion, os, provider, e2e.Large, e2e.GPUInstance, remoteCommandRunner, logCollector)
 				Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
 				Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
@@ -226,12 +239,13 @@ var _ = Describe("Hybrid Nodes", func() {
 
 				// clean up node
 				addonEc2Test.Logger.Info("Resetting hybrid node...")
-				n := testNode.PeerdNode()
+				n := testNode.PeeredInstance()
 				cleanNode := addonEc2Test.NewCleanNode(
 					provider,
 					testNode.PeeredNode.NodeInfrastructureCleaner(*n),
 					n.Name,
 					n.Instance.IP,
+					remoteCommandRunner,
 				)
 				Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 			}, Label("nvidia-device-plugin"))

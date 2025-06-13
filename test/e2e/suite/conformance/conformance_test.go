@@ -20,6 +20,8 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	"github.com/aws/eks-hybrid/test/e2e/peered"
+	"github.com/aws/eks-hybrid/test/e2e/ssm"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
@@ -53,6 +55,10 @@ var _ = SynchronizedBeforeSuite(
 	func(ctx context.Context) []byte {
 		suiteConfig := suite.BeforeSuiteCredentialSetup(ctx, filePath)
 		test := suite.BeforeVPCTest(ctx, &suiteConfig)
+		remoteCommandRunner := ssm.NewSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, "root", test.Logger)
+		logCollector := peered.BottlerocketLogCollector{
+			Runner: remoteCommandRunner,
+		}
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
 		osList := suite.OSProviderList(credentialProviders)
 
@@ -74,7 +80,7 @@ var _ = SynchronizedBeforeSuite(
 				NodeName:     "conformance" + "-node-" + string(provider.Name()) + "-" + os.Name(),
 			})
 		}
-		suite.CreateNodes(ctx, test, nodesToCreate)
+		suite.CreateNodes(ctx, test, nodesToCreate, remoteCommandRunner, logCollector)
 
 		suiteJson, err := yaml.Marshal(suiteConfig)
 		Expect(err).NotTo(HaveOccurred(), "suite config should be marshalled successfully")

@@ -233,16 +233,16 @@ func SetTestResourcesDefaults(testResources TestResources) TestResources {
 	}
 	if testResources.ClusterNetwork == (NetworkConfig{}) {
 		testResources.ClusterNetwork = NetworkConfig{
-			VpcCidr:           "10.0.0.0/16",
-			PublicSubnetCidr:  "10.0.10.0/24",
-			PrivateSubnetCidr: "10.0.20.0/24",
+			VpcCidr:           "10.20.0.0/16",
+			PublicSubnetCidr:  "10.20.1.0/24",
+			PrivateSubnetCidr: "10.20.2.0/24",
 		}
 	}
 	if testResources.HybridNetwork == (NetworkConfig{}) {
 		testResources.HybridNetwork = NetworkConfig{
-			VpcCidr:          "10.1.0.0/16",
-			PublicSubnetCidr: "10.1.1.0/24",
-			PodCidr:          "10.2.0.0/16",
+			VpcCidr:          "10.80.0.0/16",
+			PublicSubnetCidr: "10.80.1.0/24",
+			PodCidr:          "10.87.0.0/16",
 		}
 	}
 

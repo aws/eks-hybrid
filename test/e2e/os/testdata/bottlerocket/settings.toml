@@ -1,0 +1,43 @@
+[settings.kubernetes]
+cluster-name = "{{ .ClusterName }}"
+api-server = "{{ .KubernetesAPIServer }}"
+cluster-certificate = "{{ .ClusterCertificate }}"
+cluster-dns-ip = "172.16.0.10"
+
+authentication-mode = "aws"
+cloud-provider = ""
+
+hostname-override = "{{ .HostName }}"
+provider-id = "eks-hybrid:///{{ .Region }}/{{ .ClusterName }}/{{ .HostName }}"
+
+[settings.network]
+hostname = "{{ .HostName }}"
+
+[settings.aws]
+region = "{{ .Region }}"
+config = "{{ .AWSConfig }}"
+
+[settings.kubernetes.node-labels]
+"eks.amazonaws.com/compute-type" = "hybrid"
+"test.eks-hybrid.amazonaws.com/node-name" = "{{ .HostName }}"
+{{- if .IamRA }}
+"eks.amazonaws.com/hybrid-credential-provider" = "iam-ra"
+{{- else }}
+"eks.amazonaws.com/hybrid-credential-provider" = "ssm"
+{{- end }}
+
+[settings.bootstrap-containers.eks-hybrid-setup]
+mode = "always"
+source = "public.ecr.aws/bottlerocket/bottlerocket-bootstrap:v0.2.2"
+user-data = "{{ .HybridContainerUserData }}"
+
+[settings.host-containers.admin]
+enabled = true
+source = "public.ecr.aws/bottlerocket/bottlerocket-admin:v0.11.20"
+user-data = "{{ .AdminContainerUserData }}"
+
+{{- if not .IamRA }}
+[settings.host-containers.control]
+enabled = true
+source = "public.ecr.aws/bottlerocket/bottlerocket-control:v0.8.4"
+{{- end }}
