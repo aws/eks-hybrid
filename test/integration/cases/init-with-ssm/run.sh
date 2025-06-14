@@ -4,15 +4,13 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source /helpers.sh
-
 mock::aws
 wait::dbus-ready
 
 # remove previously installed containerd to test installation via nodeadm
 dnf remove -y containerd
 
-nodeadm install 1.31 --credential-provider ssm
+nodeadm install $CURRENT_VERSION --credential-provider ssm
 
 mock::ssm
 nodeadm init --skip run,preprocess,node-ip-validation --config-source file://config.yaml
@@ -30,4 +28,3 @@ assert::path-not-exist /eks-hybrid/.aws
 assert::path-not-exist /usr/bin/ssm-agent-worker
 assert::path-not-exist /etc/amazon
 assert::path-not-exist /var/lib/amazon/ssm/registration
-

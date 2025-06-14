@@ -4,8 +4,6 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source /helpers.sh
-
 mock::aws
 wait::dbus-ready
 
@@ -15,7 +13,7 @@ mkdir -p /etc/iam/pki
 touch  /etc/iam/pki/server.pem
 touch  /etc/iam/pki/server.key
 
-nodeadm install 1.30  --credential-provider iam-ra
+nodeadm install $CURRENT_VERSION  --credential-provider iam-ra
 
 mock::aws_signing_helper
 
@@ -31,7 +29,7 @@ fi
 aws eks create-cluster \
     --name my-cluster \
     --region us-west-2 \
-    --kubernetes-version 1.31 \
+    --kubernetes-version $CURRENT_VERSION \
     --role-arn arn:aws:iam::123456789012:role/eksClusterRole-12-3 \
     --resources-vpc-config subnetIds=subnet-123456789012,subnet-123456789013,securityGroupIds=sg-123456789014,endpointPrivateAccess=true,endpointPublicAccess=false \
     --remote-network-config '{"remoteNodeNetworks":[{"cidrs":["10.100.0.0/16"]}],"remotePodNetworks":[{"cidrs":["10.101.0.0/16"]}]}'

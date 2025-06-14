@@ -34,7 +34,7 @@ for CASE_DIR in $(find test/integration/cases -maxdepth 1 -mindepth 1 -name "$TE
     -v $PWD/$CASE_DIR:/test-case \
     $TEST_IMAGE)
   LOG_FILE=$(mktemp)
-  if docker exec $CONTAINER_ID bash -c "cd /test-case && ./run.sh" > $LOG_FILE 2>&1; then
+  if docker exec $CONTAINER_ID bash -c "source /helpers.sh && source /test-constants.sh && cd /test-case && source run.sh" > $LOG_FILE 2>&1; then
     echo "passed! ✅"
     if [ "$DEBUG" = "true" ]; then
       cat $LOG_FILE

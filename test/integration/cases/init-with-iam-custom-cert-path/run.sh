@@ -4,8 +4,6 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-source /helpers.sh
-
 mock::aws
 wait::dbus-ready
 
@@ -13,12 +11,10 @@ mkdir -p /etc/certificates/iam/pki
 touch /etc/certificates/iam/pki/my-server.crt
 touch /etc/certificates/iam/pki/my-server.key
 
-declare INITIAL_VERSION=1.30
-
 # remove previously installed containerd to test installation via nodeadm
 dnf remove -y containerd
 
-nodeadm install $INITIAL_VERSION --credential-provider iam-ra
+nodeadm install $CURRENT_VERSION --credential-provider iam-ra
 
 # mock iam-ra update service credentials file
 mock::iamra_aws_credentials
