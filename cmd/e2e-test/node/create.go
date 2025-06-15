@@ -6,7 +6,7 @@ import (
 	"os"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmsdk "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
@@ -20,6 +20,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
+	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
@@ -82,7 +83,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	eksClient := e2e.NewEKSClient(aws, config.Endpoint)
-	ec2Client := ec2.NewFromConfig(aws)
+	ec2Client := ec2v2.NewFromConfig(aws)
 	ssmClient := ssmsdk.NewFromConfig(aws)
 	s3Client := s3sdk.NewFromConfig(aws)
 
@@ -162,6 +163,16 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	logger.Info("Node created", "instanceID", peerdNode.Instance.ID)
+
+	logger.Info("Waiting for EC2 Instance to be running...", "instanceID", peerdNode.Instance.ID)
+	if err := ec2.WaitForEC2InstanceRunning(ctx, ec2Client, peerdNode.Instance.ID); err != nil {
+		return fmt.Errorf("waiting for EC2 instance for node to be running: %w", err)
+	}
+
+	logger.Info("Disabling source/destination check...", "instanceID", peerdNode.Instance.ID)
+	if err := ec2.DisableSourceDestCheck(ctx, ec2Client, peerdNode.Instance.ID); err != nil {
+		return err
+	}
 
 	logger.Info("Connecting to the node serial console...")
 	serial, err := node.SerialConsole(ctx, peerdNode.Instance.ID)

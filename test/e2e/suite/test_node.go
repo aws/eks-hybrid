@@ -102,6 +102,8 @@ func (n *testNode) Start(ctx context.Context) error {
 			n.waitForNodeToJoin(ctx, flakeRun)
 		})
 
+		Expect(ec2.DisableSourceDestCheck(ctx, n.EC2Client, node.Instance.ID)).Should(Succeed(), "Disable source/destination check should have succeeded")
+
 		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.node)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
 	})
 	return nil

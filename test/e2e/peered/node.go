@@ -159,16 +159,6 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeerdNode, erro
 		return PeerdNode{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
 
-	c.Logger.Info("Waiting for EC2 Instance to be running...", "instanceID", instance.ID)
-	if err := ec2.WaitForEC2InstanceRunning(ctx, c.EC2, instance.ID); err != nil {
-		return PeerdNode{}, fmt.Errorf("waiting for EC2 instance for node to be running: %w", err)
-	}
-
-	c.Logger.Info("Disabling source/destination check...", "instanceID", instance.ID)
-	if err := ec2.DisableSourceDestCheck(ctx, c.EC2, instance.ID); err != nil {
-		return PeerdNode{}, err
-	}
-
 	c.Logger.Info("A Hybrid EC2 instace is created", "instanceID", instance.ID)
 	return PeerdNode{
 		Instance: instance,
