@@ -43,6 +43,14 @@ func NewDeleteCommand() *Delete {
 	return cmd
 }
 
+func NewDeleteCommandWithParams(instanceName, configFile string) *Delete {
+	cmd := &Delete{
+		instanceName: instanceName,
+		configFile:   configFile,
+	}
+	return cmd
+}
+
 func (d *Delete) Flaggy() *flaggy.Subcommand {
 	return d.flaggy
 }
