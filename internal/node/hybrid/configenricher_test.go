@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	internalaws "github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/node/hybrid"
 	"github.com/aws/eks-hybrid/internal/test"
 )
@@ -429,7 +430,7 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 			)
 			g.Expect(err).To(Succeed())
 
-			err = p.Enrich(ctx)
+			err = p.Enrich(ctx, &internalaws.RegionData{})
 			if tc.wantErr != "" {
 				g.Expect(err).To(MatchError(ContainSubstring(tc.wantErr)))
 			} else {

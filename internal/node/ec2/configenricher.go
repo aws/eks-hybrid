@@ -10,10 +10,11 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	awsinternal "github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/aws/ecr"
 )
 
-func (enp *ec2NodeProvider) Enrich(ctx context.Context) error {
+func (enp *ec2NodeProvider) Enrich(ctx context.Context, regionConfig *awsinternal.RegionData) error {
 	enp.logger.Info("Fetching instance details..")
 	imdsClient := imds.New(imds.Options{})
 	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithClientLogMode(aws.LogRetries), config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
@@ -30,7 +31,7 @@ func (enp *ec2NodeProvider) Enrich(ctx context.Context) error {
 	enp.logger.Info("Instance details populated", zap.Reflect("details", instanceDetails))
 	region := instanceDetails.Region
 	enp.logger.Info("Fetching default options...")
-	eksRegistry, err := ecr.GetEKSRegistry(region)
+	eksRegistry, err := ecr.GetEKSRegistry(region, regionConfig)
 	if err != nil {
 		return err
 	}
