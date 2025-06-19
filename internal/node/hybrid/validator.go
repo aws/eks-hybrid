@@ -80,17 +80,22 @@ func validateRolesAnywhereNode(node *api.NodeConfig) error {
 	if len(node.Spec.Hybrid.IAMRolesAnywhere.NodeName) > 64 {
 		return fmt.Errorf("NodeName can't be longer than 64 characters in hybrid iam roles anywhere configuration")
 	}
+
+	// IAM roles anywhere certificate validation
 	if node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath == "" {
 		return fmt.Errorf("CertificatePath is missing in hybrid iam roles anywhere configuration")
 	}
-	if node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath == "" {
-		return fmt.Errorf("PrivateKeyPath is missing in hybrid iam roles anywhere configuration")
-	}
-
 	if !file.Exists(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath) {
 		return fmt.Errorf("IAM Roles Anywhere certificate %s not found", node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath)
 	}
+	if err := ValidateCertificate(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath, nil, CertTypeIAMRA); err != nil {
+		return fmt.Errorf("IAM Roles Anywhere certificate error - %v", err)
+	}
 
+	// IAM roles anywhere key validation
+	if node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath == "" {
+		return fmt.Errorf("PrivateKeyPath is missing in hybrid iam roles anywhere configuration")
+	}
 	if !file.Exists(node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath) {
 		return fmt.Errorf("IAM Roles Anywhere private key %s not found", node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath)
 	}
