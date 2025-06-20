@@ -31,7 +31,13 @@ func (hnp *HybridNodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 	}
 	return []daemon.Daemon{
 		containerd.NewContainerdDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig, hnp.logger),
-		kubelet.NewKubeletDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.awsConfig, credentialProviderAwsConfig),
+		kubelet.NewKubeletDaemon(
+			hnp.daemonManager,
+			hnp.nodeConfig,
+			hnp.awsConfig,
+			credentialProviderAwsConfig,
+			hnp.runner,
+		),
 	}, nil
 }
 

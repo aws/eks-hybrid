@@ -1,4 +1,4 @@
-package node
+package kubernetes
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	k8s "github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/retry"
 	"github.com/aws/eks-hybrid/internal/validation"
@@ -31,12 +30,22 @@ type Kubelet interface {
 }
 
 type APIServerValidator struct {
-	kubelet Kubelet
+	kubeconfig Kubeconfig
+	kubelet    Kubelet
 }
 
-func NewAPIServerValidator(kubelet Kubelet) APIServerValidator {
+// Kubeconfig defines the interface for working with kubeconfig files
+type Kubeconfig interface {
+	// Path returns the path to the kubeconfig file
+	Path() string
+	// BuildClient builds a Kubernetes client from the kubeconfig
+	BuildClient() (kubernetes.Interface, error)
+}
+
+func NewAPIServerValidator(kubeconfig Kubeconfig, kubelet Kubelet) APIServerValidator {
 	return APIServerValidator{
-		kubelet: kubelet,
+		kubeconfig: kubeconfig,
+		kubelet:    kubelet,
 	}
 }
 
@@ -54,9 +63,12 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 		return err
 	}
 
-	_, err = k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
+	_, err = GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
-		err = validation.WithRemediation(err, badPermissionsRemediation)
+		err = validation.WithRemediation(
+			fmt.Errorf("making authenticated request to Kubernetes API endpoint: %w", err),
+			badPermissionsRemediation,
+		)
 		return err
 	}
 
@@ -146,7 +158,7 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 		return err
 	}
 
-	kubeEndpoint, err := k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
+	kubeEndpoint, err := GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -194,9 +206,9 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 }
 
 func (a APIServerValidator) client() (kubernetes.Interface, error) {
-	client, err := a.kubelet.BuildClient()
+	client, err := a.kubeconfig.BuildClient()
 	if err != nil {
-		return nil, validation.WithRemediation(err, fmt.Sprintf("Ensure the kubeconfig at %s has been created and is valid.", a.kubelet.KubeconfigPath()))
+		return nil, validation.WithRemediation(err, fmt.Sprintf("Ensure the kubeconfig at %s has been created and is valid.", a.kubeconfig.Path()))
 	}
 
 	return client, nil

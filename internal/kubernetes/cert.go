@@ -5,7 +5,6 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/kubelet"
-	"github.com/aws/eks-hybrid/internal/node/hybrid"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -47,7 +46,7 @@ func (v KubeletCertificateValidator) Run(ctx context.Context, informer validatio
 	defer func() {
 		informer.Done(ctx, name, err)
 	}()
-	if err = hybrid.ValidateKubeletCert(v.certPath, cluster.CertificateAuthority); err != nil {
+	if err = kubelet.ValidateKubeletCert(v.certPath, cluster.CertificateAuthority); err != nil {
 		return err
 	}
 
