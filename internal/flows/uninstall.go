@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"go.uber.org/zap"
@@ -83,7 +85,11 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 		}
 
 		ssmClient := awsSsm.NewFromConfig(awsConfig, func(o *awsSsm.Options) {
-			o.RetryMaxAttempts = 6
+			// intentionally long max backoff and number of retry attempts as we want to optimize for success
+			// vs flaky fails during deregistering due to connection reset (and the like) errors from the ssm endpoint
+			// we would rather longer run time than flaky failures
+			o.Retryer = retry.AddWithMaxAttempts(o.Retryer, 12)
+			o.Retryer = retry.AddWithMaxBackoffDelay(o.Retryer, 1*time.Minute)
 		})
 		if err := ssm.Uninstall(ctx, ssm.UninstallOptions{
 			Logger:          u.Logger,
