@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/aws/aws-sdk-go-v2/config v1.29.16
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.31
+	github.com/aws/aws-sdk-go-v2/service/acmpca v1.40.2
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.60.2
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.50.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.225.1
@@ -20,6 +21,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.59.2
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.21
 	github.com/aws/smithy-go v1.22.3
+	github.com/cert-manager/cert-manager v1.17.2
+	github.com/cert-manager/aws-privateca-issuer v1.5.0
 	github.com/cert-manager/cert-manager v1.17.2
 	github.com/containerd/containerd v1.7.27
 	github.com/coreos/go-systemd/v22 v22.5.0

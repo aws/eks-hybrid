@@ -1,6 +1,8 @@
 package suite
 
 import (
+	"github.com/aws/aws-sdk-go-v2/service/acmpca"
+	awspcaclientset "github.com/cert-manager/aws-privateca-issuer/pkg/clientset/v1beta1"
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned"
 
@@ -102,6 +104,29 @@ func (a *AddonEc2Test) NewCertManagerTest() *addon.CertManagerTest {
 		a.Logger.Error(err, "Failed to create cert-manager client")
 	}
 
+	// Create AWS PCA client
+	pcaClient := acmpca.NewFromConfig(a.aws)
+
+	// Create AWS PCA issuer client
+	pcaIssuerClient, err := awspcaclientset.NewForConfig(a.K8sClientConfig)
+	if err != nil {
+		a.Logger.Error(err, "Failed to create AWS PCA issuer client")
+	}
+
+	// Create PCA Issuer test
+	pcaIssuerTest := &addon.PCAIssuerTest{
+		Cluster:            a.Cluster.Name,
+		Namespace:          "cert-test",
+		K8S:                a.k8sClient,
+		EKSClient:          a.eksClient,
+		CertClient:         certClient,
+		K8sPcaClient:       pcaIssuerClient,
+		PCAClient:          pcaClient,
+		Region:             a.Cluster.Region,
+		PodIdentityRoleArn: a.podIdentityRoleArn,
+		Logger:             a.Logger.WithName("pca-issuer"),
+	}
+
 	return &addon.CertManagerTest{
 		Cluster:    a.Cluster.Name,
 		K8S:        a.k8sClient,
@@ -109,5 +134,6 @@ func (a *AddonEc2Test) NewCertManagerTest() *addon.CertManagerTest {
 		K8SConfig:  a.K8sClientConfig,
 		Logger:     a.Logger,
 		CertClient: certClient,
+		PCAIssuer:  pcaIssuerTest,
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 )
@@ -26,6 +27,16 @@ func IsS3BucketNotFound(err error) bool {
 	var ae smithy.APIError
 	return errors.As(err, &ae) &&
 		ae.ErrorCode() == "NoSuchBucket"
+}
+
+func IsIAMRoleNotFound(err error) bool {
+	if IsType(err, &iamTypes.NoSuchEntityException{}) {
+		return true
+	}
+
+	var ae smithy.APIError
+	return errors.As(err, &ae) &&
+		ae.ErrorCode() == "NoSuchEntityException"
 }
 
 func IsAwsError(err error, code string) bool {
