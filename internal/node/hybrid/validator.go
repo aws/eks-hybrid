@@ -2,10 +2,17 @@ package hybrid
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/util/file"
+)
+
+const (
+	// https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_CreateActivation.html#systemsmanager-CreateActivation-response-ActivationId
+	ssmActivationIDPattern   = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	ssmActivationCodePattern = `^.{20,250}$`
 )
 
 func extractFlagValue(args []string, flag string) string {
@@ -50,6 +57,26 @@ func (hnp *HybridNodeProvider) withHybridValidators() {
 			}
 			if cfg.Spec.Hybrid.SSM.ActivationID == "" {
 				return fmt.Errorf("ActivationID is missing in hybrid ssm configuration")
+			}
+
+			// Compile the activation code pattern
+			reCode, err := regexp.Compile(ssmActivationCodePattern)
+			if err != nil {
+				return fmt.Errorf("internal error: invalid ActivationCode pattern: %v", err)
+			}
+			// Check if ActivationCode matches the pattern
+			if !reCode.MatchString(cfg.Spec.Hybrid.SSM.ActivationCode) {
+				return fmt.Errorf("invalid ActivationCode format: %s. Must be 20-250 characters", cfg.Spec.Hybrid.SSM.ActivationCode)
+			}
+
+			// Compile the regex patterns
+			reID, err := regexp.Compile(ssmActivationIDPattern)
+			if err != nil {
+				return fmt.Errorf("internal error: invalid ActivationID pattern: %v", err)
+			}
+			// Check if ActivationID matches the pattern
+			if !reID.MatchString(cfg.Spec.Hybrid.SSM.ActivationID) {
+				return fmt.Errorf("invalid ActivationID format: %s. Must be in format: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", cfg.Spec.Hybrid.SSM.ActivationID)
 			}
 		}
 		return nil
