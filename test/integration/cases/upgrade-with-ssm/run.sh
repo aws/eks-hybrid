@@ -45,7 +45,7 @@ assert::file-permission-matches /usr/local/bin/aws-iam-authenticator 755
 assert::file-permission-matches /opt/ssm/ssm-setup-cli 755
 
 mock::ssm
-nodeadm init --skip run,preprocess,node-ip-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml
+nodeadm init --skip run,preprocess,node-ip-validation,aws-auth-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml
 
 # The memory reserved by kubelet is dynamic depending on the host that builts the docker image
 # Remove kubeReserved field before checking its content
@@ -70,7 +70,7 @@ generate::birth-file /usr/bin/amazon-ssm-agent
 # Create dummy cilium-cni to ensure cilium isnt getting replaced
 touch /opt/cni/cilium-cni
 
-nodeadm upgrade $TARGET_VERSION --skip run,preprocess,pod-validation,node-validation,init-validation,node-ip-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,preprocess,pod-validation,node-validation,init-validation,aws-auth-validation,node-ip-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml
 
 assert::birth-not-match /usr/bin/kubelet
 assert::birth-not-match /usr/local/bin/kubectl
@@ -114,7 +114,7 @@ generate::birth-file /usr/bin/kubelet
 generate::birth-file /usr/local/bin/kubectl
 generate::birth-file /etc/eks/image-credential-provider/ecr-credential-provider
 
-nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,aws-auth-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml
 assert::birth-match /usr/bin/kubelet
 assert::birth-match /usr/local/bin/kubectl
 assert::birth-match /usr/bin/containerd

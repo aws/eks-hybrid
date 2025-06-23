@@ -89,7 +89,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	os.Stderr = printer.File
 
 	runner := validation.NewRunner[*api.NodeConfig](printer)
-	apiServerValidator := kubernetes.NewAPIServerValidator(kubelet.Kubeconfig{})
+	apiServerValidator := kubernetes.NewAPIServerValidator(kubelet.Kubeconfig{}, kubelet.New())
 	clusterProvider := kubernetes.NewClusterProvider(awsConfig)
 	runner.Register(creds.Validations(awsConfig, nodeConfig)...)
 	runner.Register(
