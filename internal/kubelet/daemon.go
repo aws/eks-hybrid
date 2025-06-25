@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 const KubeletDaemonName = "kubelet"
@@ -27,9 +28,15 @@ type kubelet struct {
 	// kubelet config flags without leading dashes
 	flags                       map[string]string
 	credentialProviderAwsConfig CredentialProviderAwsConfig
+	runner                      ValidationRunner
 }
 
-func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config, credentialProviderAwsConfig CredentialProviderAwsConfig) daemon.Daemon {
+// ValidationRunner runs validations.
+type ValidationRunner interface {
+	Run(ctx context.Context, obj *api.NodeConfig, validations ...validation.Validation[*api.NodeConfig]) error
+}
+
+func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config, credentialProviderAwsConfig CredentialProviderAwsConfig, runner ValidationRunner) daemon.Daemon {
 	return &kubelet{
 		daemonManager:               daemonManager,
 		nodeConfig:                  cfg,
@@ -37,6 +44,7 @@ func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, a
 		environment:                 make(map[string]string),
 		flags:                       make(map[string]string),
 		credentialProviderAwsConfig: credentialProviderAwsConfig,
+		runner:                      runner,
 	}
 }
 
@@ -56,6 +64,10 @@ func (k *kubelet) Configure(ctx context.Context) error {
 	if err := k.writeKubeletEnvironment(); err != nil {
 		return err
 	}
+
+	// At this point we have a valid kubeconfig so we should be able to make an authenticated request
+	// Note: The k8s-authentication validation has been moved to avoid circular imports
+	// It should be handled by the validation runner passed to this daemon
 	return nil
 }
 

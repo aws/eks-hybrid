@@ -67,3 +67,34 @@ func TestRemediation(t *testing.T) {
 		})
 	}
 }
+
+func TestFlattenRemediation(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "remediable error",
+			err:  validation.NewRemediableErr("test error", "fix it"),
+			want: "test error: fix it",
+		},
+		{
+			name: "non-remediable error",
+			err:  errors.New("test error"),
+			want: "test error",
+		},
+		{
+			name: "wrapped remediable error",
+			err:  validation.WithRemediation(errors.New("test error"), "fix it"),
+			want: "test error: fix it",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			flattened := validation.FlattenRemediation(tt.err)
+			g.Expect(flattened.Error()).To(Equal(tt.want))
+		})
+	}
+}

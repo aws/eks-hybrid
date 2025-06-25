@@ -2,6 +2,7 @@ package hybrid
 
 import (
 	"context"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
@@ -12,12 +13,18 @@ import (
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 const (
 	nodeIpValidation      = "node-ip-validation"
 	kubeletCertValidation = "kubelet-cert-validation"
 )
+
+// ValidationRunner runs validations.
+type ValidationRunner interface {
+	Run(ctx context.Context, obj *api.NodeConfig, validations ...validation.Validation[*api.NodeConfig]) error
+}
 
 type HybridNodeProvider struct {
 	nodeConfig    *api.NodeConfig
@@ -31,17 +38,27 @@ type HybridNodeProvider struct {
 	// CertPath is the path to the kubelet certificate
 	// If not provided, defaults to kubelet.KubeletCurrentCertPath
 	certPath string
+	runner   ValidationRunner
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
 
 func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logger *zap.Logger, opts ...NodeProviderOpt) (nodeprovider.NodeProvider, error) {
+	var skipValidations []string
+	for _, phase := range skipPhases {
+		skipValidations = append(skipValidations, strings.TrimSuffix(phase, "-validation"))
+	}
+
 	np := &HybridNodeProvider{
 		nodeConfig: nodeConfig,
 		logger:     logger,
 		skipPhases: skipPhases,
 		network:    &defaultKubeletNetwork{},
 		certPath:   kubelet.KubeletCurrentCertPath,
+		runner: validation.NewSingleRunner[*api.NodeConfig](
+			validation.NewZapInformer(logger),
+			validation.WithSingleRunnerSkipValidations(skipValidations...),
+		),
 	}
 	np.withHybridValidators()
 	if err := np.withDaemonManager(); err != nil {
@@ -82,6 +99,13 @@ func WithCertPath(path string) NodeProviderOpt {
 	}
 }
 
+// WithValidationRunner sets the runner for the HybridNodeProvider.
+func WithValidationRunner(runner ValidationRunner) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.runner = runner
+	}
+}
+
 func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
@@ -99,10 +123,10 @@ func (hnp *HybridNodeProvider) Validate() error {
 
 	if !slices.Contains(hnp.skipPhases, kubeletCertValidation) {
 		hnp.logger.Info("Validating kubelet certificate...")
-		if err := ValidateKubeletCert(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
+		if err := kubelet.ValidateKubeletCert(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
 			// Ignore date validation errors in the hybrid provider since kubelet will regenerate them
 			// Ignore no cert errors since we expect it to not exist
-			if IsDateValidationError(err) || IsNoCertError(err) {
+			if kubelet.IsDateValidationError(err) || kubelet.IsNoCertError(err) {
 				return nil
 			}
 

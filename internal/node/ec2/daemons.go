@@ -5,9 +5,11 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func (enp *ec2NodeProvider) withDaemonManager() error {
@@ -25,7 +27,15 @@ func (enp *ec2NodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 	}
 	return []daemon.Daemon{
 		containerd.NewContainerdDaemon(enp.daemonManager, enp.nodeConfig, enp.awsConfig, enp.logger),
-		kubelet.NewKubeletDaemon(enp.daemonManager, enp.nodeConfig, enp.awsConfig, kubelet.CredentialProviderAwsConfig{}),
+		kubelet.NewKubeletDaemon(
+			enp.daemonManager,
+			enp.nodeConfig,
+			enp.awsConfig,
+			kubelet.CredentialProviderAwsConfig{},
+			// For EC2 nodes we don't run in-flight validations
+			// We could but we don't to preserve the current (now old) behavior
+			validation.NewNoopSingleRunner[*api.NodeConfig](),
+		),
 	}, nil
 }
 
