@@ -65,6 +65,12 @@ var installContainerdScript []byte
 //go:embed testdata/nvidia-driver-install.sh
 var nvidiaDriverInstallScript []byte
 
+//go:embed testdata/proxy/systemd-proxy.conf
+var systemdProxyConf []byte
+
+//go:embed testdata/proxy/proxy-vars.sh
+var proxyVarsScript []byte
+
 func (a architecture) String() string {
 	return string(a)
 }
@@ -83,14 +89,57 @@ func populateBaseScripts(userDataInput *e2e.UserDataInput) error {
 		return fmt.Errorf("generating nodeadm wrapper: %w", err)
 	}
 
+	// Always create proxy-vars.sh, it will return early if no proxy is set
+	proxyVars, err := executeTemplate(proxyVarsScript, map[string]interface{}{
+		"Proxy": userDataInput.Proxy,
+	})
+	if err != nil {
+		return fmt.Errorf("executing proxy vars template: %w", err)
+	}
+
 	userDataInput.Files = append(userDataInput.Files,
 		e2e.File{Content: string(nodeAdmInitScript), Path: "/tmp/nodeadm-init.sh", Permissions: "0755"},
 		e2e.File{Content: string(logCollector), Path: "/tmp/log-collector.sh", Permissions: "0755"},
 		e2e.File{Content: string(nodeadmWrapper), Path: "/tmp/nodeadm-wrapper.sh", Permissions: "0755"},
 		e2e.File{Content: string(installContainerdScript), Path: "/tmp/install-containerd.sh", Permissions: "0755"},
 		e2e.File{Content: string(nvidiaDriverInstallScript), Path: "/tmp/nvidia-driver-install.sh", Permissions: "0755"},
+		e2e.File{Content: string(proxyVars), Path: "/etc/proxy-vars.sh", Permissions: "0644"},
 	)
 
+	if userDataInput.Proxy != "" {
+		// Use the common systemd proxy config for containerd and kubelet
+		if err := addSystemdProxyConfig(userDataInput, "/etc/systemd/system/containerd.service.d/http-proxy.conf"); err != nil {
+			return fmt.Errorf("adding containerd proxy config: %w", err)
+		}
+		if err := addSystemdProxyConfig(userDataInput, "/etc/systemd/system/kubelet.service.d/http-proxy.conf"); err != nil {
+			return fmt.Errorf("adding kubelet proxy config: %w", err)
+		}
+		if err := addSystemdProxyConfig(userDataInput, "/etc/systemd/system/aws_signing_helper_update.service.d/http-proxy.conf"); err != nil {
+			return fmt.Errorf("adding aws signing helper update proxy config: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// addSSMAgentProxyConfig adds the SSM agent proxy configuration at the specified path
+func addSystemdProxyConfig(userDataInput *e2e.UserDataInput, path string) error {
+	if userDataInput.Proxy == "" {
+		return nil
+	}
+
+	proxyConf, err := executeTemplate(systemdProxyConf, map[string]interface{}{
+		"Proxy": userDataInput.Proxy,
+	})
+	if err != nil {
+		return fmt.Errorf("executing ssm agent proxy template: %w", err)
+	}
+
+	userDataInput.Files = append(userDataInput.Files, e2e.File{
+		Content:     string(proxyConf),
+		Path:        path,
+		Permissions: "0644",
+	})
 	return nil
 }
 

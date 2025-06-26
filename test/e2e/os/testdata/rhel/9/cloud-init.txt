@@ -23,6 +23,12 @@ write_files:
   - content: |
 {{ .NodeadmConfigYaml | indent 6 }}
     path: nodeadm-config.yaml
+{{- if .Proxy }}
+  - content: |      
+      proxy={{ .Proxy }}
+    path: /etc/yum.conf
+    append: true
+{{- end }}
 {{ range $file := .Files }}
   - content: |
 {{ $file.Content | indent 6 }}

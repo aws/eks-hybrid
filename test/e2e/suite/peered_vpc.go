@@ -49,7 +49,7 @@ type SuiteConfiguration struct {
 	RolesAnywhereCACertPEM []byte                   `json:"rolesAnywhereCACertPEM"`
 	RolesAnywhereCAKeyPEM  []byte                   `json:"rolesAnywhereCAPrivateKeyPEM"`
 	PublicKey              string                   `json:"publicKey"`
-	JumpboxInstanceId      string                   `json:"jumpboxInstanceId"`
+	Jumpbox                peered.Jumpbox           `json:"jumpbox"`
 }
 
 type PeeredVPCTest struct {
@@ -77,7 +77,8 @@ type PeeredVPCTest struct {
 	OverrideNodeK8sVersion string
 	setRootPassword        bool
 	SkipCleanup            bool
-	JumpboxInstanceId      string
+	Jumpbox                peered.Jumpbox
+	Proxy                  string
 
 	publicKey string
 
@@ -102,7 +103,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		publicKey:              suite.PublicKey,
 		setRootPassword:        suite.TestConfig.SetRootPassword,
 		SkipCleanup:            suite.SkipCleanup,
-		JumpboxInstanceId:      suite.JumpboxInstanceId,
+		Jumpbox:                suite.Jumpbox,
+		Proxy:                  fmt.Sprintf("http://%s:3128", suite.Jumpbox.IP),
 	}
 
 	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion),
@@ -175,7 +177,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 }
 
 func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
-	remoteCommandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger)
+	remoteCommandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.Jumpbox.Id, t.Logger)
 	return &peered.Node{
 		NodeCreate: peered.NodeCreate{
 			AWS:                 t.aws,
@@ -185,6 +187,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 			Logger:              logger,
 			Cluster:             t.Cluster,
 			NodeadmURLs:         t.nodeadmURLs,
+			Proxy:               t.Proxy,
 			PublicKey:           t.publicKey,
 			SetRootPassword:     t.setRootPassword,
 			RemoteCommandRunner: remoteCommandRunner,
@@ -217,7 +220,7 @@ func (t *PeeredVPCTest) NewPeeredNetwork(logger logr.Logger) *peered.Network {
 func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
 		K8s:                   t.k8sClient,
-		RemoteCommandRunner:   ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
+		RemoteCommandRunner:   ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.Jumpbox.Id, t.Logger),
 		Verifier:              provider,
 		Logger:                t.Logger,
 		InfrastructureCleaner: infraCleaner,
@@ -229,7 +232,7 @@ func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, in
 func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
 	return &nodeadm.UpgradeNode{
 		K8s:                 t.k8sClient,
-		RemoteCommandRunner: ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
+		RemoteCommandRunner: ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.Jumpbox.Id, t.Logger),
 		Logger:              t.Logger,
 		NodeName:            nodeName,
 		NodeIP:              nodeIP,
@@ -258,6 +261,7 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		Logger:              t.Logger,
 		K8SConfig:           t.K8sClientConfig,
 		Region:              t.Cluster.Region,
+		Proxy:               t.Proxy,
 	}
 }
 
@@ -386,7 +390,7 @@ func BeforeSuiteCredentialSetup(ctx context.Context, filePath string) SuiteConfi
 		RolesAnywhereCACertPEM: infra.Credentials.RolesAnywhereCA.CertPEM,
 		RolesAnywhereCAKeyPEM:  infra.Credentials.RolesAnywhereCA.KeyPEM,
 		PublicKey:              infra.NodesPublicSSHKey,
-		JumpboxInstanceId:      infra.JumpboxInstanceId,
+		Jumpbox:                infra.Jumpbox,
 	}
 }
 

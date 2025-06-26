@@ -205,7 +205,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						k8sVersion = test.OverrideNodeK8sVersion
 					}
 
-					remoteCommandRunner := ssm.NewBottlerocketSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, test.Logger)
+					remoteCommandRunner := ssm.NewBottlerocketSSHOnSSMCommandRunner(test.SSMClient, test.Jumpbox.Id, test.Logger)
 					logCollector := os.BottlerocketLogCollector{
 						Runner: remoteCommandRunner,
 					}

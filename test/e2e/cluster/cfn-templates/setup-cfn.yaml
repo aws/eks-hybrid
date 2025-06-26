@@ -334,6 +334,69 @@ Resources:
                   - "|"
                   - !Ref PortWithDescription
 
+  HybridNodeDefaultSecurityGroupIngressFromProxyOnly:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3128
+      ToPort: 3128
+      SourceSecurityGroupId: !Ref HybridNodeProxyOnlySecurityGroup
+
+  HybridNodeProxyOnlySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for hybrid nodes that only allows traffic through the proxy
+      VpcId: !Ref HybridNodeVPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          SourceSecurityGroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-hybrid-node-proxy-sg
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
+
+  HybridNodeProxyOnlySecurityGroupIngress10250:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref HybridNodeProxyOnlySecurityGroup
+      IpProtocol: tcp
+      FromPort: 10250
+      ToPort: 10250
+      CidrIp: !Ref ClusterVPCCidr
+
+  HybridNodeProxyOnlySecurityGroupIngress9443:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref HybridNodeProxyOnlySecurityGroup
+      IpProtocol: tcp
+      FromPort: 9443
+      ToPort: 9443
+      CidrIp: !Ref ClusterVPCCidr
+
+  HybridNodeProxyOnlySecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref HybridNodeProxyOnlySecurityGroup
+      IpProtocol: tcp
+      FromPort: 3128
+      ToPort: 3128
+      DestinationSecurityGroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+
+  HybridNodeProxyOnlySecurityGroupEgressToCluster:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref HybridNodeProxyOnlySecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref ClusterVPCCidr
+
   ClusterToHybridTGW:
     Type: AWS::EC2::TransitGateway
     Properties:
@@ -536,8 +599,10 @@ Resources:
         Fn::Base64:
           Fn::Base64: !Sub |
             #cloud-config
+            package_update: true
             packages:
               - rsyslog
+              - squid
             write_files:
               - content: |
                   Host *
@@ -562,6 +627,10 @@ Resources:
                 permissions: "0755"
             runcmd:
               - systemctl enable rsyslog --now
+              - systemctl enable squid
+              - sed -i 's/http_access deny all/http_access allow all/' /etc/squid/squid.conf
+              - echo 'acl allow_my_ip src ${HybridNodeVPCCidr}' | tee -a /etc/squid/squid.conf
+              - systemctl start squid
               - cfn-signal --stack ${AWS::StackName} --resource Jumpbox --region ${AWS::Region}
 
   PodIdentityS3Bucket:
@@ -630,6 +699,10 @@ Outputs:
   ClusterSecurityGroup:
     Description: The ID of the EKS Hybrid Cluster Security Group.
     Value: !GetAtt ClusterVPC.DefaultSecurityGroup
+
+  HybridNodeProxyOnlySecurityGroup:
+    Description: The ID of the security group for hybrid nodes with proxy-only internet access.
+    Value: !Ref HybridNodeProxyOnlySecurityGroup
 
   PodIdentityAssociationRoleARN:
     Description: The role ARN of PodIdentityAssociationRole

@@ -12,6 +12,9 @@ provider-id = "eks-hybrid:///{{ .Region }}/{{ .ClusterName }}/{{ .HostName }}"
 
 [settings.network]
 hostname = "{{ .HostName }}"
+{{- if .Proxy }}
+https-proxy = "{{ .Proxy }}"
+{{- end }}
 
 [settings.aws]
 region = "{{ .Region }}"

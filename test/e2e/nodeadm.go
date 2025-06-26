@@ -50,6 +50,7 @@ type UserDataInput struct {
 	HostName            string
 	ClusterName         string
 	ClusterCert         []byte
+	Proxy               string
 }
 
 type NodeadmURLs struct {

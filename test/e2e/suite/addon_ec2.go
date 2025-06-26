@@ -16,7 +16,7 @@ type AddonEc2Test struct {
 
 // NewNodeMonitoringAgentTest creates a new NodeMonitoringAgentTest
 func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTest {
-	commandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, a.Logger)
+	commandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(a.SSMClient, a.Jumpbox.Id, a.Logger)
 	return &addon.NodeMonitoringAgentTest{
 		Cluster:       a.Cluster.Name,
 		K8S:           a.k8sClient,
@@ -82,7 +82,7 @@ func (a *AddonEc2Test) NewPrometheusNodeExporterTest() *addon.PrometheusNodeExpo
 
 // NewNvidiaDevicePluginTest creates a new NvidiaDevicePluginTest
 func (a *AddonEc2Test) NewNvidiaDevicePluginTest(nodeName string) *addon.NvidiaDevicePluginTest {
-	commandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, a.Logger)
+	commandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(a.SSMClient, a.Jumpbox.Id, a.Logger)
 	return &addon.NvidiaDevicePluginTest{
 		Cluster:       a.Cluster.Name,
 		K8S:           a.k8sClient,
