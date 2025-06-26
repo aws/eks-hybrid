@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+source /etc/proxy-vars.sh
+
 # first arg is the url to upload the logs to
 LOGS_UPLOAD_URL="$1"
 # remaining args are the additional folders/files to add to the bundle

@@ -20,6 +20,10 @@ var ubuntu2204CloudInit []byte
 //go:embed testdata/ubuntu/2404/cloud-init.txt
 var ubuntu2404CloudInit []byte
 
+const (
+	ubuntuSSMAgentProxyPath = "/etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service.d/http-proxy.conf"
+)
+
 type ubuntuCloudInitData struct {
 	e2e.UserDataInput
 	NodeadmUrl            string
@@ -95,6 +99,10 @@ func (u Ubuntu2004) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, erro
 		return nil, err
 	}
 
+	if err := addSystemdProxyConfig(&userDataInput, ubuntuSSMAgentProxyPath); err != nil {
+		return nil, err
+	}
+
 	data := ubuntuCloudInitData{
 		UserDataInput: userDataInput,
 		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
@@ -166,6 +174,10 @@ func (u Ubuntu2204) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, erro
 	userDataInput.NodeadmConfigYaml = nodeadmConfigYaml
 
 	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	if err := addSystemdProxyConfig(&userDataInput, ubuntuSSMAgentProxyPath); err != nil {
 		return nil, err
 	}
 
@@ -251,6 +263,10 @@ func (u Ubuntu2404) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, erro
 	userDataInput.NodeadmConfigYaml = nodeadmConfigYaml
 
 	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	if err := addSystemdProxyConfig(&userDataInput, ubuntuSSMAgentProxyPath); err != nil {
 		return nil, err
 	}
 

@@ -34,6 +34,7 @@ type brSettingsTomlInitData struct {
 	ClusterCertificate      string
 	HybridContainerUserData string
 	IamRA                   bool
+	Proxy                   string
 }
 
 type BottleRocket struct {
@@ -101,10 +102,14 @@ func (a BottleRocket) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, er
 			}
 		}
 		bootstrapContainerCommand = fmt.Sprintf("%s --certificate='%s' --key='%s'", iamRaSetupBootstrapCommand, certificate, key)
+		withProxy := ""
+		if userDataInput.Proxy != "" {
+			withProxy = "--use-proxy"
+		}
 		awsConfig = fmt.Sprintf(`
 [default]
-credential_process = %s credential-process --certificate %s --private-key %s --profile-arn %s --role-arn %s --trust-anchor-arn %s --role-session-name %s
-`, awsSigningHelperBinary, iamRaCertificatePath, iamRaKeyPath, userDataInput.NodeadmConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN, userDataInput.NodeadmConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN, userDataInput.NodeadmConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN, userDataInput.HostName)
+credential_process = %s credential-process --certificate %s --private-key %s --profile-arn %s --role-arn %s --trust-anchor-arn %s --role-session-name %s %s
+`, awsSigningHelperBinary, iamRaCertificatePath, iamRaKeyPath, userDataInput.NodeadmConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN, userDataInput.NodeadmConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN, userDataInput.NodeadmConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN, userDataInput.HostName, withProxy)
 	} else if userDataInput.NodeadmConfig.Spec.Hybrid.SSM != nil {
 		bootstrapContainerCommand = fmt.Sprintf("%s --activation-id=%q --activation-code=%q --region=%q", ssmSetupBootstrapCommand, userDataInput.NodeadmConfig.Spec.Hybrid.SSM.ActivationID, userDataInput.NodeadmConfig.Spec.Hybrid.SSM.ActivationCode, userDataInput.Region)
 	}
@@ -115,6 +120,7 @@ credential_process = %s credential-process --certificate %s --private-key %s --p
 		ClusterCertificate:      base64.StdEncoding.EncodeToString(userDataInput.ClusterCert),
 		IamRA:                   userDataInput.NodeadmConfig.Spec.Hybrid.SSM == nil,
 		HybridContainerUserData: base64.StdEncoding.EncodeToString([]byte(bootstrapContainerCommand)),
+		Proxy:                   userDataInput.Proxy,
 	}
 
 	return executeTemplate(brSettingsToml, data)

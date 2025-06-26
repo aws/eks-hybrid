@@ -12,12 +12,13 @@ import (
 )
 
 type HybridCluster struct {
-	Name              string
-	Arn               string
-	Region            string
-	KubernetesVersion string
-	SubnetID          string
-	SecurityGroupID   string
+	Name                     string
+	Arn                      string
+	Region                   string
+	KubernetesVersion        string
+	SubnetID                 string
+	SecurityGroupID          string
+	ProxyOnlySecurityGroupID string
 }
 
 // GetHybridCluster returns the hybrid cluster details.
@@ -48,6 +49,11 @@ func GetHybridCluster(ctx context.Context, eksClient *eks.Client, ec2Client *ec2
 	cluster.SecurityGroupID, err = getDefaultSecurityGroup(ctx, ec2Client, hybridVpcID)
 	if err != nil {
 		return nil, fmt.Errorf("getting default security group in the given hybrid node vpc %s: %w", hybridVpcID, err)
+	}
+
+	cluster.ProxyOnlySecurityGroupID, err = getProxyOnlySecurityGroup(ctx, ec2Client, hybridVpcID, clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("getting proxy only security group in the given hybrid node vpc %s: %w", hybridVpcID, err)
 	}
 
 	return cluster, nil
@@ -166,6 +172,32 @@ func getDefaultSecurityGroup(ctx context.Context, client *ec2.Client, vpcID stri
 
 	if len(result.SecurityGroups) == 0 {
 		return "", fmt.Errorf("no default security group found for VPC %s", vpcID)
+	}
+
+	return *result.SecurityGroups[0].GroupId, nil
+}
+
+func getProxyOnlySecurityGroup(ctx context.Context, client *ec2.Client, vpcID, clusterName string) (string, error) {
+	input := &ec2.DescribeSecurityGroupsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []string{vpcID},
+			},
+			{
+				Name:   aws.String("tag:Name"),
+				Values: []string{fmt.Sprintf("%s-hybrid-node-proxy-sg", clusterName)},
+			},
+		},
+	}
+
+	result, err := client.DescribeSecurityGroups(ctx, input)
+	if err != nil {
+		return "", err
+	}
+
+	if len(result.SecurityGroups) == 0 {
+		return "", fmt.Errorf("no proxy only security group found for VPC %s", vpcID)
 	}
 
 	return *result.SecurityGroups[0].GroupId, nil

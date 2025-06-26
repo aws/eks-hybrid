@@ -13,6 +13,10 @@ import (
 //go:embed testdata/amazonlinux/2023/cloud-init.txt
 var al23CloudInit []byte
 
+const (
+	alSSMAgentProxyPath = "/etc/systemd/system/amazon-ssm-agent.service.d/http-proxy.conf"
+)
+
 type amazonLinuxCloudInitData struct {
 	e2e.UserDataInput
 	NodeadmUrl string
@@ -58,6 +62,10 @@ func (a AmazonLinux2023) BuildUserData(userDataInput e2e.UserDataInput) ([]byte,
 	userDataInput.NodeadmConfigYaml = nodeadmConfigYaml
 
 	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	if err := addSystemdProxyConfig(&userDataInput, alSSMAgentProxyPath); err != nil {
 		return nil, err
 	}
 
