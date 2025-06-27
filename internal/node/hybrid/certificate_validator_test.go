@@ -49,7 +49,7 @@ func TestValidateKubeletCert(t *testing.T) {
 			name:          "wrong CA",
 			cert:          test.GenerateKubeletCert(g, wrongCA, wrongCAKey, time.Now(), time.Now().AddDate(10, 0, 0)),
 			ca:            caBytes,
-			expectedError: "kubelet certificate is not valid for the current cluster",
+			expectedError: "certificate is not valid for the current cluster",
 		},
 		{
 			name:          "skip validation",
@@ -60,7 +60,7 @@ func TestValidateKubeletCert(t *testing.T) {
 		},
 		{
 			name:          "stat error",
-			expectedError: "reading kubelet certificate",
+			expectedError: "reading certificate",
 			setup: func(tempDir string) error {
 				// Create a directory with the same name as the cert file to cause a stat error
 				certPath := filepath.Join(tempDir, kubelet.KubeletCurrentCertPath)
@@ -71,7 +71,7 @@ func TestValidateKubeletCert(t *testing.T) {
 			name:          "invalid cert format",
 			cert:          []byte("invalid pem data"),
 			ca:            caBytes,
-			expectedError: "parsing kubelet certificate",
+			expectedError: "parsing certificate",
 		},
 		{
 			name:          "invalid CA format",
