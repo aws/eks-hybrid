@@ -24,6 +24,7 @@ func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTe
 		K8SConfig:     a.K8sClientConfig,
 		Logger:        a.Logger,
 		CommandRunner: commandRunner,
+		NodeFilter:    addon.IsRegularLinuxNode, // Only run commands on regular Linux nodes
 	}
 }
 

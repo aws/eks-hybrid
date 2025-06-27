@@ -36,6 +36,7 @@ type NodeMonitoringAgentTest struct {
 	K8SConfig     *rest.Config
 	Logger        logr.Logger
 	CommandRunner commands.RemoteCommandRunner
+	NodeFilter    func(v1.Node) bool // Filter function to determine which nodes to run commands on
 }
 
 func (n *NodeMonitoringAgentTest) Create(ctx context.Context) error {
@@ -58,6 +59,12 @@ func (n *NodeMonitoringAgentTest) Create(ctx context.Context) error {
 
 func (n *NodeMonitoringAgentTest) runKernelError(ctx context.Context, nodes *v1.NodeList) error {
 	for _, node := range nodes.Items {
+		// Apply node filter if provided
+		if n.NodeFilter != nil && !n.NodeFilter(node) {
+			n.Logger.Info("Skipping node due to filter", "node", node.Name)
+			continue
+		}
+
 		ip := kubernetes.GetNodeInternalIP(&node)
 		if ip == "" {
 			return fmt.Errorf("failed to get internal IP for node %s", node.Name)
@@ -65,8 +72,9 @@ func (n *NodeMonitoringAgentTest) runKernelError(ctx context.Context, nodes *v1.
 		// This command simulates a kernel error on the node
 		// Node Monitoring Agent should detect this and create an event for SoftLockup
 		// citing KernelReady as the reason.
+		n.Logger.Info("Running kernel error simulation on node", "node", node.Name, "ip", ip)
 		if _, err := n.CommandRunner.Run(ctx, ip, []string{"echo 'watchdog: BUG: soft lockup - CPU#6 stuck for 23s! [VM Thread:4054]' | tee -a /dev/kmsg"}); err != nil {
-			return err
+			return fmt.Errorf("failed to run kernel error simulation on node %s: %w", node.Name, err)
 		}
 	}
 
@@ -172,4 +180,14 @@ func (n *NodeMonitoringAgentTest) PrintLogs(ctx context.Context) error {
 
 func (n *NodeMonitoringAgentTest) Delete(ctx context.Context) error {
 	return n.addon.Delete(ctx, n.EKSClient, n.Logger)
+}
+
+// IsBottlerocketNode checks if a node is a Bottlerocket node based on its name
+func IsBottlerocketNode(node v1.Node) bool {
+	return strings.Contains(strings.ToLower(node.Name), "bottlerocket")
+}
+
+// IsRegularLinuxNode checks if a node is a regular Linux node (not Bottlerocket)
+func IsRegularLinuxNode(node v1.Node) bool {
+	return !IsBottlerocketNode(node)
 }

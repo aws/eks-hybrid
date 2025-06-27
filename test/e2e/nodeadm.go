@@ -14,7 +14,7 @@ import (
 // NodeadmOS defines an interface for operating system-specific behavior.
 type NodeadmOS interface {
 	Name() string
-	AMIName(ctx context.Context, awsConfig aws.Config, kubernetesVersion string) (string, error)
+	AMIName(ctx context.Context, awsConfig aws.Config, kubernetesVersion string, computeType ComputeType) (string, error)
 	BuildUserData(userDataInput UserDataInput) ([]byte, error)
 	InstanceType(region string, instanceSize InstanceSize, computeType ComputeType) string
 }
