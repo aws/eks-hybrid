@@ -18,6 +18,7 @@ type HybridCluster struct {
 	KubernetesVersion string
 	SubnetID          string
 	SecurityGroupID   string
+	SubnetIds         []string
 }
 
 // GetHybridCluster returns the hybrid cluster details.
@@ -34,6 +35,7 @@ func GetHybridCluster(ctx context.Context, eksClient *eks.Client, ec2Client *ec2
 
 	cluster.KubernetesVersion = *clusterDetails.Version
 	cluster.Arn = *clusterDetails.Arn
+	cluster.SubnetIds = clusterDetails.ResourcesVpcConfig.SubnetIds
 
 	hybridVpcID, err := findHybridVPC(ctx, ec2Client, *clusterDetails.ResourcesVpcConfig.VpcId)
 	if err != nil {

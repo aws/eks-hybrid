@@ -13,7 +13,7 @@ GIT_VERSION?=0.0.0
 MANIFEST_HOST?=hybrid-assets.eks.amazonaws.com
 HYBRID_MANIFEST_URL=https://$(MANIFEST_HOST)/manifest.yaml
 
-E2E_SUITES?=./test/e2e/suite/nodeadm ./test/e2e/suite/conformance ./test/e2e/suite/addons
+E2E_SUITES?=./test/e2e/suite/nodeadm ./test/e2e/suite/conformance ./test/e2e/suite/addons ./test/e2e/suite/mixed_mode
 
 .PHONY: all
 all: crds generate fmt vet build
