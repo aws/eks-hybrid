@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/aws/aws-sdk-go-v2/config v1.29.17
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.32
+	github.com/aws/aws-sdk-go-v2/service/acmpca v1.40.5
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.60.3
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.51.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.225.2
@@ -20,6 +21,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.59.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.34.0
 	github.com/aws/smithy-go v1.22.4
+	github.com/cert-manager/aws-privateca-issuer v1.6.0
 	github.com/cert-manager/cert-manager v1.18.1
 	github.com/containerd/containerd v1.7.27
 	github.com/coreos/go-systemd/v22 v22.5.0
@@ -88,7 +90,7 @@ require (
 	dario.cat/mergo v1.0.2 // direct
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.36.5
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.70 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.70
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.36 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.36 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
