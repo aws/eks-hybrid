@@ -51,7 +51,16 @@ func (u *Upgrader) Run(ctx context.Context) error {
 	if err := u.NodeProvider.ConfigureAws(ctx); err != nil {
 		return err
 	}
-	if err := u.NodeProvider.Enrich(ctx); err != nil {
+
+	// Get region config from manifest for ECR registry lookup
+	region := u.NodeProvider.GetNodeConfig().Spec.Cluster.Region
+	regionConfig, err := aws.GetRegionConfig(ctx, region)
+	if err != nil {
+		u.Logger.Warn("Failed to get region config from manifest, using fallback ECR registry logic", zap.Error(err))
+		regionConfig = nil
+	}
+
+	if err := u.NodeProvider.Enrich(ctx, regionConfig); err != nil {
 		return err
 	}
 	if err := initDaemons(ctx, u.NodeProvider, u.SkipPhases, u.Logger); err != nil {

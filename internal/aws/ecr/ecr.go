@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 
+	awsinternal "github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/aws/imds"
 	"github.com/aws/eks-hybrid/internal/system"
 )
@@ -30,21 +31,21 @@ func (r *ECRRegistry) GetSandboxImage() string {
 	return r.GetImageReference("eks/pause", "3.5")
 }
 
-func GetEKSRegistry(region string) (ECRRegistry, error) {
+func GetEKSRegistry(region string, regionConfig *awsinternal.RegionData) (ECRRegistry, error) {
 	servicesDomain, err := imds.GetProperty(imds.ServicesDomain)
 	if err != nil {
 		return "", err
 	}
 
-	return getEksRegistryWithServiceDomain(region, servicesDomain)
+	return getEksRegistryWithServiceDomain(region, servicesDomain, regionConfig)
 }
 
-func GetEKSHybridRegistry(region string) (ECRRegistry, error) {
-	return getEksRegistryWithServiceDomain(region, hybridServicesDomain)
+func GetEKSHybridRegistry(region string, regionConfig *awsinternal.RegionData) (ECRRegistry, error) {
+	return getEksRegistryWithServiceDomain(region, hybridServicesDomain, regionConfig)
 }
 
-func getEksRegistryWithServiceDomain(region, servicesDomain string) (ECRRegistry, error) {
-	account, region := getEKSRegistryCoordinates(region)
+func getEksRegistryWithServiceDomain(region, servicesDomain string, regionConfig *awsinternal.RegionData) (ECRRegistry, error) {
+	account, region := getEKSRegistryCoordinates(region, regionConfig)
 	fipsInstalled, fipsEnabled, err := system.GetFipsInfo()
 	if err != nil {
 		return "", err
@@ -77,43 +78,9 @@ func getRegistry(accountID, ecrSubdomain, region, servicesDomain string) string 
 const nonOptInRegionAccount = "602401143452"
 
 var accountsByRegion = map[string]string{
-	"ap-northeast-1": nonOptInRegionAccount,
-	"ap-northeast-2": nonOptInRegionAccount,
-	"ap-northeast-3": nonOptInRegionAccount,
-	"ap-south-1":     nonOptInRegionAccount,
-	"ap-southeast-1": nonOptInRegionAccount,
-	"ap-southeast-2": nonOptInRegionAccount,
-	"ca-central-1":   nonOptInRegionAccount,
-	"eu-central-1":   nonOptInRegionAccount,
-	"eu-north-1":     nonOptInRegionAccount,
-	"eu-west-1":      nonOptInRegionAccount,
-	"eu-west-2":      nonOptInRegionAccount,
-	"eu-west-3":      nonOptInRegionAccount,
-	"sa-east-1":      nonOptInRegionAccount,
-	"us-east-1":      nonOptInRegionAccount,
-	"us-east-2":      nonOptInRegionAccount,
-	"us-west-1":      nonOptInRegionAccount,
-	"us-west-2":      nonOptInRegionAccount,
-
-	"af-south-1":      "877085696533",
-	"ap-east-1":       "800184023465",
-	"ap-east-2":       "533267051163",
-	"ap-south-2":      "900889452093",
-	"ap-southeast-3":  "296578399912",
-	"ap-southeast-4":  "491585149902",
-	"ap-southeast-5":  "151610086707",
-	"ap-southeast-7":  "121268973566",
-	"ca-west-1":       "761377655185",
 	"cn-north-1":      "918309763551",
 	"cn-northwest-1":  "961992271922",
-	"eu-central-2":    "900612956339",
 	"eu-isoe-west-1":  "249663109785",
-	"eu-south-1":      "590381155156",
-	"eu-south-2":      "455263428931",
-	"il-central-1":    "066635153087",
-	"me-central-1":    "759879836304",
-	"me-south-1":      "558608220178",
-	"mx-central-1":    "730335286997",
 	"us-gov-east-1":   "151742754352",
 	"us-gov-west-1":   "013241004608",
 	"us-iso-east-1":   "725322719131",
@@ -123,11 +90,17 @@ var accountsByRegion = map[string]string{
 }
 
 // getEKSRegistryCoordinates returns an AWS region and account ID for the default EKS ECR container image registry
-func getEKSRegistryCoordinates(region string) (string, string) {
+func getEKSRegistryCoordinates(region string, regionConfig *awsinternal.RegionData) (string, string) {
+	if regionConfig != nil && regionConfig.EcrAccountID != "" {
+		return regionConfig.EcrAccountID, region
+	}
+
 	inRegionRegistry, ok := accountsByRegion[region]
 	if ok {
 		return inRegionRegistry, region
 	}
+
+	// Fallback to existing region prefix-based logic
 	if strings.HasPrefix(region, "us-gov-") {
 		return "013241004608", "us-gov-west-1"
 	} else if strings.HasPrefix(region, "cn-") {
@@ -139,5 +112,5 @@ func getEKSRegistryCoordinates(region string) (string, string) {
 	} else if strings.HasPrefix(region, "us-isof-") {
 		return "676585237158", "us-isof-south-1"
 	}
-	return "602401143452", "us-west-2"
+	return nonOptInRegionAccount, "us-west-2"
 }
