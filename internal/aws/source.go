@@ -131,6 +131,20 @@ func getLatestDateEksPatchRelease(patchReleases []EksPatchRelease) (EksPatchRele
 	return latestRelease, nil
 }
 
+func GetRegionConfig(ctx context.Context, region string) (*RegionData, error) {
+	manifest, err := getReleaseManifest(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	regionCfg, ok := manifest.RegionConfig[region]
+	if !ok {
+		return nil, fmt.Errorf("region %s not found in manifest", region)
+	}
+
+	return &regionCfg, nil
+}
+
 // GetKubelet satisfies kubelet.Source.
 func (as Source) GetKubelet(ctx context.Context) (artifact.Source, error) {
 	return as.getEksSource(ctx, "kubelet")
