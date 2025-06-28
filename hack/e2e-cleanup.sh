@@ -345,7 +345,8 @@ function delete_vpc(){
 }
 
 # Deletion ordering
-# - instances
+# - managed node groups first
+# - then individual instances (hybrid nodes)
 # - instance profiles since these are created after the test cfn
 #   - remove roles from instance profile first
 # - test cfn statck (creates the ssm/iam-ra roles/ec2role)
@@ -353,6 +354,53 @@ function delete_vpc(){
 # - infra cfn stack (creates vpcs/eks cluster)
 # - remaining leaking items which should only exist in the case where the cfn deletion is incomplete
 
+# Delete managed node groups FIRST to prevent instance recreation
+function delete_managed_node_groups_for_cluster() {
+    local cluster_name="$1"
+    echo "Checking managed node groups for cluster: $cluster_name"
+    
+    local nodegroups=$(aws eks list-nodegroups --cluster-name "$cluster_name" --query "nodegroups" --output text 2>/dev/null)
+    if [ $? -ne 0 ] || [ -z "$nodegroups" ] || [ "$nodegroups" == "None" ]; then
+        echo "No managed node groups found for cluster: $cluster_name"
+        return 0
+    fi
+    
+    # Delete all node groups
+    for nodegroup in $nodegroups; do
+        echo "Deleting managed node group: $nodegroup from cluster: $cluster_name"
+        aws eks delete-nodegroup --cluster-name "$cluster_name" --nodegroup-name "$nodegroup"
+        if [ $? -ne 0 ]; then
+            echo "Warning: Failed to delete managed node group: $nodegroup"
+        fi
+    done
+    
+    # Wait for node groups to be deleted with timeout
+    echo "Waiting for managed node groups to be deleted from cluster: $cluster_name"
+    local timeout=900  # 15 minutes timeout
+    local elapsed=0
+    
+    while [ $elapsed -lt $timeout ]; do
+        local remaining=$(aws eks list-nodegroups --cluster-name "$cluster_name" --query "length(nodegroups)" --output text 2>/dev/null)
+        if [ "$remaining" == "0" ]; then
+            echo "All managed node groups deleted successfully from cluster: $cluster_name"
+            return 0
+        fi
+        echo "Still waiting for managed node groups to be deleted... (${elapsed}s/${timeout}s)"
+        sleep 10
+        elapsed=$((elapsed + 10))
+    done
+    
+    echo "Warning: Timeout waiting for managed node groups deletion in cluster: $cluster_name"
+    return 1
+}
+
+for eks_cluster in $(aws eks list-clusters --query "clusters" --output text); do
+    if should_cleanup_cluster "$eks_cluster"; then
+        delete_managed_node_groups_for_cluster "$eks_cluster"
+    fi
+done
+
+# NOW terminate remaining individual instances (hybrid nodes)
 # The passed in filters will only return instances with the e2e cluster tag
 # If a cluster name was passed to the script, it also added to the filters so that we
 # only are getting instances associated with that cluster
