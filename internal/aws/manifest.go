@@ -16,6 +16,7 @@ type Manifest struct {
 	SupportedEksReleases     []SupportedEksRelease     `json:"supported_eks_releases"`
 	IamRolesAnywhereReleases []IamRolesAnywhereRelease `json:"iam_roles_anywhere_releases"`
 	SsmReleases              []SsmRelease              `json:"ssm_releases"`
+	RegionConfig             RegionConfig              `json:"region_config"`
 }
 
 type SupportedEksRelease struct {
@@ -39,6 +40,15 @@ type IamRolesAnywhereRelease struct {
 type SsmRelease struct {
 	Version   string     `json:"version"`
 	Artifacts []Artifact `json:"artifacts"`
+}
+
+// RegionConfig represents the structure of the manifest file
+type RegionConfig map[string]RegionData
+
+// RegionData represents data for a specific region
+type RegionData struct {
+	EcrAccountID  string          `json:"ecr_account_id"`
+	CredProviders map[string]bool `json:"cred_providers"`
 }
 
 type Artifact struct {
