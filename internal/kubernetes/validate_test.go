@@ -3,7 +3,7 @@
 // and not endpointslices
 //
 //nolint:staticcheck
-package node_test
+package kubernetes_test
 
 import (
 	"context"
@@ -16,15 +16,31 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
+	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	fakeTesting "k8s.io/client-go/testing"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/node"
+	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/test"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
+
+type fakeKubeconfig struct {
+	client clientgo.Interface
+	err    error
+}
+
+func (f fakeKubeconfig) Path() string {
+	return "/var/lib/kubelet/kubeconfig"
+}
+
+func (f fakeKubeconfig) BuildClient() (clientgo.Interface, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.client, nil
+}
 
 func TestAPIServerValidator_MakeAuthenticatedRequest(t *testing.T) {
 	testCases := []struct {
@@ -60,7 +76,7 @@ func TestAPIServerValidator_MakeAuthenticatedRequest(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, "v1.28.0")
 
-			v := node.NewAPIServerValidator(kubelet)
+			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client}, kubelet)
 			err := v.MakeAuthenticatedRequest(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -83,7 +99,7 @@ func TestAPIServerValidator_MakeAuthenticatedRequest_FailBuildingClient(t *testi
 	kubelet := newMockKubelet(nil, "v1.28.0")
 	kubelet.clientError = errors.New("can't build client")
 
-	v := node.NewAPIServerValidator(kubelet)
+	v := kubernetes.NewAPIServerValidator(fakeKubeconfig{err: errors.New("can't build client")}, kubelet)
 	err := v.MakeAuthenticatedRequest(ctx, informer, nodeConfig)
 
 	g.Expect(err).To(MatchError(ContainSubstring("can't build client")))
@@ -214,7 +230,7 @@ func TestAPIServerValidator_CheckVPCEndpointAccess(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, "v1.28.0")
 
-			v := node.NewAPIServerValidator(kubelet)
+			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client}, kubelet)
 			err := v.CheckVPCEndpointAccess(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -329,7 +345,7 @@ func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, tc.kubeletVersion)
 
-			v := node.NewAPIServerValidator(kubelet)
+			v := kubernetes.NewAPIServerValidator(fakeKubeconfig{client: client}, kubelet)
 			err := v.CheckIdentity(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -360,14 +376,14 @@ func mockSelfSubjectReview(client *fake.Clientset, selfReview *authenticationv1.
 
 // mockKubelet implements the Kubelet interface for testing
 type mockKubelet struct {
-	client         kubernetes.Interface
+	client         clientgo.Interface
 	version        string
 	versionError   error
 	clientError    error
 	kubeconfigPath string
 }
 
-func newMockKubelet(client kubernetes.Interface, version string) *mockKubelet {
+func newMockKubelet(client clientgo.Interface, version string) *mockKubelet {
 	return &mockKubelet{
 		client:         client,
 		version:        version,
@@ -375,7 +391,7 @@ func newMockKubelet(client kubernetes.Interface, version string) *mockKubelet {
 	}
 }
 
-func (m *mockKubelet) BuildClient() (kubernetes.Interface, error) {
+func (m *mockKubelet) BuildClient() (clientgo.Interface, error) {
 	if m.clientError != nil {
 		return nil, m.clientError
 	}

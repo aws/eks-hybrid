@@ -37,6 +37,17 @@ func (s *swapAspect) Name() string {
 }
 
 func (s *swapAspect) Setup() error {
+	// Check if kubelet is configured to allow swap (failSwapOn=false)
+	swapAllowed, err := api.IsFailSwapOnDisabled(s.nodeConfig)
+	if err != nil {
+		return fmt.Errorf("failed to check kubelet failSwapOn configuration: %w", err)
+	}
+
+	if swapAllowed {
+		s.logger.Info("Kubelet configured to allow swap (failSwapOn=false), skipping swap disablement")
+		return nil
+	}
+
 	hasSwapPartition, err := partitionSwapExists()
 	if err != nil {
 		return err

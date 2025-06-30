@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -20,7 +21,10 @@ func CheckConnection(ctx context.Context, informer validation.Informer, node *ap
 
 	endpoint, err := url.Parse(node.Spec.Cluster.APIServerEndpoint)
 	if err != nil {
-		err = validation.WithRemediation(err, "Ensure the Kubernetes API server endpoint provided is correct.")
+		err = validation.WithRemediation(
+			fmt.Errorf("parsing Kubernetes API server endpoint: %w", err),
+			"Ensure the Kubernetes API server endpoint provided is correct.",
+		)
 		return err
 	}
 
@@ -28,7 +32,10 @@ func CheckConnection(ctx context.Context, informer validation.Informer, node *ap
 		return network.CheckConnectionToHost(ctx, *endpoint)
 	})
 	if err != nil {
-		err = validation.WithRemediation(err, "Ensure your network configuration allows the node to access the Kubernetes API endpoint.")
+		err = validation.WithRemediation(
+			fmt.Errorf("checking network connection to Kubernetes API endpoint: %w", err),
+			"Ensure your network configuration allows the node to access the Kubernetes API endpoint.",
+		)
 		return err
 	}
 

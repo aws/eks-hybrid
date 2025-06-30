@@ -12,13 +12,32 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/aws/sts"
+	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
+	// Here we are "loading" a dummy AWS config that likely will not be used for anything since we
+	// load the proper SSM/IAM-RA one later on. We are just loading it so we can pass it to the
+	// validator which just uses it to resolve the SSM/IAM-RA endpoint and then makes a TCP
+	// connection to that endpoint.
+	baseAWSConfig, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(hnp.nodeConfig.Spec.Cluster.Region),
+	)
+	if err != nil {
+		return fmt.Errorf("loading aws config: %w", err)
+	}
+
+	// First verify that we can access the right AWS API endpoints for the credential provider before we try to use any of them
+	if err := hnp.runner.Run(ctx, hnp.nodeConfig, creds.Validations(baseAWSConfig, hnp.nodeConfig)...); err != nil {
+		return err
+	}
+
 	if hnp.nodeConfig.IsSSM() {
 		configurator := SSMAWSConfigurator{
 			Manager: hnp.daemonManager,
@@ -54,6 +73,14 @@ func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
 
 		hnp.awsConfig = &awsConfig
 	}
+
+	// Then verify that we can authenticate with AWS
+	if err := hnp.runner.Run(ctx, hnp.nodeConfig,
+		validation.New("aws-auth", sts.NewAuthenticationValidator(*hnp.awsConfig).Run),
+	); err != nil {
+		return err
+	}
+
 	return nil
 }
 
