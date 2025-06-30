@@ -9,14 +9,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.32
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.60.3
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.51.0
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.225.2
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.227.0
 	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.28.4
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.45.1
 	github.com/aws/aws-sdk-go-v2/service/eks v1.66.1
 	github.com/aws/aws-sdk-go-v2/service/iam v1.42.2
 	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.26.6
 	github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.5
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.81.0
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.82.0
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.59.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.34.0
 	github.com/aws/smithy-go v1.22.4
@@ -75,6 +75,8 @@ require (
 	go.opentelemetry.io/otel v1.34.0 // indirect
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
+	go.yaml.in/yaml/v2 v2.4.2 // indirect
+	go.yaml.in/yaml/v3 v3.0.3 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	k8s.io/apiextensions-apiserver v0.33.0 // indirect
 	k8s.io/cli-runtime v0.33.2 // indirect
@@ -88,7 +90,7 @@ require (
 	dario.cat/mergo v1.0.2 // direct
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.36.5
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.70 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.70
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.36 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.36 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
@@ -151,5 +153,5 @@ require (
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e // direct
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
-	sigs.k8s.io/yaml v1.4.0
+	sigs.k8s.io/yaml v1.5.0
 )
