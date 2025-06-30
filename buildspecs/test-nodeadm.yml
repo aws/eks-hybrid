@@ -9,6 +9,12 @@ phases:
   pre_build:
     commands:
       - echo "Setting up for e2e tests..."
+      - |
+        if [ "$ENVIRONMENT" = "beta" ]; then
+          export EKS_ENDPOINT=$BETA_EKS_ENDPOINT
+          export EKS_CLUSTER_ROLE_SP=$BETA_EKS_CLUSTER_ROLE_SP
+          export EKS_POD_IDENTITY_SP=$BETA_EKS_POD_IDENTITY_SP
+        fi
       - export BUILD_NUMBER=${CODEBUILD_BUILD_NUMBER:-1}
       - export VERSION="build-${BUILD_NUMBER}"
 
