@@ -13,10 +13,12 @@ import (
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 const (
+	swapValidation        = "swap-validation"
 	nodeIpValidation      = "node-ip-validation"
 	kubeletCertValidation = "kubelet-cert-validation"
 )
@@ -115,6 +117,16 @@ func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 }
 
 func (hnp *HybridNodeProvider) Validate() error {
+	if !slices.Contains(hnp.skipPhases, swapValidation) {
+		hnp.logger.Info("Validating swap configuration...")
+		swapValidator := system.NewSwapValidator(hnp.logger)
+		if err := hnp.runner.Run(context.Background(), hnp.nodeConfig,
+			validation.New("swap", swapValidator.Run),
+		); err != nil {
+			return err
+		}
+	}
+
 	if !slices.Contains(hnp.skipPhases, nodeIpValidation) {
 		if err := hnp.ValidateNodeIP(); err != nil {
 			return err

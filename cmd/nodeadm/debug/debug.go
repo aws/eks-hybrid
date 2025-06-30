@@ -19,6 +19,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/logger"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -91,8 +92,10 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	runner := validation.NewRunner[*api.NodeConfig](printer)
 	apiServerValidator := kubernetes.NewAPIServerValidator(kubelet.Kubeconfig{}, kubelet.New())
 	clusterProvider := kubernetes.NewClusterProvider(awsConfig)
+	swapValidator := system.NewSwapValidator(log)
 	runner.Register(creds.Validations(awsConfig, nodeConfig)...)
 	runner.Register(
+		validation.New("swap", swapValidator.Run),
 		validation.New("aws-auth", sts.NewAuthenticationValidator(awsConfig).Run),
 		runner.UntilError(
 			validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(clusterProvider).Run),
