@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
-	"github.com/aws/eks-hybrid/test/e2e/os"
+	e2eOS "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
@@ -30,6 +31,10 @@ var (
 
 func init() {
 	flag.StringVar(&filePath, "filepath", "", "Path to configuration")
+}
+
+func skipPodIdentityTest() bool {
+	return os.Getenv("SKIP_POD_IDENTITY_TEST") == "true"
 }
 
 func TestE2E(t *testing.T) {
@@ -111,9 +116,11 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(testNode.WaitForJoin(ctx)).To(Succeed(), "node should join successfully")
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
-					test.Logger.Info("Testing Pod Identity add-on functionality")
-					verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.PeeredInstance().Name)
-					Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+					if !skipPodIdentityTest() {
+						test.Logger.Info("Testing Pod Identity add-on functionality")
+						verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.PeeredInstance().Name)
+						Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+					}
 
 					test.Logger.Info("Resetting hybrid node...")
 					i := testNode.PeeredInstance()
@@ -206,7 +213,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					}
 
 					remoteCommandRunner := ssm.NewBottlerocketSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, test.Logger)
-					logCollector := os.BottlerocketLogCollector{
+					logCollector := e2eOS.BottlerocketLogCollector{
 						Runner: remoteCommandRunner,
 					}
 					testNode := test.NewTestNode(ctx, instanceName, nodeName, k8sVersion, nodeOS, provider, e2e.Large, e2e.CPUInstance)
@@ -217,9 +224,11 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(testNode.WaitForJoin(ctx)).To(Succeed(), "node should join successfully")
 					Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
-					test.Logger.Info("Testing Pod Identity add-on functionality")
-					verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.PeeredInstance().Name)
-					Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+					if !skipPodIdentityTest() {
+						test.Logger.Info("Testing Pod Identity add-on functionality")
+						verifyPodIdentityAddon := test.NewVerifyPodIdentityAddon(testNode.PeeredInstance().Name)
+						Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
+					}
 
 					i := testNode.PeeredInstance()
 
