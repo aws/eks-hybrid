@@ -43,13 +43,15 @@ import (
 var notSupported = NodeadmConfigMatchers{}
 
 type SuiteConfiguration struct {
-	TestConfig             *e2e.TestConfig          `json:"testConfig"`
-	SkipCleanup            bool                     `json:"skipCleanup"`
-	CredentialsStackOutput *credentials.StackOutput `json:"ec2StackOutput"`
-	RolesAnywhereCACertPEM []byte                   `json:"rolesAnywhereCACertPEM"`
-	RolesAnywhereCAKeyPEM  []byte                   `json:"rolesAnywhereCAPrivateKeyPEM"`
-	PublicKey              string                   `json:"publicKey"`
-	JumpboxInstanceId      string                   `json:"jumpboxInstanceId"`
+	TestConfig              *e2e.TestConfig          `json:"testConfig"`
+	SkipCleanup             bool                     `json:"skipCleanup"`
+	CredentialsStackOutput  *credentials.StackOutput `json:"ec2StackOutput"`
+	RolesAnywhereCACertPEM  []byte                   `json:"rolesAnywhereCACertPEM"`
+	RolesAnywhereCAKeyPEM   []byte                   `json:"rolesAnywhereCAPrivateKeyPEM"`
+	PublicKey               string                   `json:"publicKey"`
+	JumpboxInstanceId       string                   `json:"jumpboxInstanceId"`
+	RegularGPUNodeName      string                   `json:"regularGPUNodeName"`
+	BottlerocketGPUNodeName string                   `json:"bottlerocketGPUNodeName"`
 }
 
 type PeeredVPCTest struct {
@@ -451,10 +453,12 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 	return osProviderList
 }
 
-func BottlerocketOSList() []e2e.NodeadmOS {
-	return []e2e.NodeadmOS{
-		osystem.NewBottleRocket(),
-		osystem.NewBottleRocketARM(),
+func BottlerocketOSProviderList() []OSProvider {
+	return []OSProvider{
+		{OS: osystem.NewBottleRocket(), Provider: &credentials.SsmProvider{}},
+		{OS: osystem.NewBottleRocket(), Provider: &credentials.IamRolesAnywhereProvider{}},
+		{OS: osystem.NewBottleRocketARM(), Provider: &credentials.SsmProvider{}},
+		{OS: osystem.NewBottleRocketARM(), Provider: &credentials.IamRolesAnywhereProvider{}},
 	}
 }
 
@@ -515,7 +519,18 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize, entry.ComputeType,
 				WithLogging(controlledLogger, outputControl))
 
+			// if osystem.IsBottlerocket(entry.OS.Name()) {
+			// 	remoteCommandRunner := ssm.NewBottlerocketSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, test.Logger)
+			// 	logCollector := osystem.BottlerocketLogCollector{
+			// 		Runner: remoteCommandRunner,
+			// 	}
+			// 	testNode.PeeredNode.RemoteCommandRunner = remoteCommandRunner
+			// 	testNode.PeeredNode.LogCollector = logCollector
+			// }
 			Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+			// if osystem.IsBottlerocket(entry.OS.Name()) {
+			// 	testNode.NodeWaiter = testNode.NewBottlerocketNodeWaiter()
+			// }
 			Expect(testNode.WaitForJoin(ctx)).To(Succeed(), "node should join successfully")
 			Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 

@@ -71,7 +71,7 @@ func (r RedHat8) InstanceType(region string, instanceSize e2e.InstanceSize, comp
 	return getInstanceTypeFromRegionAndArch(region, r.architecture, instanceSize, computeType)
 }
 
-func (r RedHat8) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
+func (r RedHat8) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
 	// there is no rhel ssm parameter
 	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-8*" "Name=architecture,Values=x86_64" --region us-west-2
 	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-8*", r.amiArchitecture)
@@ -150,7 +150,7 @@ func (r RedHat9) InstanceType(region string, instanceSize e2e.InstanceSize, comp
 	return getInstanceTypeFromRegionAndArch(region, r.architecture, instanceSize, computeType)
 }
 
-func (r RedHat9) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
+func (r RedHat9) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
 	// there is no rhel ssm parameter
 	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-9*" "Name=architecture,Values=x86_64" --region us-west-2
 	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-9*", r.amiArchitecture)
