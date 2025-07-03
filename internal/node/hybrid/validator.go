@@ -1,7 +1,6 @@
 package hybrid
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -135,26 +134,22 @@ func validateRolesAnywhereNode(node *api.NodeConfig) error {
 
 // addIAMRARemediation adds IAM Role Anywhere specific remediation messages based on error type
 func addIAMRARemediation(certPath string, err error) error {
-	var validationErr *ValidationError
-	if !errors.As(err, &validationErr) {
-		return err
+	errWithContext := fmt.Errorf("validating iam-roles-anywhere certificate: %w", err)
+
+	switch err.(type) {
+	case *CertNotFoundError, *CertFileError, *CertReadError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM role anywhere certificate at %s. %s", certPath, iamRolesCertGuideURL))
+	case *CertInvalidFormatError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM Role certificate format. %s", iamRolesCertGuideURL))
+	case *CertClockSkewError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM Role certificate validity or system time is correct. %s", iamRolesCertGuideURL))
+	case *CertExpiredError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Generate a new IAM Roles Anywhere certificate as the current one has expired. %s", iamRolesCertGuideURL))
+	case *CertParseCAError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Ensure the IAM Roles Anywhere certificate is valid. %s", iamRolesCertGuideURL))
+	case *CertInvalidCAError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Please remove the IAM Roles Anywhere certificate file at %s. %s", certPath, iamRolesCertGuideURL))
 	}
 
-	errWithContext := fmt.Errorf("validating iam-roles-anywhere certificate: %w", err)
-	switch validationErr.ErrorType() {
-	case ErrorNoCert, ErrorCertFile, ErrorReadFile:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM role anywhere certificate at %s. %s", certPath, iamRolesCertGuideURL))
-	case ErrorInvalidFormat:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM Role certificate format. %s", iamRolesCertGuideURL))
-	case ErrorClockSkewDetected:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM Role certificate validity or system time is correct. %s", iamRolesCertGuideURL))
-	case ErrorExpired:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Generate a new IAM Roles Anywhere certificate as the current one has expired. %s", iamRolesCertGuideURL))
-	case ErrorParseCA:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Ensure the IAM Roles Anywhere certificate is valid. %s", iamRolesCertGuideURL))
-	case ErrorInvalidCA:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Please remove the IAM Roles Anywhere certificate file at %s. %s", certPath, iamRolesCertGuideURL))
-	default:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Add IAM Roles Anywhere certificate. %s", iamRolesCertGuideURL))
-	}
+	return errWithContext
 }

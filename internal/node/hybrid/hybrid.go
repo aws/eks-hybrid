@@ -2,7 +2,6 @@ package hybrid
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -138,26 +137,22 @@ func (hnp *HybridNodeProvider) getCluster(ctx context.Context) (*types.Cluster, 
 
 // AddKubeletRemediation adds kubelet-specific remediation messages based on error type
 func AddKubeletRemediation(certPath string, err error) error {
-	var validationErr *ValidationError
-	if !errors.As(err, &validationErr) {
-		return err
+	errWithContext := fmt.Errorf("validating kubelet certificate: %w", err)
+
+	switch err.(type) {
+	case *CertNotFoundError, *CertFileError, *CertReadError:
+		return validation.WithRemediation(errWithContext, "Kubelet certificate will be created when the kubelet is able to authenticate with the API server. Check previous authentication remediation advice.")
+	case *CertInvalidFormatError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Delete the kubelet server certificate file %s and restart kubelet", certPath))
+	case *CertClockSkewError:
+		return validation.WithRemediation(errWithContext, "Verify the system time is correct and restart the kubelet.")
+	case *CertExpiredError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Delete the kubelet server certificate file %s and restart kubelet. Validate `serverTLSBootstrap` is true in the kubelet config /etc/kubernetes/kubelet/config.json to automatically rotate the certificate.", certPath))
+	case *CertParseCAError:
+		return validation.WithRemediation(errWithContext, "Ensure the cluster CA certificate is valid")
+	case *CertInvalidCAError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Please remove the kubelet server certificate file %s or use \"--skip %s\" if this is expected", certPath, kubeletCertValidation))
 	}
 
-	errWithContext := fmt.Errorf("validating kubelet certificate: %w", err)
-	switch validationErr.ErrorType() {
-	case ErrorNoCert, ErrorCertFile, ErrorReadFile:
-		return validation.WithRemediation(errWithContext, "Kubelet certificate will be created when the kubelet is able to authenticate with the API server. Check previous authentication remediation advice.")
-	case ErrorInvalidFormat:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Delete the kubelet server certificate file %s and restart kubelet", certPath))
-	case ErrorClockSkewDetected:
-		return validation.WithRemediation(errWithContext, "Verify the system time is correct and restart the kubelet.")
-	case ErrorExpired:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Delete the kubelet server certificate file %s and restart kubelet. Validate `serverTLSBootstrap` is true in the kubelet config /etc/kubernetes/kubelet/config.json to automatically rotate the certificate.", certPath))
-	case ErrorParseCA:
-		return validation.WithRemediation(errWithContext, "Ensure the cluster CA certificate is valid")
-	case ErrorInvalidCA:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Please remove the kubelet server certificate file %s or use \"--skip %s\" if this is expected", certPath, kubeletCertValidation))
-	default:
-		return validation.WithRemediation(errWithContext, "Kubelet certificate error")
-	}
+	return errWithContext
 }
