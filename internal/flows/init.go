@@ -6,6 +6,8 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 
+	"github.com/aws/eks-hybrid/internal/aws"
+	"github.com/aws/eks-hybrid/internal/configenricher"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 )
 
@@ -33,7 +35,14 @@ func (i *Initer) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := i.NodeProvider.Enrich(ctx); err != nil {
+	// Get region config from manifest for ECR registry lookup
+	region := i.NodeProvider.GetNodeConfig().Spec.Cluster.Region
+	regionConfig, err := aws.GetRegionConfig(ctx, region)
+	if err != nil {
+		i.Logger.Warn("Failed to get region config from manifest, using fallback ECR registry logic", zap.Error(err))
+	}
+
+	if err := i.NodeProvider.Enrich(ctx, configenricher.WithRegionConfig(regionConfig)); err != nil {
 		return err
 	}
 

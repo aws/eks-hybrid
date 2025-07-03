@@ -12,11 +12,19 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/ecr"
+	"github.com/aws/eks-hybrid/internal/configenricher"
 )
 
-func (hnp *HybridNodeProvider) Enrich(ctx context.Context) error {
+func (hnp *HybridNodeProvider) Enrich(ctx context.Context, opts ...configenricher.ConfigEnricherOption) error {
 	hnp.logger.Info("Enriching configuration...")
-	eksRegistry, err := ecr.GetEKSHybridRegistry(hnp.nodeConfig.Spec.Cluster.Region)
+
+	// Apply options to build configuration
+	config := &configenricher.ConfigEnricherConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	eksRegistry, err := ecr.GetEKSHybridRegistry(hnp.nodeConfig.Spec.Cluster.Region, config.RegionConfig)
 	if err != nil {
 		return err
 	}

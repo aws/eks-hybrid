@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cni"
+	"github.com/aws/eks-hybrid/internal/configenricher"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
@@ -51,7 +52,8 @@ func (u *Upgrader) Run(ctx context.Context) error {
 	if err := u.NodeProvider.ConfigureAws(ctx); err != nil {
 		return err
 	}
-	if err := u.NodeProvider.Enrich(ctx); err != nil {
+
+	if err := u.NodeProvider.Enrich(ctx, configenricher.WithRegionConfig(&u.AwsSource.RegionInfo)); err != nil {
 		return err
 	}
 	if err := initDaemons(ctx, u.NodeProvider, u.SkipPhases, u.Logger); err != nil {
