@@ -131,9 +131,11 @@ func (f *FlakyCode) It(ctx context.Context, description string, flakeAttempts in
 		// this error will have already been caught in ginkgo's Fail handler and stored on the test
 		// so when we expect here, the stacktrace and error message are pulled from what was stored via the Fail handler
 		// which is called by Expect and RetryableExpect when its the last attempt
-		Expect(retry.panicableError).NotTo(HaveOccurred())
+		if retry != nil {
+			Expect(retry.panicableError).NotTo(HaveOccurred())
+		}
 
-		if retry.retryableError == nil {
+		if retry == nil || retry.retryableError == nil {
 			if attempt > 0 {
 				f.Logger.Info(fmt.Sprintf("Succeeded on attempt %d after previous failures", attempt+1))
 			}

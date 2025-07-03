@@ -27,6 +27,11 @@ const (
 //go:embed testdata/bottlerocket/settings.toml
 var brSettingsToml []byte
 
+var brVariantForComputeType = map[e2e.ComputeType]string{
+	e2e.CPUInstance: "aws-k8s-%s",
+	e2e.GPUInstance: "aws-k8s-%s-nvidia",
+}
+
 type brSettingsTomlInitData struct {
 	e2e.UserDataInput
 	AdminContainerUserData  string
@@ -63,8 +68,8 @@ func (a BottleRocket) InstanceType(region string, instanceSize e2e.InstanceSize,
 	return getInstanceTypeFromRegionAndArch(region, a.architecture, instanceSize, computeType)
 }
 
-func (a BottleRocket) AMIName(ctx context.Context, awsConfig aws.Config, kubernetesVersion string) (string, error) {
-	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), fmt.Sprintf("/aws/service/bottlerocket/aws-k8s-%s/%s/latest/image_id", kubernetesVersion, a.amiArchitecture))
+func (a BottleRocket) AMIName(ctx context.Context, awsConfig aws.Config, kubernetesVersion string, computeType e2e.ComputeType) (string, error) {
+	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), fmt.Sprintf("/aws/service/bottlerocket/%s/%s/latest/image_id", fmt.Sprintf(brVariantForComputeType[computeType], kubernetesVersion), a.amiArchitecture))
 	return *amiId, err
 }
 

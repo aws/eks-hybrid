@@ -131,7 +131,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		return PeeredInstance{}, fmt.Errorf("expected to successfully build user data: %w", err)
 	}
 
-	amiId, err := spec.OS.AMIName(ctx, c.AWS, spec.NodeK8sVersion)
+	amiId, err := spec.OS.AMIName(ctx, c.AWS, spec.NodeK8sVersion, spec.ComputeType)
 	if err != nil {
 		return PeeredInstance{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
 	}

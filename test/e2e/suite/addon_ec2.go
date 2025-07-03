@@ -2,6 +2,8 @@ package suite
 
 import (
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/aws/eks-hybrid/test/e2e/addon"
@@ -17,6 +19,7 @@ type AddonEc2Test struct {
 // NewNodeMonitoringAgentTest creates a new NodeMonitoringAgentTest
 func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTest {
 	commandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, a.Logger)
+	labelReq, _ := labels.NewRequirement("os.bottlerocket.aws/version", selection.DoesNotExist, []string{})
 	return &addon.NodeMonitoringAgentTest{
 		Cluster:       a.Cluster.Name,
 		K8S:           a.k8sClient,
@@ -24,6 +27,7 @@ func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTe
 		K8SConfig:     a.K8sClientConfig,
 		Logger:        a.Logger,
 		CommandRunner: commandRunner,
+		NodeFilter:    labels.NewSelector().Add(*labelReq),
 	}
 }
 
