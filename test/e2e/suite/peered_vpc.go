@@ -34,6 +34,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
+	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
 )
@@ -59,7 +60,7 @@ type PeeredVPCTest struct {
 	ec2Client       *ec2v2.Client
 	SSMClient       *ssmv2.Client
 	cfnClient       *cloudformation.Client
-	k8sClient       peered.K8s
+	k8sClient       peeredtypes.K8s
 	K8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client
@@ -145,7 +146,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 
-	test.k8sClient = peered.K8s{
+	test.k8sClient = peeredtypes.K8s{
 		Interface: k8s,
 		Dynamic:   dynamicK8s,
 	}
