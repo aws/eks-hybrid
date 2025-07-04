@@ -45,9 +45,10 @@ type PolicyDocument struct {
 }
 
 type StatementEntry struct {
-	Effect   string
-	Action   []string
-	Resource []string
+	Effect    string
+	Action    []string
+	Resource  []string
+	Principal map[string]string
 }
 
 func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {

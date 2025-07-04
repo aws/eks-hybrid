@@ -32,6 +32,8 @@ github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 h1:bIqFDwgGXXN1Kpp99pDOdKMTTb5d
 github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3/go.mod h1:H5O/EsxDWyU+LP/V8i5sm8cxoZgc2fdNR9bxlOFrQTo=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.36 h1:GMYy2EOWfzdP3wfVAGXBNKY5vK4K8vMET4sYOYltmqs=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.36/go.mod h1:gDhdAV6wL3PmPqBhiPbnlS447GoWs8HTTOYef9/9Inw=
+github.com/aws/aws-sdk-go-v2/service/acmpca v1.40.5 h1:wO4AWPJlnLRbLgQnrVKG/HTy9qDCxFVMjPFkqr2IKRA=
+github.com/aws/aws-sdk-go-v2/service/acmpca v1.40.5/go.mod h1:Jhu06Hov5+oM1+zkhDGCZBp8yoVCSiFHSnkSC0KIzDs=
 github.com/aws/aws-sdk-go-v2/service/cloudformation v1.60.3 h1:aic9qcLAqsmeYCfXElUnZOB/GRBIV2lFd1pQeJs9sVY=
 github.com/aws/aws-sdk-go-v2/service/cloudformation v1.60.3/go.mod h1:xU79X14UC0F8sEJCRTWwINzlQ4jacpEFpRESLHRHfoY=
 github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.51.0 h1:e5cbPZYTIY2nUEFieZUfVdINOiCTvChOMPfdLnmiLzs=
@@ -74,6 +76,8 @@ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=
 github.com/blang/semver/v4 v4.0.0/go.mod h1:IbckMUScFkM3pff0VJDNKRiT6TG/YpiHIM2yvyW5YoQ=
+github.com/cert-manager/aws-privateca-issuer v1.6.0 h1:DqAbNrf4Ios049k1R5awbw1znzl9DAZh7iE+MzO4Grk=
+github.com/cert-manager/aws-privateca-issuer v1.6.0/go.mod h1:p9uIzmEK1+aPHjPgtKbIPGllytWXxG3EquLF+j6Rjg4=
 github.com/cert-manager/cert-manager v1.18.1 h1:5qa3UNrgkNc5Zpn0CyAVMyRIchfF3/RHji4JrazYmWw=
 github.com/cert-manager/cert-manager v1.18.1/go.mod h1:icDJx4kG9BCNpGjBvrmsFd99d+lXUvWdkkcrSSQdIiw=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=

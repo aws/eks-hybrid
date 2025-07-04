@@ -1,6 +1,10 @@
 package suite
 
 import (
+	"context"
+
+	"github.com/aws/aws-sdk-go-v2/service/acmpca"
+	awspcaclientset "github.com/cert-manager/aws-privateca-issuer/pkg/clientset/v1beta1"
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned"
 
@@ -95,11 +99,40 @@ func (a *AddonEc2Test) NewNvidiaDevicePluginTest(nodeName string) *addon.NvidiaD
 }
 
 // NewCertManagerTest creates a new CertManagerTest
-func (a *AddonEc2Test) NewCertManagerTest() *addon.CertManagerTest {
+func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) *addon.CertManagerTest {
 	// Create cert-manager client
 	certClient, err := certmanagerclientset.NewForConfig(a.K8sClientConfig)
 	if err != nil {
 		a.Logger.Error(err, "Failed to create cert-manager client")
+	}
+
+	// Create AWS PCA client
+	k8sPcaClient, err := awspcaclientset.NewForConfig(a.K8sClientConfig)
+	if err != nil {
+		a.Logger.Error(err, "Failed to create AWS PCA client")
+	}
+
+	// Create PCA service client
+	pcaClient := acmpca.NewFromConfig(a.aws)
+
+	// Get pod identity role ARN
+	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.iamClient, a.Cluster.Name)
+	if err != nil {
+		a.Logger.Error(err, "Failed to get pod identity role ARN")
+	}
+
+	// Create PCA Issuer test
+	pcaIssuer := &addon.PCAIssuerTest{
+		Cluster:            a.Cluster.Name,
+		Namespace:          "cert-test",
+		K8S:                a.k8sClient,
+		EKSClient:          a.eksClient,
+		CertClient:         certClient,
+		K8sPcaClient:       k8sPcaClient,
+		PCAClient:          pcaClient,
+		Region:             a.Cluster.Region,
+		PodIdentityRoleArn: podIdentityRoleArn,
+		Logger:             a.Logger,
 	}
 
 	return &addon.CertManagerTest{
@@ -109,5 +142,6 @@ func (a *AddonEc2Test) NewCertManagerTest() *addon.CertManagerTest {
 		K8SConfig:  a.K8sClientConfig,
 		Logger:     a.Logger,
 		CertClient: certClient,
+		PCAIssuer:  pcaIssuer,
 	}
 }
