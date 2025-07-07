@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -262,6 +261,21 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		K8SConfig:           t.K8sClientConfig,
 		Region:              t.Cluster.Region,
 	}
+}
+
+// GetK8sClient returns the Kubernetes client for external package access
+func (t *PeeredVPCTest) GetK8sClient() peered.K8s {
+	return t.k8sClient
+}
+
+// GetEKSClient returns the EKS client for external package access
+func (t *PeeredVPCTest) GetEKSClient() *eks.Client {
+	return t.eksClient
+}
+
+// GetEC2Client returns the EC2 client for external package access
+func (t *PeeredVPCTest) GetEC2Client() *ec2v2.Client {
+	return t.ec2Client
 }
 
 type TestNodeOption func(*testNode)
@@ -533,43 +547,28 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 
 // CreateManagedNodeGroups creates EKS managed node groups for mixed mode testing
 func (t *PeeredVPCTest) CreateManagedNodeGroups(ctx context.Context) error {
-	nodeGroupName := "mixed-mode-cloud-nodes-v2"
+	nodeGroupName := "mixed-mode-cloud-nodes"
 
 	t.Logger.Info("Creating EKS managed node group for mixed mode testing")
 
+	// Use only public subnets - they have both internet access and hybrid routes
+	subnets, err := t.ec2Client.DescribeSubnets(ctx, &ec2v2.DescribeSubnetsInput{
+		SubnetIds: t.Cluster.SubnetIds,
+		Filters: []ec2v2types.Filter{{
+			Name: aws.String("map-public-ip-on-launch"), Values: []string{"true"},
+		}},
+	})
+	if err != nil {
+		return fmt.Errorf("finding public subnets: %w", err)
+	}
+
 	var validSubnets []string
-	for _, subnetId := range t.Cluster.SubnetIds {
-		// Check if subnet has internet gateway route
-		routeTables, err := t.ec2Client.DescribeRouteTables(ctx, &ec2v2.DescribeRouteTablesInput{
-			Filters: []ec2v2types.Filter{
-				{Name: aws.String("association.subnet-id"), Values: []string{subnetId}},
-			},
-		})
-		if err != nil || len(routeTables.RouteTables) == 0 {
-			continue
-		}
-
-		hasInternet := false
-		for _, rt := range routeTables.RouteTables {
-			for _, route := range rt.Routes {
-				if route.DestinationCidrBlock != nil && *route.DestinationCidrBlock == "0.0.0.0/0" &&
-					route.GatewayId != nil && strings.HasPrefix(*route.GatewayId, "igw-") {
-					hasInternet = true
-					break
-				}
-			}
-			if hasInternet {
-				break
-			}
-		}
-
-		if hasInternet {
-			validSubnets = append(validSubnets, subnetId)
-		}
+	for _, subnet := range subnets.Subnets {
+		validSubnets = append(validSubnets, *subnet.SubnetId)
 	}
 
 	if len(validSubnets) == 0 {
-		return fmt.Errorf("no subnets found with internet access")
+		return fmt.Errorf("no public subnets found for managed node groups")
 	}
 
 	input := &eks.CreateNodegroupInput{
@@ -590,7 +589,7 @@ func (t *PeeredVPCTest) CreateManagedNodeGroups(ctx context.Context) error {
 		},
 	}
 
-	_, err := t.eksClient.CreateNodegroup(ctx, input)
+	_, err = t.eksClient.CreateNodegroup(ctx, input)
 	if err != nil {
 		return fmt.Errorf("creating managed node group: %w", err)
 	}
