@@ -40,6 +40,7 @@ func Phases() []string {
 		"k8s-endpoint-network-validation",
 		"k8s-authentication-validation",
 		"kubelet-version-skew-validation",
+		"api-server-endpoint-resolution-validation",
 		"preprocess",
 		"config",
 		"run",

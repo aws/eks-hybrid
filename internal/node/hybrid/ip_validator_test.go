@@ -451,6 +451,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 			)
 			g.Expect(err).To(Succeed())
 
+			// Use the context variable
 			err = hnp.Validate()
 
 			if tt.expectedErr != "" {
