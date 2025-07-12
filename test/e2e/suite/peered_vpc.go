@@ -522,7 +522,18 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize, entry.ComputeType,
 				WithLogging(controlledLogger, outputControl))
 
+			if osystem.IsBottlerocket(entry.OS.Name()) {
+				remoteCommandRunner := ssm.NewBottlerocketSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, test.Logger)
+				logCollector := osystem.BottlerocketLogCollector{
+					Runner: remoteCommandRunner,
+				}
+				testNode.PeeredNode.RemoteCommandRunner = remoteCommandRunner
+				testNode.PeeredNode.LogCollector = logCollector
+			}
 			Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+			if osystem.IsBottlerocket(entry.OS.Name()) {
+				testNode.NodeWaiter = testNode.NewBottlerocketNodeWaiter()
+			}
 			Expect(testNode.WaitForJoin(ctx)).To(Succeed(), "node should join successfully")
 			Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 

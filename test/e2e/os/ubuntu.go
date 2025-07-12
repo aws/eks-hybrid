@@ -79,7 +79,7 @@ func (u Ubuntu2004) InstanceType(region string, instanceSize e2e.InstanceSize, c
 	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize, computeType)
 }
 
-func (u Ubuntu2004) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
+func (u Ubuntu2004) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
 	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/canonical/ubuntu/server/20.04/stable/current/"+u.amiArchitecture+"/hvm/ebs-gp2/ami-id")
 	return *amiId, err
 }
@@ -153,7 +153,7 @@ func (u Ubuntu2204) InstanceType(region string, instanceSize e2e.InstanceSize, c
 	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize, computeType)
 }
 
-func (u Ubuntu2204) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
+func (u Ubuntu2204) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
 	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/canonical/ubuntu/server/22.04/stable/current/"+u.amiArchitecture+"/hvm/ebs-gp2/ami-id")
 	return *amiId, err
 }
@@ -238,7 +238,7 @@ func (u Ubuntu2404) InstanceType(region string, instanceSize e2e.InstanceSize, c
 	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize, computeType)
 }
 
-func (u Ubuntu2404) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
+func (u Ubuntu2404) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
 	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/canonical/ubuntu/server/24.04/stable/current/"+u.amiArchitecture+"/hvm/ebs-gp3/ami-id")
 	return *amiId, err
 }
