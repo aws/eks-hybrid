@@ -21,6 +21,7 @@ type NvidiaDevicePluginTest struct {
 	EKSClient     *eks.Client
 	K8SConfig     *rest.Config
 	Logger        logr.Logger
+	Command       string
 	CommandRunner commands.RemoteCommandRunner
 
 	NodeName string
@@ -45,7 +46,7 @@ func (n *NvidiaDevicePluginTest) WaitForNvidiaDriverReady(ctx context.Context) e
 	}
 
 	err = wait.PollUntilContextTimeout(ctx, nvidiaDriverWaitInterval, nvidiaDriverWaitTimeout, true, func(ctx context.Context) (bool, error) {
-		if commandOutput, err := n.CommandRunner.Run(ctx, ip, []string{"nvidia-smi"}); err != nil || commandOutput.ResponseCode != 0 {
+		if commandOutput, err := n.CommandRunner.Run(ctx, ip, []string{n.Command}); err != nil || commandOutput.ResponseCode != 0 {
 			n.Logger.Info("nvidia-smi command failed", "node", node.Name, "error", err, "responseCode", commandOutput.ResponseCode)
 			return false, nil
 		}

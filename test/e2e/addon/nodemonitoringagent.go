@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -35,7 +36,9 @@ type NodeMonitoringAgentTest struct {
 	EKSClient     *eks.Client
 	K8SConfig     *rest.Config
 	Logger        logr.Logger
+	Command       string
 	CommandRunner commands.RemoteCommandRunner
+	NodeFilter    labels.Selector
 }
 
 func (n *NodeMonitoringAgentTest) Create(ctx context.Context) error {
@@ -65,8 +68,9 @@ func (n *NodeMonitoringAgentTest) runKernelError(ctx context.Context, nodes *v1.
 		// This command simulates a kernel error on the node
 		// Node Monitoring Agent should detect this and create an event for SoftLockup
 		// citing KernelReady as the reason.
-		if _, err := n.CommandRunner.Run(ctx, ip, []string{"echo 'watchdog: BUG: soft lockup - CPU#6 stuck for 23s! [VM Thread:4054]' | tee -a /dev/kmsg"}); err != nil {
-			return err
+		n.Logger.Info("Running kernel error simulation on node", "node", node.Name, "ip", ip)
+		if _, err := n.CommandRunner.Run(ctx, ip, []string{n.Command}); err != nil {
+			return fmt.Errorf("failed to run kernel error simulation on node %s: %w", node.Name, err)
 		}
 	}
 
@@ -74,7 +78,9 @@ func (n *NodeMonitoringAgentTest) runKernelError(ctx context.Context, nodes *v1.
 }
 
 func (n *NodeMonitoringAgentTest) Validate(ctx context.Context) error {
-	nodes, err := ik8s.ListRetry(ctx, n.K8S.CoreV1().Nodes())
+	nodes, err := ik8s.ListRetry(ctx, n.K8S.CoreV1().Nodes(), func(opts *ik8s.ListOptions) {
+		opts.LabelSelector = n.NodeFilter.String()
+	})
 	if err != nil {
 		return err
 	}
