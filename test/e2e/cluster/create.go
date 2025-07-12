@@ -152,17 +152,19 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		return fmt.Errorf("creating kubernetes client: %w", err)
 	}
 
-	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, stackOut.podIdentity.roleArn)
+	if !skipPodIdentityTest() {
+		podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, stackOut.podIdentity.roleArn)
 
-	err = podIdentityAddon.Create(ctx, c.logger, c.eks, k8sClient)
-	if err != nil {
-		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon.Name, err)
-	}
+		err = podIdentityAddon.Create(ctx, c.logger, c.eks, k8sClient)
+		if err != nil {
+			return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon.Name, err)
+		}
 
-	// upload test file to pod identity S3 bucket
-	err = podIdentityAddon.UploadFileForVerification(ctx, c.logger, c.s3, stackOut.podIdentity.s3Bucket)
-	if err != nil {
-		return fmt.Errorf("uploading test file to s3 bucket: %s", stackOut.podIdentity.s3Bucket)
+		// upload test file to pod identity S3 bucket
+		err = podIdentityAddon.UploadFileForVerification(ctx, c.logger, c.s3, stackOut.podIdentity.s3Bucket)
+		if err != nil {
+			return fmt.Errorf("uploading test file to s3 bucket: %s", stackOut.podIdentity.s3Bucket)
+		}
 	}
 
 	dynamicK8s, err := dynamic.NewForConfig(clientConfig)
@@ -252,6 +254,10 @@ func SetTestResourcesDefaults(testResources TestResources) TestResources {
 	}
 
 	return testResources
+}
+
+func skipPodIdentityTest() bool {
+	return os.Getenv("SKIP_POD_IDENTITY_TEST") == "true"
 }
 
 func (c *Create) tagClusterLogGroup(ctx context.Context, clusterName string) error {
