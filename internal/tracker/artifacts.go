@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
@@ -80,8 +81,34 @@ func (tracker *Tracker) Save() error {
 	return util.WriteFileWithDir(trackerFile, data, 0o644)
 }
 
-func Clear() error {
-	return os.RemoveAll(path.Dir(trackerFile))
+func Clear(logger *zap.Logger) error {
+	trackerDir := path.Dir(trackerFile)
+
+	passwdFile := "/etc/passwd"
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+
+	logger.Info("Clearing tracker directory", zap.String("path", trackerDir))
+	if err := os.RemoveAll(trackerDir); err != nil {
+		logger.Error("Failed to clear tracker directory", zap.String("path", trackerDir), zap.Error(err))
+		return err
+	}
+
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("After Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("After /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+
+	logger.Info("Successfully cleared tracker directory", zap.String("path", trackerDir))
+	return nil
 }
 
 // GetInstalledArtifacts reads the tracker file and returns the current

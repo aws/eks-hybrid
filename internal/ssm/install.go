@@ -172,19 +172,19 @@ func Uninstall(ctx context.Context, opts UninstallOptions) error {
 			return Deregister(ctx, opts.SSMRegistration, opts.SSMClient, opts.Logger)
 		},
 		func() error {
-			return removeFileOrDir(opts.SSMRegistration.RegistrationFilePath(), "uninstalling ssm registration file")
+			return removeFileOrDir(opts.SSMRegistration.RegistrationFilePath(), "uninstalling ssm registration file", opts.Logger)
 		},
 		func() error {
-			return uninstallPreRegisterComponents(ctx, opts.PkgSource)
+			return uninstallPreRegisterComponents(ctx, opts.PkgSource, opts.Logger)
 		},
 		func() error {
-			return removeFileOrDir(filepath.Join(opts.InstallRoot, configRoot), "uninstalling ssm config files")
+			return removeFileOrDir(filepath.Join(opts.InstallRoot, configRoot), "uninstalling ssm config files", opts.Logger)
 		},
 		func() error {
-			return removeFileOrDir(filepath.Join(opts.InstallRoot, symlinkedAWSConfigPath), "uninstalling ssm aws config symlink")
+			return removeFileOrDir(filepath.Join(opts.InstallRoot, symlinkedAWSConfigPath), "uninstalling ssm aws config symlink", opts.Logger)
 		},
 		func() error {
-			return removeFileOrDir(filepath.Join(opts.InstallRoot, defaultAWSConfigPath), "uninstalling ssm aws config")
+			return removeFileOrDir(filepath.Join(opts.InstallRoot, defaultAWSConfigPath), "uninstalling ssm aws config", opts.Logger)
 		},
 	}
 
@@ -202,10 +202,30 @@ func Uninstall(ctx context.Context, opts UninstallOptions) error {
 	return nil
 }
 
-func removeFileOrDir(path, errorMessage string) error {
+func removeFileOrDir(path, errorMessage string, logger *zap.Logger) error {
+
+	passwdFile := "/etc/passwd"
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+
+	logger.Info("Removing file or directory", zap.String("path", path))
 	if err := os.RemoveAll(path); err != nil {
+		logger.Error("Failed to remove file or directory", zap.String("path", path), zap.Error(err))
 		return errors.Wrap(err, errorMessage)
 	}
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("After Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("After /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+	logger.Info("Successfully removed file or directory", zap.String("path", path))
 	return nil
 }
 
@@ -219,12 +239,42 @@ func writeGpgConfig() error {
 	return util.WriteFileUniqueLine(gpgConfigFile, []byte("no-tty"), gpgConfigFilePerms)
 }
 
-func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) error {
+func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource, logger *zap.Logger) error {
+	logger.Info("Uninstalling SSM pre-register components")
+
 	ssmPkg := pkgSource.GetSSMPackage()
+	logger.Info("Executing SSM package uninstall command")
 	if err := cmd.Retry(ctx, ssmPkg.UninstallCmd, 5*time.Second); err != nil {
+		logger.Error("Failed to uninstall SSM package", zap.Error(err))
 		return errors.Wrapf(err, "uninstalling ssm")
 	}
-	return os.RemoveAll(defaultInstallerPath)
+	logger.Info("Successfully uninstalled SSM package")
+
+	passwdFile := "/etc/passwd"
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+
+	logger.Info("Removing SSM installer", zap.String("path", defaultInstallerPath))
+	if err := os.RemoveAll(defaultInstallerPath); err != nil {
+		logger.Error("Failed to remove SSM installer", zap.String("path", defaultInstallerPath), zap.Error(err))
+		return err
+	}
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("After Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("After /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+	logger.Info("Successfully removed SSM installer", zap.String("path", defaultInstallerPath))
+
+	logger.Info("SSM pre-register components uninstall completed successfully")
+	return nil
 }
 
 func runInstallWithRetries(ctx context.Context, installerPath, region string) error {
