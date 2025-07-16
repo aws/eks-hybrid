@@ -3,7 +3,6 @@ package flows
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
@@ -21,6 +20,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -167,7 +167,7 @@ func (u *Uninstaller) cleanup() error {
 		return err
 	}
 
-	if err := os.RemoveAll(eksConfigDir); err != nil {
+	if err := system.SafeRemoveAll(eksConfigDir, false, false); err != nil {
 		return err
 	}
 

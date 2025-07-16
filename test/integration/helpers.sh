@@ -435,3 +435,125 @@ function mock::iamra-certificate-path() {
       exit 1
   fi
 }
+
+# Mount point testing helpers for SafeRemoveAll integration tests
+function assert::command-success() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: assert::command-success 'command'"
+    exit 1
+  fi
+  local COMMAND=$1
+  if ! eval "$COMMAND"; then
+    echo "Command failed: $COMMAND"
+    exit 1
+  fi
+}
+
+function assert::command-failure() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: assert::command-failure 'command'"
+    exit 1
+  fi
+  local COMMAND=$1
+  if eval "$COMMAND"; then
+    echo "Command unexpectedly succeeded: $COMMAND"
+    exit 1
+  fi
+}
+
+function assert::mount-point-exists() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: assert::mount-point-exists PATH"
+    exit 1
+  fi
+  local PATH=$1
+  if ! is_mount_point "$PATH"; then
+    echo "Path $PATH is not a mount point"
+    exit 1
+  fi
+}
+
+function assert::mount-point-not-exists() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: assert::mount-point-not-exists PATH"
+    exit 1
+  fi
+  local PATH=$1
+  if is_mount_point "$PATH"; then
+    echo "Path $PATH is unexpectedly a mount point"
+    exit 1
+  fi
+}
+
+# Helper function to check if a path is a mount point using /proc/mounts
+function is_mount_point() {
+  local PATH=$1
+  # Resolve to absolute path
+  PATH=$(realpath "$PATH" 2>/dev/null || echo "$PATH")
+  
+  # Check if path exists in /proc/mounts
+  if grep -q " $PATH " /proc/mounts 2>/dev/null; then
+    return 0
+  fi
+  
+  # Alternative check: use cut to get second field
+  if cut -d' ' -f2 /proc/mounts | grep -q "^$PATH$" 2>/dev/null; then
+    return 0
+  fi
+  
+  # Alternative: use findmnt if available
+  if command -v findmnt >/dev/null 2>&1; then
+    if findmnt "$PATH" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
+function create::bind-mount() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: create::bind-mount SOURCE TARGET"
+    exit 1
+  fi
+  local SOURCE=$1
+  local TARGET=$2
+  
+  # Ensure target exists
+  if [ -d "$SOURCE" ]; then
+    mkdir -p "$TARGET"
+  else
+    mkdir -p "$(dirname "$TARGET")"
+    touch "$TARGET"
+  fi
+  
+  mount --bind "$SOURCE" "$TARGET"
+  echo "Created bind mount: $SOURCE -> $TARGET"
+}
+
+function cleanup::mount() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: cleanup::mount PATH"
+    exit 1
+  fi
+  local PATH=$1
+  
+  if is_mount_point "$PATH"; then
+    umount "$PATH" || {
+      echo "Warning: Failed to unmount $PATH, trying lazy unmount"
+      umount -l "$PATH" || echo "Warning: Lazy unmount also failed for $PATH"
+    }
+    echo "Cleaned up mount: $PATH"
+  fi
+}
+
+function list::mount-points-in-path() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: list::mount-points-in-path PATH"
+    exit 1
+  fi
+  local PATH=$1
+  
+  echo "Mount points under $PATH:"
+  findmnt -R "$PATH" 2>/dev/null || echo "No mount points found under $PATH"
+}

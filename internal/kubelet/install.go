@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -128,7 +129,7 @@ func Uninstall(opts UninstallOptions) error {
 	}
 
 	for _, path := range pathsToRemove {
-		if err := os.RemoveAll(path); err != nil {
+		if err := system.SafeRemoveAll(path, false, false); err != nil {
 			allErrors = append(allErrors, err)
 		}
 	}

@@ -2,13 +2,13 @@ package cni
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -93,7 +93,7 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 }
 
 func Uninstall() error {
-	return os.RemoveAll(rootDir)
+	return system.SafeRemoveAll(rootDir, false, false)
 }
 
 // Upgrade re-installs the cni-plugins available from the source

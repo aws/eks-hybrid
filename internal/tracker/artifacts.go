@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
@@ -81,7 +82,7 @@ func (tracker *Tracker) Save() error {
 }
 
 func Clear() error {
-	return os.RemoveAll(path.Dir(trackerFile))
+	return system.SafeRemoveAll(path.Dir(trackerFile), false, false)
 }
 
 // GetInstalledArtifacts reads the tracker file and returns the current

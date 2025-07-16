@@ -3,7 +3,6 @@ package containerd
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"time"
 
@@ -59,7 +58,7 @@ func Uninstall(ctx context.Context, source Source) error {
 			return errors.Wrap(err, "uninstalling containerd")
 		}
 
-		if err := os.RemoveAll(containerdConfigDir); err != nil {
+		if err := system.SafeRemoveAll(containerdConfigDir, false, false); err != nil {
 			return errors.Wrap(err, "removing containerd config files")
 		}
 	}
