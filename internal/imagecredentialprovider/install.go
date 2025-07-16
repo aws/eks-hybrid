@@ -2,7 +2,6 @@ package imagecredentialprovider
 
 import (
 	"context"
-	"os"
 	"path"
 	"path/filepath"
 
@@ -10,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -87,7 +87,7 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 }
 
 func Uninstall() error {
-	return os.RemoveAll(path.Dir(BinPath))
+	return system.SafeRemoveAll(path.Dir(BinPath), false, false)
 }
 
 func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {

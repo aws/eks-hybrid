@@ -2,11 +2,12 @@ package cleanup
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/system"
 )
 
 // Directories to clean up when force flag is enabled
@@ -57,5 +58,5 @@ func (c *Force) Cleanup() error {
 
 func (c *Force) removeDir(dir string) error {
 	c.logger.Info("Removing directory", zap.String("path", dir))
-	return os.RemoveAll(dir)
+	return system.SafeRemoveAll(dir, false, false)
 }

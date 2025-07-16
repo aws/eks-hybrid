@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/aws/eks-hybrid/internal/system"
 )
 
 // DefaultDirPerms are the permissions assigned to a directory when an Install* func is called
@@ -21,7 +23,7 @@ const DefaultDirPerms = fs.ModeDir | 0o755
 // InstallFile installs src to dst with perms permissions. It ensures any base paths exist
 // before installing.
 func InstallFile(dst string, src io.Reader, perms fs.FileMode) error {
-	if err := os.RemoveAll(dst); err != nil {
+	if err := system.SafeRemoveAll(dst, false, false); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(path.Dir(dst), DefaultDirPerms); err != nil {

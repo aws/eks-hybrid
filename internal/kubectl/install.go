@@ -2,13 +2,13 @@ package kubectl
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -86,7 +86,7 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 }
 
 func Uninstall() error {
-	return os.RemoveAll(BinPath)
+	return system.SafeRemoveAll(BinPath, false, false)
 }
 
 func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {

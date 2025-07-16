@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 	"github.com/aws/eks-hybrid/internal/util"
 	"github.com/aws/eks-hybrid/internal/util/cmd"
@@ -203,7 +204,7 @@ func Uninstall(ctx context.Context, opts UninstallOptions) error {
 }
 
 func removeFileOrDir(path, errorMessage string) error {
-	if err := os.RemoveAll(path); err != nil {
+	if err := system.SafeRemoveAll(path, false, false); err != nil {
 		return errors.Wrap(err, errorMessage)
 	}
 	return nil
@@ -224,7 +225,7 @@ func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) er
 	if err := cmd.Retry(ctx, ssmPkg.UninstallCmd, 5*time.Second); err != nil {
 		return errors.Wrapf(err, "uninstalling ssm")
 	}
-	return os.RemoveAll(defaultInstallerPath)
+	return system.SafeRemoveAll(defaultInstallerPath, false, false)
 }
 
 func runInstallWithRetries(ctx context.Context, installerPath, region string) error {

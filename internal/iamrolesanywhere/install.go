@@ -2,7 +2,6 @@ package iamrolesanywhere
 
 import (
 	"context"
-	"os"
 	"path"
 	"path/filepath"
 
@@ -10,6 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -85,13 +85,13 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 }
 
 func Uninstall() error {
-	if err := os.RemoveAll(SigningHelperServiceFilePath); err != nil {
+	if err := system.SafeRemoveAll(SigningHelperServiceFilePath, false, false); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(path.Dir(EksHybridAwsCredentialsPath)); err != nil {
+	if err := system.SafeRemoveAll(path.Dir(EksHybridAwsCredentialsPath), false, false); err != nil {
 		return err
 	}
-	return os.RemoveAll(SigningHelperBinPath)
+	return system.SafeRemoveAll(SigningHelperBinPath, false, false)
 }
 
 func Upgrade(ctx context.Context, signingHelperSrc SigningHelperSource, log *zap.Logger) error {

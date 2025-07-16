@@ -95,7 +95,7 @@ func (s *ssm) PostLaunch() error {
 			return fmt.Errorf("creating path: %v", err)
 		}
 
-		err = os.RemoveAll(symlinkedAWSConfigPath)
+		err = system.SafeRemoveAll(symlinkedAWSConfigPath, false, false)
 		if err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing directory %s: %v", symlinkedAWSConfigPath, err)
 		}
