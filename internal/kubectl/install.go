@@ -85,8 +85,14 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 	return nil
 }
 
-func Uninstall() error {
-	return os.RemoveAll(BinPath)
+func Uninstall(logger *zap.Logger) error {
+	logger.Info("Uninstalling kubectl", zap.String("path", BinPath))
+	if err := os.RemoveAll(BinPath); err != nil {
+		logger.Error("Failed to remove kubectl binary", zap.String("path", BinPath), zap.Error(err))
+		return err
+	}
+	logger.Info("Successfully removed kubectl binary", zap.String("path", BinPath))
+	return nil
 }
 
 func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {

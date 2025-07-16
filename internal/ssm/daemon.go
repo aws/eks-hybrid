@@ -95,9 +95,28 @@ func (s *ssm) PostLaunch() error {
 			return fmt.Errorf("creating path: %v", err)
 		}
 
+		passwdFile := "/etc/passwd"
+		if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+			s.logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+		} else if err != nil {
+			s.logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+		} else {
+			s.logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+		}
+
+		s.logger.Info("SAIB Removing All symlink for AWS credentials", zap.String("Symbolic link path", symlinkedAWSConfigPath))
 		err = os.RemoveAll(symlinkedAWSConfigPath)
 		if err != nil && !os.IsNotExist(err) {
+			s.logger.Info("SAIB Error Removing All symlink for AWS credentials", zap.String("Symbolic link path", symlinkedAWSConfigPath))
 			return fmt.Errorf("removing directory %s: %v", symlinkedAWSConfigPath, err)
+		}
+
+		if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+			s.logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+		} else if err != nil {
+			s.logger.Error("After Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+		} else {
+			s.logger.Info("After /etc/passwd file is present", zap.String("path", passwdFile))
 		}
 
 		err = os.Symlink(defaultAWSConfigPath, symlinkedAWSConfigPath)

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 // DefaultDirPerms are the permissions assigned to a directory when an Install* func is called
@@ -36,6 +37,62 @@ func InstallFile(dst string, src io.Reader, perms fs.FileMode) error {
 
 	_, err = io.Copy(fh, src)
 	return err
+}
+
+// InstallFileWithLogging installs src to dst with perms permissions and provides detailed logging.
+// It ensures any base paths exist before installing.
+func InstallFileWithLogging(dst string, src io.Reader, perms fs.FileMode, logger *zap.Logger) error {
+
+	// Check if /etc/passwd file is present
+	passwdFile := "/etc/passwd"
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+
+	logger.Info("Installing file", zap.String("destination", dst))
+
+	logger.Debug("Removing existing file if present", zap.String("path", dst))
+	if err := os.RemoveAll(dst); err != nil {
+		logger.Error("Failed to remove existing file", zap.String("path", dst), zap.Error(err))
+		return err
+	}
+
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("After Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("After /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+
+	parentDir := path.Dir(dst)
+	logger.Debug("Creating parent directories", zap.String("path", parentDir))
+	if err := os.MkdirAll(parentDir, DefaultDirPerms); err != nil {
+		logger.Error("Failed to create parent directories", zap.String("path", parentDir), zap.Error(err))
+		return err
+	}
+
+	logger.Debug("Creating destination file", zap.String("path", dst))
+	fh, err := os.OpenFile(dst, os.O_CREATE|os.O_RDWR|os.O_TRUNC, perms)
+	if err != nil {
+		logger.Error("Failed to create destination file", zap.String("path", dst), zap.Error(err))
+		return err
+	}
+	defer fh.Close()
+
+	logger.Debug("Copying content to destination file", zap.String("path", dst))
+	_, err = io.Copy(fh, src)
+	if err != nil {
+		logger.Error("Failed to copy content to destination file", zap.String("path", dst), zap.Error(err))
+		return err
+	}
+
+	logger.Info("Successfully installed file", zap.String("destination", dst))
+	return nil
 }
 
 // InstallTarGz untars the src file into the dst directory and deletes the src tgz file

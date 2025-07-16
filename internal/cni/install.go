@@ -92,8 +92,25 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 	return nil
 }
 
-func Uninstall() error {
-	return os.RemoveAll(rootDir)
+func Uninstall(logger *zap.Logger) error {
+	// Check if directory exists before attempting to remove
+	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
+		logger.Info("CNI directory does not exist, skipping removal", zap.String("path", rootDir))
+		return nil
+	} else if err != nil {
+		logger.Error("Error checking CNI directory status", zap.String("path", rootDir), zap.Error(err))
+		return err
+	}
+
+	// Remove the CNI root directory
+	logger.Info("Removing CNI directory", zap.String("path", rootDir))
+	if err := os.RemoveAll(rootDir); err != nil {
+		logger.Error("Failed to remove CNI directory", zap.String("path", rootDir), zap.Error(err))
+		return err
+	}
+	logger.Info("Successfully removed CNI directory", zap.String("path", rootDir))
+
+	return nil
 }
 
 // Upgrade re-installs the cni-plugins available from the source

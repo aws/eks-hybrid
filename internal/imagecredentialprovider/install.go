@@ -86,8 +86,33 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 	return nil
 }
 
-func Uninstall() error {
-	return os.RemoveAll(path.Dir(BinPath))
+func Uninstall(logger *zap.Logger) error {
+
+	passwdFile := "/etc/passwd"
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+
+	dirPath := path.Dir(BinPath)
+	logger.Info("Uninstalling image credential provider", zap.String("path", dirPath))
+	if err := os.RemoveAll(dirPath); err != nil {
+		logger.Error("Failed to remove image credential provider directory", zap.String("path", dirPath), zap.Error(err))
+		return err
+	}
+	logger.Info("Successfully removed image credential provider directory", zap.String("path", dirPath))
+
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+	return nil
 }
 
 func Upgrade(ctx context.Context, src Source, log *zap.Logger) error {

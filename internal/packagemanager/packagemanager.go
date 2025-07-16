@@ -163,17 +163,22 @@ func (pm *DistroPackageManager) uninstallDockerRepo() error {
 		_, err := os.Stat(path)
 
 		if os.IsNotExist(err) {
+			pm.logger.Info("Docker repo file does not exist, skipping removal", zap.String("path", path), zap.String("type", pkgType))
 			return nil
 		}
 		if err != nil {
+			pm.logger.Error("Error checking docker repo file status", zap.String("path", path), zap.String("type", pkgType), zap.Error(err))
 			return errors.Wrapf(err, "encountered error while trying to reach %s docker repo file at %s",
 				pkgType, path)
 		}
 
+		pm.logger.Info("Removing docker repo file", zap.String("path", path), zap.String("type", pkgType))
 		if err := os.Remove(path); err != nil {
+			pm.logger.Error("Failed to remove docker repo file", zap.String("path", path), zap.String("type", pkgType), zap.Error(err))
 			return errors.Wrapf(err, "failed to remove %s docker repo from %s",
 				pkgType, path)
 		}
+		pm.logger.Info("Successfully removed docker repo file", zap.String("path", path), zap.String("type", pkgType))
 
 		return nil
 	}
@@ -182,10 +187,19 @@ func (pm *DistroPackageManager) uninstallDockerRepo() error {
 	case yumPackageManager:
 		return removeRepoFile(yumDockerRepoSourceFilePath, yumPackageManager)
 	case aptPackageManager:
-		if err := os.Remove(ubuntuDockerGpgKeyPath); err != nil {
-			if !os.IsNotExist(err) {
+		// Remove GPG key file
+		if _, err := os.Stat(ubuntuDockerGpgKeyPath); os.IsNotExist(err) {
+			pm.logger.Info("Docker GPG key file does not exist, skipping removal", zap.String("path", ubuntuDockerGpgKeyPath))
+		} else if err != nil {
+			pm.logger.Error("Error checking docker GPG key file status", zap.String("path", ubuntuDockerGpgKeyPath), zap.Error(err))
+			return err
+		} else {
+			pm.logger.Info("Removing docker GPG key file", zap.String("path", ubuntuDockerGpgKeyPath))
+			if err := os.Remove(ubuntuDockerGpgKeyPath); err != nil {
+				pm.logger.Error("Failed to remove docker GPG key file", zap.String("path", ubuntuDockerGpgKeyPath), zap.Error(err))
 				return err
 			}
+			pm.logger.Info("Successfully removed docker GPG key file", zap.String("path", ubuntuDockerGpgKeyPath))
 		}
 
 		return removeRepoFile(aptDockerRepoSourceFilePath, aptPackageManager)

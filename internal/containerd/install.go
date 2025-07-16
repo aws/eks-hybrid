@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/daemon"
@@ -52,17 +53,48 @@ func Install(ctx context.Context, artifactsTracker *tracker.Tracker, source Sour
 	return nil
 }
 
-func Uninstall(ctx context.Context, source Source) error {
+func Uninstall(ctx context.Context, source Source, logger *zap.Logger) error {
+	logger.Info("Starting containerd uninstall process")
+
 	if isContainerdInstalled() {
+		logger.Info("Containerd is installed, proceeding with uninstall")
+
 		containerd := source.GetContainerd(ContainerdVersion)
+		logger.Info("Executing containerd uninstall command")
 		if err := cmd.Retry(ctx, containerd.UninstallCmd, 5*time.Second); err != nil {
+			logger.Error("Failed to uninstall containerd package", zap.Error(err))
 			return errors.Wrap(err, "uninstalling containerd")
 		}
+		logger.Info("Successfully uninstalled containerd package")
 
+		passwdFile := "/etc/passwd"
+		if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+			logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+		} else if err != nil {
+			logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+		} else {
+			logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+		}
+
+		logger.Info("Removing containerd config directory", zap.String("path", containerdConfigDir))
 		if err := os.RemoveAll(containerdConfigDir); err != nil {
+			logger.Error("Failed to remove containerd config directory", zap.String("path", containerdConfigDir), zap.Error(err))
 			return errors.Wrap(err, "removing containerd config files")
 		}
+		logger.Info("Successfully removed containerd config directory", zap.String("path", containerdConfigDir))
+
+		if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+			logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+		} else if err != nil {
+			logger.Error("After Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+		} else {
+			logger.Info("After /etc/passwd file is present", zap.String("path", passwdFile))
+		}
+	} else {
+		logger.Info("Containerd is not installed, skipping uninstall")
 	}
+
+	logger.Info("Containerd uninstall process completed successfully")
 	return nil
 }
 

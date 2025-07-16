@@ -84,14 +84,33 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 	return nil
 }
 
-func Uninstall() error {
+func Uninstall(logger *zap.Logger) error {
+	logger.Info("Uninstalling IAM Roles Anywhere components...")
+
+	logger.Info("Removing signing helper service file", zap.String("path", SigningHelperServiceFilePath))
 	if err := os.RemoveAll(SigningHelperServiceFilePath); err != nil {
+		logger.Error("Failed to remove signing helper service file", zap.String("path", SigningHelperServiceFilePath), zap.Error(err))
 		return err
 	}
-	if err := os.RemoveAll(path.Dir(EksHybridAwsCredentialsPath)); err != nil {
+	logger.Info("Successfully removed signing helper service file", zap.String("path", SigningHelperServiceFilePath))
+
+	credentialsDir := path.Dir(EksHybridAwsCredentialsPath)
+	logger.Info("Removing AWS credentials directory", zap.String("path", credentialsDir))
+	if err := os.RemoveAll(credentialsDir); err != nil {
+		logger.Error("Failed to remove AWS credentials directory", zap.String("path", credentialsDir), zap.Error(err))
 		return err
 	}
-	return os.RemoveAll(SigningHelperBinPath)
+	logger.Info("Successfully removed AWS credentials directory", zap.String("path", credentialsDir))
+
+	logger.Info("Removing signing helper binary", zap.String("path", SigningHelperBinPath))
+	if err := os.RemoveAll(SigningHelperBinPath); err != nil {
+		logger.Error("Failed to remove signing helper binary", zap.String("path", SigningHelperBinPath), zap.Error(err))
+		return err
+	}
+	logger.Info("Successfully removed signing helper binary", zap.String("path", SigningHelperBinPath))
+
+	logger.Info("IAM Roles Anywhere uninstall completed successfully")
+	return nil
 }
 
 func Upgrade(ctx context.Context, signingHelperSrc SigningHelperSource, log *zap.Logger) error {

@@ -77,6 +77,7 @@ func TestUninstall(t *testing.T) {
 
 			err := kubelet.Uninstall(kubelet.UninstallOptions{
 				InstallRoot: tmpDir,
+				Logger:      zap.NewNop(),
 			})
 
 			// Restore permissions to allow cleanup
