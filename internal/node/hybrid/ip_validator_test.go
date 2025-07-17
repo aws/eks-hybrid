@@ -19,7 +19,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 		name        string
 		nodeConfig  *api.NodeConfig
 		cluster     *types.Cluster
-		network     hybrid.Network
+		network     *mockNetwork
 		expectedErr string
 	}{
 		{
