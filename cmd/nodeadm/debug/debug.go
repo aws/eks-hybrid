@@ -19,6 +19,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/logger"
+	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/validation"
@@ -105,6 +106,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			validation.New("k8s-vpc-network", apiServerValidator.CheckVPCEndpointAccess),
 		),
 		validation.New("k8s-certificate", kubernetes.NewKubeletCertificateValidator(clusterProvider).Run),
+		validation.New("network-interface", network.NewNetworkInterfaceValidator(awsConfig).Run),
 	)
 
 	if err := runner.Sequentially(ctx, nodeConfig); err != nil {

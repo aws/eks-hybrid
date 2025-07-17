@@ -12,6 +12,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/validation"
@@ -32,7 +33,7 @@ type HybridNodeProvider struct {
 	logger        *zap.Logger
 	cluster       *types.Cluster
 	skipPhases    []string
-	network       Network
+	network       network.Network
 	// CertPath is the path to the kubelet certificate
 	// If not provided, defaults to kubelet.KubeletCurrentCertPath
 	certPath string
@@ -46,7 +47,7 @@ func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logg
 		nodeConfig: nodeConfig,
 		logger:     logger,
 		skipPhases: skipPhases,
-		network:    &defaultKubeletNetwork{},
+		network:    network.NewDefaultNetwork(),
 		certPath:   kubelet.KubeletCurrentCertPath,
 		kubelet:    kubelet.New(),
 	}
@@ -76,9 +77,9 @@ func WithCluster(cluster *types.Cluster) NodeProviderOpt {
 }
 
 // WithNetwork adds network util functions to the HybridNodeProvider for testing purposes.
-func WithNetwork(network Network) NodeProviderOpt {
+func WithNetwork(net network.Network) NodeProviderOpt {
 	return func(hnp *HybridNodeProvider) {
-		hnp.network = network
+		hnp.network = net
 	}
 }
 
