@@ -511,29 +511,29 @@ Resources:
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
-  
-  Jumpbox:
-    Type: AWS::EC2::Instance
-    CreationPolicy:   
-      ResourceSignal:
-        Timeout: PT5M
+
+  JumpboxLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     DependsOn:
       - JumpboxKeyPair
-    DeletionPolicy: Delete
     Properties:
-      ImageId: resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
-      InstanceType: t4g.micro
-      SubnetId: !Ref HybridNodeVPCPublicSubnet
-      IamInstanceProfile: !Ref JumpboxInstanceProfile
-      Tags:
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-        - Key: Jumpbox
-          Value: true
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-jumpbox"
-      UserData:
-        Fn::Base64:
+      LaunchTemplateName: !Sub "${AWS::StackName}-jumpbox-template"
+      LaunchTemplateData:
+        ImageId: resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+        IamInstanceProfile:
+          Arn: !GetAtt JumpboxInstanceProfile.Arn
+        SecurityGroupIds:
+          - !GetAtt HybridNodeVPC.DefaultSecurityGroup
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: !Ref TestClusterTagKey
+                Value: !Ref ClusterName
+              - Key: Jumpbox
+                Value: true
+              - Key: Name
+                Value: !Sub "${AWS::StackName}-jumpbox"
+        UserData:
           Fn::Base64: !Sub |
             #cloud-config
             packages:
@@ -562,7 +562,38 @@ Resources:
                 permissions: "0755"
             runcmd:
               - systemctl enable rsyslog --now
-              - cfn-signal --stack ${AWS::StackName} --resource Jumpbox --region ${AWS::Region}
+              - /opt/aws/bin/cfn-signal --stack ${AWS::StackName} --resource JumpboxFleet --region ${AWS::Region}
+
+  JumpboxFleet:
+    Type: AWS::EC2::EC2Fleet
+    CreationPolicy:   
+      ResourceSignal:
+        Timeout: PT5M
+    DeletionPolicy: Delete
+    Properties:
+      LaunchTemplateConfigs:
+        - LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref JumpboxLaunchTemplate
+            Version: !GetAtt JumpboxLaunchTemplate.LatestVersionNumber
+          Overrides:
+            # use t4g.micro if available, otherwise try other instance types
+            - InstanceType: t4g.micro
+              SubnetId: !Ref HybridNodeVPCPublicSubnet
+            - InstanceType: t4g.small
+              SubnetId: !Ref HybridNodeVPCPublicSubnet
+            - InstanceType: a1.medium
+              SubnetId: !Ref HybridNodeVPCPublicSubnet
+      TargetCapacitySpecification:
+        TotalTargetCapacity: 1
+        DefaultTargetCapacityType: on-demand
+      Type: instant
+      TagSpecifications:
+        - ResourceType: fleet
+          Tags:
+            - Key: !Ref TestClusterTagKey
+              Value: !Ref ClusterName
+            - Key: Name
+              Value: !Sub "${AWS::StackName}-jumpbox-fleet"
 
   PodIdentityS3Bucket:
     Type: AWS::S3::Bucket
