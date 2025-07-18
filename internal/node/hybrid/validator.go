@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/certificate"
 	"github.com/aws/eks-hybrid/internal/util/file"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
@@ -117,7 +118,7 @@ func validateRolesAnywhereNode(node *api.NodeConfig) error {
 	if !file.Exists(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath) {
 		return fmt.Errorf("IAM Roles Anywhere certificate %s not found", node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath)
 	}
-	if err := ValidateCertificate(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath, nil); err != nil {
+	if err := certificate.Validate(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath, nil); err != nil {
 		return addIAMRARemediation(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath, err)
 	}
 
@@ -137,17 +138,17 @@ func addIAMRARemediation(certPath string, err error) error {
 	errWithContext := fmt.Errorf("validating iam-roles-anywhere certificate: %w", err)
 
 	switch err.(type) {
-	case *CertNotFoundError, *CertFileError, *CertReadError:
+	case *certificate.CertNotFoundError, *certificate.CertFileError, *certificate.CertReadError:
 		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM role anywhere certificate at %s. %s", certPath, iamRolesCertGuideURL))
-	case *CertInvalidFormatError:
+	case *certificate.CertInvalidFormatError:
 		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM Role certificate format. %s", iamRolesCertGuideURL))
-	case *CertClockSkewError:
+	case *certificate.CertClockSkewError:
 		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM Role certificate validity or system time is correct. %s", iamRolesCertGuideURL))
-	case *CertExpiredError:
+	case *certificate.CertExpiredError:
 		return validation.WithRemediation(errWithContext, fmt.Sprintf("Generate a new IAM Roles Anywhere certificate as the current one has expired. %s", iamRolesCertGuideURL))
-	case *CertParseCAError:
+	case *certificate.CertParseCAError:
 		return validation.WithRemediation(errWithContext, fmt.Sprintf("Ensure the IAM Roles Anywhere certificate is valid. %s", iamRolesCertGuideURL))
-	case *CertInvalidCAError:
+	case *certificate.CertInvalidCAError:
 		return validation.WithRemediation(errWithContext, fmt.Sprintf("Please remove the IAM Roles Anywhere certificate file at %s. %s", certPath, iamRolesCertGuideURL))
 	}
 

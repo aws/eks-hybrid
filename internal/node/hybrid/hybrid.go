@@ -2,7 +2,6 @@ package hybrid
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
@@ -10,18 +9,21 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/certificate"
+	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 	"github.com/aws/eks-hybrid/internal/system"
-	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 const (
-	nodeIpValidation      = "node-ip-validation"
-	kubeletCertValidation = "kubelet-cert-validation"
-	kubeletVersionSkew    = "kubelet-version-skew-validation"
-	ntpSyncValidation     = "ntp-sync-validation"
+	nodeIpValidation            = "node-ip-validation"
+	kubeletVersionSkew          = "kubelet-version-skew-validation"
+	ntpSyncValidation           = "ntp-sync-validation"
+	awsCredentialsValidation    = "aws-credentials-validation"
+	apiServerEndpointResolution = "api-server-endpoint-resolution-validation"
 )
 
 type HybridNodeProvider struct {
@@ -104,29 +106,40 @@ func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 	return hnp.logger
 }
 
-func (hnp *HybridNodeProvider) Validate() error {
+func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
+	// Validate AWS credentials early in the process
+	if !slices.Contains(hnp.skipPhases, awsCredentialsValidation) {
+		if hnp.awsConfig != nil {
+			informer := &logInformer{logger: hnp.logger}
+			credValidator := creds.NewCredentialValidator(*hnp.awsConfig)
+			if err := credValidator.Run(ctx, informer, hnp.nodeConfig); err != nil {
+				return err
+			}
+		}
+	}
+
 	if !slices.Contains(hnp.skipPhases, nodeIpValidation) {
 		if err := hnp.ValidateNodeIP(); err != nil {
 			return err
 		}
 	}
 
-	if !slices.Contains(hnp.skipPhases, kubeletCertValidation) {
+	if !slices.Contains(hnp.skipPhases, certificate.KubeletCertValidation) {
 		hnp.logger.Info("Validating kubelet certificate...")
-		if err := ValidateCertificate(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
+		if err := certificate.Validate(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
 			// Ignore date validation errors in the hybrid provider since kubelet will regenerate them
 			// Ignore no cert errors since we expect it to not exist
-			if IsDateValidationError(err) || IsNoCertError(err) {
+			if certificate.IsDateValidationError(err) || certificate.IsNoCertError(err) {
 				return nil
 			}
 
-			return AddKubeletRemediation(hnp.certPath, err)
+			return certificate.AddKubeletRemediation(hnp.certPath, err)
 		}
 	}
 
 	if !slices.Contains(hnp.skipPhases, kubeletVersionSkew) {
 		if err := hnp.ValidateKubeletVersionSkew(); err != nil {
-			return validation.WithRemediation(err,
+			return withRemediation(err,
 				"Ensure the hybrid node's Kubernetes version follows the version skew policy of the EKS cluster. "+
 					"Update the node's Kubernetes components using 'nodeadm upgrade' or reinstall with a compatible version. https://kubernetes.io/releases/version-skew-policy/#kubelet")
 		}
@@ -136,6 +149,14 @@ func (hnp *HybridNodeProvider) Validate() error {
 		hnp.logger.Info("Validating NTP synchronization...")
 		ntpValidator := system.NewNTPValidator(hnp.logger)
 		if err := ntpValidator.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if !slices.Contains(hnp.skipPhases, apiServerEndpointResolution) {
+		// Create a simple informer that logs progress and errors
+		informer := &logInformer{logger: hnp.logger}
+		if err := kubernetes.CheckConnection(ctx, informer, hnp.nodeConfig); err != nil {
 			return err
 		}
 	}
@@ -163,24 +184,40 @@ func (hnp *HybridNodeProvider) getCluster(ctx context.Context) (*types.Cluster, 
 	return cluster, nil
 }
 
-// AddKubeletRemediation adds kubelet-specific remediation messages based on error type
-func AddKubeletRemediation(certPath string, err error) error {
-	errWithContext := fmt.Errorf("validating kubelet certificate: %w", err)
+// remediableError is an error that provides a possible remediation.
+type remediableError struct {
+	error
+	remediation string
+}
 
-	switch err.(type) {
-	case *CertNotFoundError, *CertFileError, *CertReadError:
-		return validation.WithRemediation(errWithContext, "Kubelet certificate will be created when the kubelet is able to authenticate with the API server. Check previous authentication remediation advice.")
-	case *CertInvalidFormatError:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Delete the kubelet server certificate file %s and restart kubelet", certPath))
-	case *CertClockSkewError:
-		return validation.WithRemediation(errWithContext, "Verify the system time is correct and restart the kubelet.")
-	case *CertExpiredError:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Delete the kubelet server certificate file %s and restart kubelet. Validate `serverTLSBootstrap` is true in the kubelet config /etc/kubernetes/kubelet/config.json to automatically rotate the certificate.", certPath))
-	case *CertParseCAError:
-		return validation.WithRemediation(errWithContext, "Ensure the cluster CA certificate is valid")
-	case *CertInvalidCAError:
-		return validation.WithRemediation(errWithContext, fmt.Sprintf("Please remove the kubelet server certificate file %s or use \"--skip %s\" if this is expected", certPath, kubeletCertValidation))
+// Remediation returns a possible solution to the error.
+func (e *remediableError) Remediation() string {
+	return e.remediation
+}
+
+// withRemediation makes an error remediable.
+func withRemediation(err error, remediation string) error {
+	return &remediableError{
+		error:       err,
+		remediation: remediation,
 	}
+}
 
-	return errWithContext
+// logInformer is a simple implementation of validation.Informer that logs progress and errors.
+type logInformer struct {
+	logger *zap.Logger
+}
+
+// Starting implements validation.Informer.
+func (i *logInformer) Starting(ctx context.Context, name, message string) {
+	i.logger.Info(message, zap.String("validation", name))
+}
+
+// Done implements validation.Informer.
+func (i *logInformer) Done(ctx context.Context, name string, err error) {
+	if err != nil {
+		i.logger.Error("validation failed", zap.String("validation", name), zap.Error(err))
+	} else {
+		i.logger.Info("validation succeeded", zap.String("validation", name))
+	}
 }

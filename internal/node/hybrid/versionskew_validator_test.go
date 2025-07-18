@@ -1,6 +1,7 @@
 package hybrid_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -105,18 +106,19 @@ func TestHybridNodeProvider_ValidateKubeletVersionSkew(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
+			ctx := context.Background()
 
 			mockKubelet := newMockKubelet(tt.kubeletVersion, tt.kubeletError)
 			hnp, err := hybrid.NewHybridNodeProvider(
 				&api.NodeConfig{},
-				[]string{"node-ip-validation", "kubelet-cert-validation"},
+				[]string{"node-ip-validation", "kubelet-cert-validation", "api-server-endpoint-resolution-validation"},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),
 				hybrid.WithKubelet(mockKubelet),
 			)
 			g.Expect(err).To(Succeed())
 
-			err = hnp.Validate()
+			err = hnp.Validate(ctx)
 			if tt.expectedErr != "" {
 				g.Expect(err).To(HaveOccurred())
 				g.Expect(err.Error()).To(ContainSubstring(tt.expectedErr))
