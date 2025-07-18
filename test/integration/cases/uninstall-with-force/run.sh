@@ -34,6 +34,8 @@ nodeadm uninstall --skip node-validation,pod-validation
 assert::path-not-exist /etc/kubernetes/test/file
 assert::path-not-exist /var/lib/kubelet/kubeconfig
 
+assert::path-exists /var/lib/kubelet
+assert::path-exists /var/lib/kubelet/test/file
 assert::path-exists /var/lib/cni/test/file
 assert::path-exists /etc/cni/net.d/test/file
 
@@ -53,6 +55,8 @@ echo "test" > /etc/cni/net.d/test/file
 # Now uninstall with force - these directories should be removed
 nodeadm uninstall --skip node-validation,pod-validation --force
 
+assert::path-exists /var/lib/kubelet
+assert::path-exists /var/lib/kubelet/test/file
 assert::path-not-exist /etc/kubernetes/test/file
 assert::path-not-exist /var/lib/cni/test/file
 assert::path-not-exist /etc/cni/net.d/test/file
