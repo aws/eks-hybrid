@@ -1,0 +1,21 @@
+# Example E2E test configuration with VSphere support
+clusterName: "my-hybrid-cluster"
+clusterRegion: "us-west-2"
+nodeadmUrlAMD: "https://s3.amazonaws.com/my-bucket/nodeadm-amd64"
+nodeadmUrlARM: "https://s3.amazonaws.com/my-bucket/nodeadm-arm64"
+setRootPassword: false
+nodeK8SVersion: "1.33"
+logsBucket: "my-logs-bucket"
+endpoint: "https://my-cluster-endpoint.eks.amazonaws.com"
+artifactsFolder: "/tmp/e2e-artifacts"
+
+# VSphere configuration for VSphere node deployment
+vsphere:
+  server: "vcenter.example.com"
+  username: "administrator@vsphere.local"
+  password: "your-password"
+  datacenter: "Datacenter1"
+  cluster: "Cluster1"
+  datastore: "datastore1"
+  network: "VM Network"
+  template: "bottlerocket-template"

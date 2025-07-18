@@ -17,7 +17,20 @@ type TestConfig struct {
 	LogsBucket      string `yaml:"logsBucket"`
 	Endpoint        string `yaml:"endpoint"`
 	// ArtifactsFolder is the local path where the test will store the artifacts.
-	ArtifactsFolder string `yaml:"artifactsFolder"`
+	ArtifactsFolder string        `yaml:"artifactsFolder"`
+	VSphere         VSphereConfig `yaml:"vsphere"`
+}
+
+// VSphereConfig contains VSphere-specific configuration
+type VSphereConfig struct {
+	Server     string `yaml:"server"`
+	Username   string `yaml:"username"`
+	Password   string `yaml:"password"`
+	Datacenter string `yaml:"datacenter"`
+	Cluster    string `yaml:"cluster"`
+	Datastore  string `yaml:"datastore"`
+	Network    string `yaml:"network"`
+	Template   string `yaml:"template"`
 }
 
 // ReadConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.
