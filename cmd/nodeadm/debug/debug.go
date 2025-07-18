@@ -97,6 +97,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	runner.Register(
 		validation.New("ntp-sync", system.NewNTPValidator(log).Run),
 		validation.New("swap", system.NewSwapValidator(log).Run),
+		validation.New("ulimit", system.NewUlimitValidator(log).Run),
 		validation.New("aws-auth", sts.NewAuthenticationValidator(awsConfig).Run),
 		runner.UntilError(
 			validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(clusterProvider).Run),
