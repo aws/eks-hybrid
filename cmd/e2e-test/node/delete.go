@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmsdk "github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/go-logr/logr"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	clientgo "k8s.io/client-go/kubernetes"
@@ -24,21 +25,26 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
+	"github.com/aws/eks-hybrid/test/e2e/vsphere"
 )
 
 type Delete struct {
-	flaggy       *flaggy.Subcommand
-	configFile   string
-	instanceName string
+	flaggy         *flaggy.Subcommand
+	configFile     string
+	instanceName   string
+	deploymentType string
 }
 
 func NewDeleteCommand() *Delete {
-	cmd := &Delete{}
+	cmd := &Delete{
+		deploymentType: "ec2",
+	}
 
 	deleteCmd := flaggy.NewSubcommand("delete")
 	deleteCmd.Description = "Delete a Hybrid Node"
 	deleteCmd.AddPositionalValue(&cmd.instanceName, "INSTANCE_NAME", 1, true, "Name of the instance to delete.")
 	deleteCmd.String(&cmd.configFile, "f", "config-file", "Path tests config file.")
+	deleteCmd.String(&cmd.deploymentType, "d", "deployment", "Deployment type (ec2, vsphere). Defaults to ec2.")
 
 	cmd.flaggy = deleteCmd
 
@@ -50,6 +56,11 @@ func (d *Delete) Flaggy() *flaggy.Subcommand {
 }
 
 func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+	// Validate deployment type
+	if d.deploymentType != "ec2" && d.deploymentType != "vsphere" {
+		return fmt.Errorf("unsupported deployment type: %s. Supported types are: ec2, vsphere", d.deploymentType)
+	}
+
 	ctx := context.Background()
 	config, err := e2e.ReadConfig(d.configFile)
 	if err != nil {
@@ -57,6 +68,26 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	logger := e2e.NewLogger()
+
+	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(config.ClusterName))
+	if err != nil {
+		return err
+	}
+	k8s, err := clientgo.NewForConfig(clientConfig)
+	if err != nil {
+		return err
+	}
+
+	if d.deploymentType == "ec2" {
+		return d.deleteEC2Node(ctx, logger, config, k8s)
+	} else if d.deploymentType == "vsphere" {
+		return d.deleteVSphereNode(ctx, logger, config, k8s)
+	}
+
+	return fmt.Errorf("unsupported deployment type: %s", d.deploymentType)
+}
+
+func (d *Delete) deleteEC2Node(ctx context.Context, logger logr.Logger, config *e2e.TestConfig, k8s clientgo.Interface) error {
 	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
@@ -87,15 +118,6 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	instance := instances.Reservations[0].Instances[0]
-
-	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(config.ClusterName))
-	if err != nil {
-		return err
-	}
-	k8s, err := clientgo.NewForConfig(clientConfig)
-	if err != nil {
-		return err
-	}
 
 	jumpbox, err := peered.JumpboxInstance(ctx, ec2Client, config.ClusterName)
 	if err != nil {
@@ -151,6 +173,40 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		Name: d.instanceName,
 	}); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (d *Delete) deleteVSphereNode(ctx context.Context, logger logr.Logger, config *e2e.TestConfig, k8s clientgo.Interface) error {
+	// Convert e2e.VSphereConfig to vsphere.VSphereConfig
+	vsphereConfig := &vsphere.VSphereConfig{
+		Server:     config.VSphere.Server,
+		Username:   config.VSphere.Username,
+		Password:   config.VSphere.Password,
+		Datacenter: config.VSphere.Datacenter,
+		Cluster:    config.VSphere.Cluster,
+		Datastore:  config.VSphere.Datastore,
+		Network:    config.VSphere.Network,
+		Template:   config.VSphere.Template,
+	}
+
+	vsphereNodeCleanup := vsphere.VSphereNodeCleanup{
+		Logger:        logger,
+		K8s:           k8s,
+		VSphereConfig: vsphereConfig,
+		LogCollector:  nil, // VSphere nodes don't need log collection for now
+	}
+
+	// Create a mock VSphere instance for cleanup
+	vsphereInstance := vsphere.VSphereInstance{
+		ID:   fmt.Sprintf("vsphere-vm-%s", d.instanceName),
+		IP:   "192.168.1.100", // Mock IP
+		Name: d.instanceName,
+	}
+
+	if err := vsphereNodeCleanup.Cleanup(ctx, vsphereInstance); err != nil {
+		return fmt.Errorf("cleaning up VSphere node: %w", err)
 	}
 
 	return nil
