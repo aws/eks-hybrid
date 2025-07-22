@@ -55,8 +55,7 @@ func (a AccessValidator) Run(ctx context.Context, informer validation.Informer, 
 	}()
 
 	if err = CheckEndpointAccess(ctx, a.aws); err != nil {
-		err = validation.WithRemediation(err, "Ensure your network configuration allows access to the AWS IAM Roles Anywhere API endpoint")
-		return err
+		return validation.WithRemediation(err, "Ensure your network configuration allows access to the AWS IAM Roles Anywhere API endpoint")
 	}
 
 	return nil

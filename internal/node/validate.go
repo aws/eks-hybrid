@@ -56,8 +56,7 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 
 	_, err = k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
-		err = validation.WithRemediation(err, badPermissionsRemediation)
-		return err
+		return validation.WithRemediation(err, badPermissionsRemediation)
 	}
 
 	return nil
@@ -94,8 +93,7 @@ func (a APIServerValidator) CheckIdentity(ctx context.Context, informer validati
 		return err
 	})
 	if err != nil {
-		err = validation.WithRemediation(err, badPermissionsRemediation)
-		return err
+		return validation.WithRemediation(err, badPermissionsRemediation)
 	}
 
 	if !slices.Contains(self.Status.UserInfo.Groups, "system:nodes") {
@@ -148,13 +146,11 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 
 	kubeEndpoint, err := k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
-		err = validation.WithRemediation(err, badPermissionsRemediation)
-		return err
+		return validation.WithRemediation(err, badPermissionsRemediation)
 	}
 
 	if len(kubeEndpoint.Subsets) == 0 {
-		err = errors.New("no subsets found in the Kubernetes endpoint, can't validate VPC API server access")
-		return err
+		return errors.New("no subsets found in the Kubernetes endpoint, can't validate VPC API server access")
 	}
 
 	for _, subset := range kubeEndpoint.Subsets {
