@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 
-	initcmd "github.com/aws/eks-hybrid/cmd/nodeadm/init"
+	initCmd "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/creds"

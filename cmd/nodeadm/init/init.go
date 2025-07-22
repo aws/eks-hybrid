@@ -65,24 +65,6 @@ func NewInitCommand() cli.Command {
 	return &init
 }
 
-// Phases returns a list of all valid phases that can be skipped.
-func Phases() []string {
-	return []string{
-		"install-validation",
-		"cni-validation",
-		"node-ip-validation",
-		"kubelet-cert-validation",
-		"ssm-api-network-validation",
-		"iam-ra-api-network-validation",
-		"aws-auth-validation",
-		"k8s-endpoint-network-validation",
-		"k8s-authentication-validation",
-		"preprocess",
-		"config",
-		"run",
-	}
-}
-
 type initCmd struct {
 	cmd          *flaggy.Subcommand
 	configSource string

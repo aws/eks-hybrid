@@ -1,4 +1,4 @@
-package hybrid
+package certificate
 
 import (
 	"crypto/x509"
@@ -7,7 +7,11 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/aws/eks-hybrid/internal/validation"
 )
+
+const KubeletCertValidation = "kubelet-cert-validation"
 
 type baseError struct {
 	message string
@@ -68,8 +72,8 @@ func IsNoCertError(err error) bool {
 	return errors.As(err, &notCrtFound)
 }
 
-// ValidateCertificate checks if there is an existing certificate and validates it against the provided CA
-func ValidateCertificate(certPath string, ca []byte) error {
+// Validate checks if there is an existing certificate and validates it against the provided CA
+func Validate(certPath string, ca []byte) error {
 	if _, err := os.Stat(certPath); os.IsNotExist(err) {
 		// Return an error for no cert, but one that can be identified
 		return &CertNotFoundError{baseError{message: "no certificate found", cause: err}}
@@ -118,4 +122,26 @@ func ValidateCertificate(certPath string, ca []byte) error {
 	}
 
 	return nil
+}
+
+// AddKubeletRemediation adds kubelet-specific remediation messages based on error type
+func AddKubeletRemediation(certPath string, err error) error {
+	errWithContext := fmt.Errorf("validating kubelet certificate: %w", err)
+
+	switch err.(type) {
+	case *CertNotFoundError, *CertFileError, *CertReadError:
+		return validation.WithRemediation(errWithContext, "Kubelet certificate will be created when the kubelet is able to authenticate with the API server. Check previous authentication remediation advice.")
+	case *CertInvalidFormatError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Delete the kubelet server certificate file %s and restart kubelet", certPath))
+	case *CertClockSkewError:
+		return validation.WithRemediation(errWithContext, "Verify the system time is correct and restart the kubelet.")
+	case *CertExpiredError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Delete the kubelet server certificate file %s and restart kubelet. Validate `serverTLSBootstrap` is true in the kubelet config /etc/kubernetes/kubelet/config.json to automatically rotate the certificate", certPath))
+	case *CertParseCAError:
+		return validation.WithRemediation(errWithContext, "Ensure the cluster CA certificate is valid")
+	case *CertInvalidCAError:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Please remove the kubelet server certificate file %s or use \"--skip %s\" if this is expected", certPath, KubeletCertValidation))
+	}
+
+	return errWithContext
 }

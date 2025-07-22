@@ -137,28 +137,42 @@ func GetKubeClientFromKubeConfig(opts ...KubeClientOption) (kubernetes.Interface
 		opt(options)
 	}
 
-	// Use the current context in the kubeconfig file
-	config, err := clientcmd.BuildConfigFromFlags("", KubeconfigPath())
-	if err != nil {
-		return nil, errors.Wrap(err, "building client for kubelet from default kubeconfig path")
-	}
+	// Load the kubeconfig file
+	kubeconfigPath := KubeconfigPath()
 
 	// Apply AWS environment variables if provided
 	if len(options.awsEnvVars) > 0 {
-		envVars := make([]clientcmdapi.ExecEnvVar, 0, len(options.awsEnvVars))
-		for name, value := range options.awsEnvVars {
-			envVars = append(envVars, clientcmdapi.ExecEnvVar{
-				Name:  name,
-				Value: value,
-			})
+		// Load the raw kubeconfig to modify it
+		rawConfig, err := clientcmd.LoadFromFile(kubeconfigPath)
+		if err != nil {
+			return nil, errors.Wrap(err, "loading kubeconfig file")
 		}
-		config.AuthInfos["kubelet"].Exec.Env = append(config.AuthInfos["kubelet"].Exec.Env, envVars...)
+
+		// Apply environment variables to the auth info
+		if authInfo, exists := rawConfig.AuthInfos["kubelet"]; exists && authInfo.Exec != nil {
+			envVars := make([]clientcmdapi.ExecEnvVar, 0, len(options.awsEnvVars))
+			for name, value := range options.awsEnvVars {
+				envVars = append(envVars, clientcmdapi.ExecEnvVar{
+					Name:  name,
+					Value: value,
+				})
+			}
+			authInfo.Exec.Env = append(authInfo.Exec.Env, envVars...)
+		}
+
+		clientConfig := clientcmd.NewDefaultClientConfig(*rawConfig, &clientcmd.ConfigOverrides{})
+		restConfig, err := clientConfig.ClientConfig()
+		if err != nil {
+			return nil, errors.Wrap(err, "building config from kubeconfig")
+		}
+
+		return kubernetes.NewForConfig(restConfig)
 	}
 
-	clientConfig := clientcmd.NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{})
-	restConfig, err := clientConfig.ClientConfig()
+	// Use the current context in the kubeconfig file (simple case without env vars)
+	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
-		return nil, errors.Wrap(err, "building config from kubeconfig")
+		return nil, errors.Wrap(err, "building client for kubelet from default kubeconfig path")
 	}
 
 	return kubernetes.NewForConfig(restConfig)

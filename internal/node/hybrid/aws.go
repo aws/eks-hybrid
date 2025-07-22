@@ -22,6 +22,10 @@ import (
 )
 
 func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
+	// Here we are "loading" a dummy AWS config that likely will not be used for anything since we
+	// load the proper SSM/IAM-RA one later on. We are just loading it so we can pass it to the
+	// validator which just uses it to resolve the SSM/IAM-RA endpoint and then makes a TCP
+	// connection to that endpoint.
 	baseAWSConfig, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(hnp.nodeConfig.Spec.Cluster.Region),
 	)

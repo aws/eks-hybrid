@@ -31,7 +31,7 @@ else
 fi
 
 mount --bind $(pwd)/swaps-file /proc/swaps
-if ! nodeadm init --skip run,node-ip-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml; then
+if ! nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-endpoint-network-validation,k8s-authentication-validation --config-source file://config.yaml; then
     echo "nodeadm should have successfully completed init"
     exit 1
 fi

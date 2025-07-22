@@ -43,8 +43,9 @@ func (hnp *HybridNodeProvider) Enrich(ctx context.Context, opts ...configenriche
 	}
 
 	// Validate access to the Kubernetes API endpoint
+	clusterProvider := kubernetes.NewClusterProvider(*hnp.awsConfig)
 	if err := hnp.runner.Run(ctx, hnp.nodeConfig,
-		validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(*hnp.awsConfig).Run),
+		validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(clusterProvider).Run),
 	); err != nil {
 		return err
 	}
