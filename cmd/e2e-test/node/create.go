@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 	clientgo "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/aws/eks-hybrid/internal/cli"
@@ -26,24 +27,27 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
+	"github.com/aws/eks-hybrid/test/e2e/vsphere"
 )
 
 type create struct {
-	flaggy        *flaggy.Subcommand
-	configFile    string
-	instanceName  string
-	instanceSize  string
-	instanceType  string
-	credsProvider string
-	os            string
-	arch          string
+	flaggy         *flaggy.Subcommand
+	configFile     string
+	instanceName   string
+	instanceSize   string
+	instanceType   string
+	credsProvider  string
+	os             string
+	arch           string
+	deploymentType string
 }
 
 func NewCreateCommand() cli.Command {
 	cmd := create{
-		os:           "al23",
-		arch:         "amd64",
-		instanceSize: "Large",
+		os:             "al23",
+		arch:           "amd64",
+		instanceSize:   "Large",
+		deploymentType: "ec2",
 	}
 
 	createCmd := flaggy.NewSubcommand("create")
@@ -55,6 +59,7 @@ func NewCreateCommand() cli.Command {
 	createCmd.String(&cmd.arch, "a", "arch", "Architecture to use (amd64, arm64).")
 	createCmd.String(&cmd.instanceSize, "s", "instance-size", "Instance size to use (Large, XLarge).")
 	createCmd.String(&cmd.instanceType, "t", "instance-type", "Instance type to use (t3.large, g4dn.xlarge, etc). If provided, instance size would be ignored.")
+	createCmd.String(&cmd.deploymentType, "d", "deployment", "Deployment type to use (ec2, vsphere). VSphere is only supported for Bottlerocket OS.")
 
 	cmd.flaggy = createCmd
 
@@ -66,6 +71,15 @@ func (c *create) Flaggy() *flaggy.Subcommand {
 }
 
 func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+	// Validate deployment type and OS combination
+	if c.deploymentType == "vsphere" && c.os != "bottlerocket" {
+		return fmt.Errorf("VSphere deployment is only supported for Bottlerocket OS, got OS: %s", c.os)
+	}
+
+	if c.deploymentType != "ec2" && c.deploymentType != "vsphere" {
+		return fmt.Errorf("unsupported deployment type: %s. Supported types are: ec2, vsphere", c.deploymentType)
+	}
+
 	ctx := context.Background()
 	config, err := e2e.ReadConfig(c.configFile)
 	if err != nil {
@@ -147,6 +161,16 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
+	if c.deploymentType == "ec2" {
+		return c.createEC2Node(ctx, logger, node, nodeOS, credsProvider, cluster, ec2Client, k8s, k8sDynamic)
+	} else if c.deploymentType == "vsphere" {
+		return c.createVSphereNode(ctx, logger, config, nodeOS, credsProvider, cluster, clientConfig, k8s)
+	}
+
+	return fmt.Errorf("unsupported deployment type: %s", c.deploymentType)
+}
+
+func (c *create) createEC2Node(ctx context.Context, logger logr.Logger, node peered.NodeCreate, nodeOS e2e.NodeadmOS, credsProvider e2e.NodeadmCredentialsProvider, cluster *peered.HybridCluster, ec2Client *ec2v2.Client, k8s clientgo.Interface, k8sDynamic dynamic.Interface) error {
 	instanceSize := e2e.Large
 	if c.instanceSize == "XLarge" {
 		instanceSize = e2e.XLarge
@@ -217,6 +241,68 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if err := network.CreateRoutesForNode(ctx, &peeredInstance); err != nil {
 		return fmt.Errorf("creating routes for node: %w", err)
 	}
+
+	return nil
+}
+
+func (c *create) createVSphereNode(ctx context.Context, logger logr.Logger, config *e2e.TestConfig, nodeOS e2e.NodeadmOS, credsProvider e2e.NodeadmCredentialsProvider, cluster *peered.HybridCluster, clientConfig *rest.Config, k8s clientgo.Interface) error {
+	// Convert e2e.VSphereConfig to vsphere.VSphereConfig
+	vsphereConfig := &vsphere.VSphereConfig{
+		Server:       config.VSphere.Server,
+		Username:     config.VSphere.Username,
+		Password:     config.VSphere.Password,
+		Datacenter:   config.VSphere.Datacenter,
+		Cluster:      config.VSphere.Cluster,
+		Datastore:    config.VSphere.Datastore,
+		Network:      config.VSphere.Network,
+		Template:     config.VSphere.Template,
+		Folder:       config.VSphere.Folder,
+		ResourcePool: config.VSphere.ResourcePool,
+	}
+
+	vsphereNodeCreate := vsphere.VSphereNodeCreate{
+		Logger:          logger,
+		K8sClientConfig: clientConfig,
+		NodeadmURLs:     e2e.NodeadmURLs{}, // Will be populated from config
+		PublicKey:       "",                // Will be populated from infra
+		VSphereConfig:   vsphereConfig,
+	}
+
+	vsphereInstance, err := vsphereNodeCreate.Create(ctx, &vsphere.VSphereNodeSpec{
+		InstanceName:        c.instanceName,
+		NodeK8sVersion:      cluster.KubernetesVersion,
+		NodeName:            c.instanceName,
+		OS:                  nodeOS,
+		Provider:            credsProvider,
+		VSphereConfig:       vsphereConfig,
+		KubernetesAPIServer: clientConfig.Host,
+		ClusterName:         cluster.Name,
+		ClusterCert:         clientConfig.CAData,
+	})
+	if err != nil {
+		return fmt.Errorf("creating VSphere node: %w", err)
+	}
+
+	logger.Info("VSphere node created", "instanceID", vsphereInstance.ID)
+
+	// Wait for VSphere VM to be ready
+	if err := vsphereNodeCreate.WaitForVMReady(ctx, vsphereInstance); err != nil {
+		return fmt.Errorf("waiting for VSphere VM to be ready: %w", err)
+	}
+
+	// Wait for the node to join the Kubernetes cluster
+	verifyNode := kubernetes.VerifyNode{
+		K8s:      k8s,
+		Logger:   logr.Discard(),
+		NodeName: vsphereInstance.Name,
+		NodeIP:   vsphereInstance.IP,
+	}
+	vn, err := verifyNode.WaitForNodeReady(ctx)
+	if err != nil {
+		return fmt.Errorf("waiting for VSphere node to be ready: %w", err)
+	}
+
+	logger.Info("VSphere node is ready", "nodeName", vn.Name)
 
 	return nil
 }

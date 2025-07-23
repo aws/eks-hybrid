@@ -1,0 +1,377 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create resources needed to run Bottlerocket E2E tests
+
+Parameters:
+  ClusterName:
+    Type: String
+    Description: Name of the EKS Hybrid Cluster
+
+  ClusterRegion:
+    Type: String
+    Description: Region of the EKS Hybrid Cluster
+
+  ClusterVPCCidr:
+    Type: String
+    Description: EKS Hybrid Cluster VPC CIDR block
+  
+  ClusterPublicSubnetCidr:
+    Type: String
+    Description: EKS Hybrid Cluster public subnet VPC CIDR block
+
+  ClusterPrivateSubnetCidr:
+    Type: String
+    Description: EKS Hybrid Cluster private subnet VPC CIDR block
+  
+  HybridNodeVPCCidr:
+    Type: String
+    Description: EC2 Hybrid Nodes VPC CIDR block
+  
+  HybridNodePodCidr:
+    Type: String
+    Description: EKS Hybrid Nodes Pod CIDR block
+
+  TestClusterTagKey:
+    Type: String
+    Description: Tag key of all the resources
+
+  PodIdentityS3BucketPrefix:
+    Type: String
+    Description: Prefix for pod identity S3 bucket
+  
+  SharedTransitGatewayId:
+    Type: String
+    Description: Transit Gateway connecting the Cluster VPC to the lab network
+
+Resources:
+  ClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+  
+  ClusterVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref ClusterVPCCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-cluster-vpc
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+  
+  ClusterVPCPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref ClusterPublicSubnetCidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-public-subnet
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+      VpcId: !Ref ClusterVPC
+  
+  ClusterVPCPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref ClusterPrivateSubnetCidr
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-private-subnet
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+      VpcId: !Ref ClusterVPC
+
+  ClusterPublicSubnetInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-igw
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  ClusterInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ClusterVPC
+      InternetGatewayId: !Ref ClusterPublicSubnetInternetGateway
+
+  ClusterRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ClusterVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-route-table
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  ClusterRouteToInternet:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ClusterPublicSubnetInternetGateway
+      RouteTableId: !Ref ClusterRouteTable
+
+  ClusterPublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref ClusterRouteTable
+      SubnetId: !Ref ClusterVPCPublicSubnet
+
+  ClusterPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ClusterVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-private-route-table
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  ClusterPrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref ClusterPrivateRouteTable
+      SubnetId: !Ref ClusterVPCPrivateSubnet
+
+  ClusterDefaultSecurityGroupIngressFromHybridNodeVPC:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt ClusterVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref HybridNodeVPCCidr
+
+  ClusterDefaultSecurityGroupIngressFromHybridNodePodCIDR:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt ClusterVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref HybridNodePodCidr
+
+  JumpboxInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: Allow
+            Principal: 
+              Service: ssm.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal: 
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  JumpboxInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: 
+        - !Ref JumpboxInstanceRole
+
+  JumpboxKeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties: 
+      KeyName: !Sub "${AWS::StackName}-jumpbox-key"
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+  
+  Jumpbox:
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Delete
+    Properties:
+      ImageId: resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+      InstanceType: t4g.micro
+      SubnetId: !Ref HybridNodeVPCPublicSubnet
+      IamInstanceProfile: !Ref JumpboxInstanceProfile
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+        - Key: Jumpbox
+          Value: true
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-jumpbox"
+      UserData:
+        Fn::Base64:
+          Fn::Base64: !Sub |
+            #cloud-config
+            write_files:
+              - content: |
+                  Host *
+                    StrictHostKeyChecking no
+                    UserKnownHostsFile=/dev/null
+                path: /root/.ssh/config
+              - content: |
+                  #!/usr/bin/env bash
+
+                  if ! aws ssm get-parameter --name /ec2/keypair/${JumpboxKeyPair.KeyPairId} --region ${ClusterRegion} --with-decryption --query Parameter.Value --output text > /root/.ssh/id_rsa ||
+                    ! openssl rsa -in /root/.ssh/id_rsa -pubout; then
+                    echo "Problem downloading private key from ssm!"
+                    cat /root/.ssh/id_rsa
+                    exit 1
+                  fi
+                  chmod 0600 /root/.ssh/id_rsa
+                path: /root/download-private-key.sh
+                permissions: "0755"
+
+  PodIdentityS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      # use a predictable prefix for PodIdentity S3 bucket while maintaining uniqueness requirement for S3 bucket name
+      BucketName:
+        Fn::Join:
+        - '-'
+        - - !Ref PodIdentityS3BucketPrefix
+          - !Ref AWS::AccountId
+          - !Ref AWS::Region
+          - Fn::Select:
+            - 0
+            - Fn::Split:
+              - '-'
+              - Fn::Select:
+                - 2
+                - Fn::Split:
+                  - /
+                  - !Ref AWS::StackId
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+        - Key: !Ref PodIdentityS3BucketPrefix
+          Value: true
+
+  PodIdentityAssociationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'pods.eks.amazonaws.com'
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+      Policies:
+        - PolicyName: pod-identity-association-role-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:Get*
+                  - s3:List*
+                Resource:
+                  - !Sub arn:aws:s3:::${PodIdentityS3Bucket}
+                  - !Sub arn:aws:s3:::${PodIdentityS3Bucket}/*
+      Tags:
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+
+  ClusterVPCLabTransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+        - !Ref ClusterVPCPrivateSubnet
+        - !Ref ClusterVPCPublicSubnet
+      TransitGatewayId: !Ref SharedTransitGatewayId
+      VpcId: !Ref ClusterVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ClusterName}-transit-gateway-attachment
+        - Key: !Ref TestClusterTagKey
+          Value: !Ref ClusterName
+    DependsOn:
+      - ClusterVPC
+
+  ClusterPrivateRouteToHybridNode:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref HybridNodeVPCCidr
+      RouteTableId: !Ref ClusterPrivateRouteTable
+      TransitGatewayId: !Ref SharedTransitGatewayId
+    DependsOn:
+      - ClusterVPCLabTransitGatewayAttachment
+
+  ClusterPrivateRouteToHybridPodCidr:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref HybridNodePodCidr
+      RouteTableId: !Ref ClusterPrivateRouteTable
+      TransitGatewayId: !Ref SharedTransitGatewayId
+    DependsOn:
+      - ClusterVPCLabTransitGatewayAttachment
+
+  ClusterPublicRouteToHybridNode:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref HybridNodeVPCCidr
+      RouteTableId: !Ref ClusterRouteTable
+      TransitGatewayId: !Ref SharedTransitGatewayId
+    DependsOn:
+      - ClusterVPCLabTransitGatewayAttachment
+
+  ClusterPublicRouteToHybridPodCIDR:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref HybridNodePodCidr
+      RouteTableId: !Ref ClusterRouteTable
+      TransitGatewayId: !Ref SharedTransitGatewayId
+    DependsOn:
+      - ClusterVPCLabTransitGatewayAttachment
+
+Outputs:
+  ClusterRole:
+    Description: The name of the IAM Role for EKS Hybrid Cluster.
+    Value: !GetAtt ClusterRole.Arn
+
+  ClusterVPC:
+    Description: The ID of the EKS Hybrid Cluster VPC.
+    Value: !Ref ClusterVPC
+
+  ClusterVPCPublicSubnet:
+    Description: The ID of the EKS Hybrid Cluster VPC Public Subnet.
+    Value: !Ref ClusterVPCPublicSubnet
+
+  ClusterVPCPrivateSubnet:
+    Description: The ID of the EKS Hybrid Cluster VPC Private Subnet.
+    Value: !Ref ClusterVPCPrivateSubnet
+  
+  ClusterSecurityGroup:
+    Description: The ID of the EKS Hybrid Cluster Security Group.
+    Value: !GetAtt ClusterVPC.DefaultSecurityGroup
+
+  PodIdentityAssociationRoleARN:
+    Description: The role ARN of PodIdentityAssociationRole
+    Value: !GetAtt PodIdentityAssociationRole.Arn
+
+  PodIdentityS3BucketName:
+    Description: The bucket name for pod identity S3 bucket
+    Value: !Ref PodIdentityS3Bucket
