@@ -22,6 +22,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cfn"
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
+	e2eCommands "github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/os"
@@ -35,7 +36,7 @@ var setupTemplateBody []byte
 
 const (
 	creationTimeParameterKey = "CreationTime"
-	stackWaitTimeout         = 9 * time.Minute
+	stackWaitTimeout         = 15 * time.Minute
 	stackWaitInterval        = 10 * time.Second
 )
 
@@ -245,7 +246,7 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	} else if resp.Stacks[0].StackStatus == cfnTypes.StackStatusCreateInProgress || resp.Stacks[0].StackStatus == cfnTypes.StackStatusUpdateInProgress {
-		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
+		s.logger.Info("Found existing stack in progress, waiting for completion", "stackName", stackName, "status", resp.Stacks[0].StackStatus)
 		err = cfn.WaitForStackOperation(ctx, s.cfn, stackName, stackWaitInterval, stackWaitTimeout)
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
@@ -352,12 +353,26 @@ func (s *stack) setupJumpbox(ctx context.Context, clusterName string) error {
 	}
 
 	command := "/root/download-private-key.sh"
-	output, err := e2eSSM.RunCommand(ctx, s.ssmClient, *jumpbox.InstanceId, command, s.logger)
-	if err != nil {
-		return fmt.Errorf("jumpbox getting private key from ssm: %w", err)
+	var output e2eCommands.RemoteCommandOutput
+
+	// Retry private key download to handle IAM role credential propagation timing.
+	// This is different from the retry for SSM call inside RunCommand since it is not the SSM API call that fails,
+	// but the command execution on the jumpbox done by that SSM API call that fails due to IAM role credentials
+	// not being available through IMDS yet, even though the instance profile is attached.
+	for range 3 {
+		output, err = e2eSSM.RunCommand(ctx, s.ssmClient, *jumpbox.InstanceId, command, s.logger)
+		if err != nil {
+			return fmt.Errorf("jumpbox getting private key from ssm: %w", err)
+		}
+		if output.Status == "Success" {
+			break
+		}
+		s.logger.Info("Private key download failed, retrying in 10 seconds")
+		time.Sleep(10 * time.Second)
 	}
+
 	if output.Status != "Success" {
-		return fmt.Errorf("jumpbox getting private key from ssm")
+		return fmt.Errorf("jumpbox getting private key from ssm after retries")
 	}
 
 	return nil

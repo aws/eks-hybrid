@@ -51,6 +51,8 @@ func GetStackFailureReason(ctx context.Context, client *cloudformation.Client, s
 // WaitForStackOperation waits for a stack to reach Create/Update/Delete Complete
 // when the operation fails, it will attempt to gather the failure reason and include it in the error
 func WaitForStackOperation(ctx context.Context, client *cloudformation.Client, stackName string, stackWaitInterval, stackWaitTimeout time.Duration) error {
+	fmt.Printf("Starting stack wait: %s (timeout: %v)\n", stackName, stackWaitTimeout)
+
 	err := wait.PollUntilContextTimeout(ctx, stackWaitInterval, stackWaitTimeout, true, func(ctx context.Context) (bool, error) {
 		stackOutput, err := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 			StackName: aws.String(stackName),
@@ -76,6 +78,12 @@ func WaitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 			return false, fmt.Errorf("stack %s failed with status: %s. Potential root cause: [%s]", stackName, stackStatus, failureReason)
 		}
 	})
+	if err != nil {
+		// Try to get final stack status for diagnosis
+		if stackOutput, statusErr := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{StackName: aws.String(stackName)}); statusErr == nil && len(stackOutput.Stacks) > 0 {
+			fmt.Printf("Stack wait failed for %s, final status: %s\n", stackName, stackOutput.Stacks[0].StackStatus)
+		}
+	}
 
 	return err
 }

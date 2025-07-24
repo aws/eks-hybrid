@@ -20,7 +20,6 @@ func TestCleanup(t *testing.T) {
 		{
 			name: "cleanup existing directories",
 			setupDirs: []string{
-				"/var/lib/kubelet",
 				"/var/lib/cni",
 				"/etc/cni/net.d",
 			},

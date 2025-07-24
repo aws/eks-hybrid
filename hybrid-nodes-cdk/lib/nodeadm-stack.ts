@@ -361,6 +361,13 @@ export class NodeadmBuildStack extends cdk.Stack {
         resources: [this.nodeadmBinaryBucket.bucketArn, `${this.nodeadmBinaryBucket.bucketArn}/*`],
       }),
     );
+    this.integrationTestProject.role!.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ecr-public:GetAuthorizationToken', 'sts:GetServiceBearerToken'],
+        resources: ['*'],
+      }),
+    );
 
     this.integrationTestProject.role!.attachInlinePolicy(this.testCreationCleanupPolicy);
   }

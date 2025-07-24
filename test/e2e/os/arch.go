@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ecrpublic"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"sigs.k8s.io/yaml"
 
@@ -109,7 +110,7 @@ func executeTemplate(templateData []byte, values any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func getAmiIDFromSSM(ctx context.Context, client *ssm.Client, amiName string) (*string, error) {
+func getAmiIDFromSSM(ctx context.Context, client *ssm.Client, amiName string) (string, error) {
 	getParameterInput := &ssm.GetParameterInput{
 		Name:           aws.String(amiName),
 		WithDecryption: aws.Bool(true),
@@ -117,10 +118,10 @@ func getAmiIDFromSSM(ctx context.Context, client *ssm.Client, amiName string) (*
 
 	output, err := client.GetParameter(ctx, getParameterInput)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return output.Parameter.Value, nil
+	return *output.Parameter.Value, nil
 }
 
 // an unknown size and arch combination is a coding error, so we panic
@@ -147,4 +148,13 @@ func generateNodeadmConfigYaml(nodeadmConfig *api.NodeConfig) (string, error) {
 	}
 
 	return string(nodeadmConfigYaml), nil
+}
+
+func getAuthToken(ctx context.Context, client *ecrpublic.Client) (string, error) {
+	output, err := client.GetAuthorizationToken(ctx, &ecrpublic.GetAuthorizationTokenInput{})
+	if err != nil {
+		return "", nil
+	}
+
+	return *output.AuthorizationData.AuthorizationToken, nil
 }

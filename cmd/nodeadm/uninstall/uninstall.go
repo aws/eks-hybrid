@@ -43,7 +43,7 @@ func NewCommand() cli.Command {
 	fc.Description = "Uninstall components installed using the install sub-command"
 	fc.AdditionalHelpAppend = uninstallHelpText
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of uninstall to skip. Allowed values: [pod-validation, node-validation].")
-	fc.Bool(&cmd.force, "f", "force", "Force delete additional directories that might contain leftovers from the node process. WARNING: This will delete all contents in default Kubernetes and CNI directories (/var/lib/kubelet, /var/lib/cni, etc). Do not use this flag if you store your own data in these locations.")
+	fc.Bool(&cmd.force, "f", "force", "Force delete additional directories that might contain leftovers from the node process. WARNING: This will delete all contents in default Kubernetes and CNI directories (/var/lib/cni, /etc/cni/net.d, etc). Do not use this flag if you store your own data in these locations.")
 	cmd.flaggy = fc
 
 	return &cmd

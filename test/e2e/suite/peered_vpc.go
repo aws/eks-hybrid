@@ -34,6 +34,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
+	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
 )
@@ -59,7 +60,7 @@ type PeeredVPCTest struct {
 	ec2Client       *ec2v2.Client
 	SSMClient       *ssmv2.Client
 	cfnClient       *cloudformation.Client
-	k8sClient       peered.K8s
+	k8sClient       peeredtypes.K8s
 	K8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client
@@ -145,7 +146,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 
-	test.k8sClient = peered.K8s{
+	test.k8sClient = peeredtypes.K8s{
 		Interface: k8s,
 		Dynamic:   dynamicK8s,
 	}
@@ -522,7 +523,18 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize, entry.ComputeType,
 				WithLogging(controlledLogger, outputControl))
 
+			if osystem.IsBottlerocket(entry.OS.Name()) {
+				remoteCommandRunner := ssm.NewBottlerocketSSHOnSSMCommandRunner(test.SSMClient, test.JumpboxInstanceId, test.Logger)
+				logCollector := osystem.BottlerocketLogCollector{
+					Runner: remoteCommandRunner,
+				}
+				testNode.PeeredNode.RemoteCommandRunner = remoteCommandRunner
+				testNode.PeeredNode.LogCollector = logCollector
+			}
 			Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+			if osystem.IsBottlerocket(entry.OS.Name()) {
+				testNode.NodeWaiter = testNode.NewBottlerocketNodeWaiter()
+			}
 			Expect(testNode.WaitForJoin(ctx)).To(Succeed(), "node should join successfully")
 			Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
