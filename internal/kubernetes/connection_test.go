@@ -17,7 +17,6 @@ import (
 func TestCheckConnectionSuccess(t *testing.T) {
 	g := NewGomegaWithT(t)
 	ctx := context.Background()
-	informer := test.NewFakeInformer()
 
 	server := test.NewHTTPSServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -30,7 +29,9 @@ func TestCheckConnectionSuccess(t *testing.T) {
 			},
 		},
 	}
-	g.Expect(kubernetes.CheckConnection(ctx, informer, config)).To(Succeed())
+
+	validator := kubernetes.NewConnectionValidator()
+	g.Expect(validator.CheckConnection(ctx, config)).To(Succeed())
 }
 
 func TestCheckConnectionInvalidURL(t *testing.T) {
@@ -46,7 +47,8 @@ func TestCheckConnectionInvalidURL(t *testing.T) {
 		},
 	}
 
-	err := kubernetes.CheckConnection(ctx, informer, config)
+	validator := kubernetes.NewConnectionValidator()
+	err := validator.Run(ctx, informer, config)
 	g.Expect(err).NotTo(Succeed())
 	g.Expect(informer.Started).To(BeTrue())
 	g.Expect(informer.DoneWith).To(HaveOccurred())
@@ -66,7 +68,8 @@ func TestCheckConnectionFailureWithAccess(t *testing.T) {
 		},
 	}
 
-	err := kubernetes.CheckConnection(ctx, informer, config)
+	validator := kubernetes.NewConnectionValidator()
+	err := validator.Run(ctx, informer, config)
 	g.Expect(err).NotTo(Succeed())
 	g.Expect(informer.Started).To(BeTrue())
 	g.Expect(informer.DoneWith).To(MatchError(ContainSubstring("connect: connection refused")))

@@ -39,7 +39,7 @@ type NodeProvider interface {
 	Logger() *zap.Logger
 
 	// Validate performs dynamic validations for the node. Requires calling ConfigureAws first.
-	Validate() error
+	Validate(ctx context.Context) error
 
 	// Cleanup runs post init cleanup if any are required by node provider.
 	Cleanup() error
