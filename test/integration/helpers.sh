@@ -270,12 +270,21 @@ function mock::kubelet() {
 }
 
 function mock::aws_signing_helper() {
+  if [ -f /usr/local/bin/aws_signing_helper ]; then
+    mv /usr/local/bin/aws_signing_helper /usr/local/bin/aws_signing_helper.bak
+  fi
   printf "#!/usr/bin/env bash\necho '{\"Version\": 1, \"AccessKeyId\": \"${AWS_ACCESS_KEY_ID}\", \"SecretAccessKey\": \"${AWS_SECRET_ACCESS_KEY}\", \"SessionToken\": \"${AWS_SESSION_TOKEN}\"}'" > /usr/local/bin/aws_signing_helper
   chmod +x /usr/local/bin/aws_signing_helper
 }
 function mock::iamra_aws_credentials() {
   mkdir -p /eks-hybrid/.aws
   touch /eks-hybrid/.aws/credentials
+}
+
+function mock::aws_signing_helper_restore() {
+  if [ -f /usr/local/bin/aws_signing_helper.bak ]; then
+    mv /usr/local/bin/aws_signing_helper.bak /usr/local/bin/aws_signing_helper
+  fi
 }
 
 function mock::ssm() {

@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/certificate"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -105,7 +106,7 @@ func TestHybridNodeProvider_NTPValidationIntegration(t *testing.T) {
 
 	// Test NTP validation through full validation flow
 	// Skip other validations to focus on NTP
-	skipPhases := []string{nodeIpValidation, kubeletCertValidation, kubeletVersionSkew}
+	skipPhases := []string{nodeIpValidation, certificate.KubeletCertValidation, kubeletVersionSkew}
 	hybridProvider.skipPhases = skipPhases
 
 	fullErr := hnp.Validate()
