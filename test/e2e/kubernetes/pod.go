@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -254,6 +255,49 @@ func execPod(ctx context.Context, config *restclient.Config, k8s kubernetes.Inte
 	})
 
 	return stdoutBuf.String(), stderrBuf.String(), err
+}
+
+// TestPodToPodConnectivity tests direct pod-to-pod connectivity using HTTP
+func TestPodToPodConnectivity(ctx context.Context, config *restclient.Config, k8s kubernetes.Interface, clientPodName, targetPodName, namespace string, logger logr.Logger) error {
+	targetPod, err := k8s.CoreV1().Pods(namespace).Get(ctx, targetPodName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting target pod %s: %w", targetPodName, err)
+	}
+
+	if targetPod.Status.PodIP == "" {
+		return fmt.Errorf("target pod %s should have IP", targetPodName)
+	}
+
+	targetIP := targetPod.Status.PodIP
+	logger.Info("Testing pod-to-pod connectivity", "from", clientPodName, "to", targetPodName, "ip", targetIP)
+
+	cmd := []string{"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", fmt.Sprintf("http://%s:8080", targetIP), "--connect-timeout", "10", "--max-time", "30"}
+
+	_, err = ik8s.GetAndWait(ctx, 2*time.Minute, k8s.CoreV1().Pods(namespace), clientPodName, func(pod *corev1.Pod) bool {
+		if pod.Status.Phase != corev1.PodRunning {
+			return false
+		}
+
+		result, execErr := ExecInPod(ctx, config, k8s, clientPodName, namespace, cmd)
+		if execErr != nil {
+			logger.Info("Pod connectivity test failed", "error", execErr.Error())
+			return false
+		}
+
+		return strings.Contains(result, "200")
+	})
+	if err != nil {
+		return fmt.Errorf("connectivity from %s to %s failed: %w", clientPodName, targetPodName, err)
+	}
+
+	logger.Info("Pod-to-pod connectivity successful", "from", clientPodName, "to", targetPodName)
+	return nil
+}
+
+// ExecInPod executes a command in a pod and returns stdout (simplified version of ExecPodWithRetries)
+func ExecInPod(ctx context.Context, config *restclient.Config, k8s kubernetes.Interface, podName, namespace string, command []string) (string, error) {
+	stdout, _, err := execPod(ctx, config, k8s, podName, namespace, command...)
+	return stdout, err
 }
 
 func WaitForDaemonSetPodToBeRunning(ctx context.Context, k8s kubernetes.Interface, namespace, daemonSetName, nodeName string, logger logr.Logger) error {

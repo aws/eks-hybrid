@@ -58,6 +58,7 @@ type StackOutput struct {
 	IRANodeRoleARN     string `json:"iraNodeRoleARN"`
 	IRATrustAnchorARN  string `json:"iraTrustAnchorARN"`
 	IRAProfileARN      string `json:"iraProfileARN"`
+	ManagedNodeRoleArn string `json:"managedNodeRoleArn"`
 }
 
 func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
@@ -296,6 +297,8 @@ func (s *Stack) readStackOutput(ctx context.Context, logger logr.Logger) (*Stack
 			result.IRATrustAnchorARN = *output.OutputValue
 		case "IRAProfileARN":
 			result.IRAProfileARN = *output.OutputValue
+		case "ManagedNodeRoleArn":
+			result.ManagedNodeRoleArn = *output.OutputValue
 		}
 	}
 
