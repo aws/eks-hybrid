@@ -26,6 +26,13 @@ const (
 	skipNodePreflightCheck = "node-validation"
 )
 
+const forceWarningText = "Force delete additional directories that might contain leftovers from the node process. " +
+	"WARNING: This will delete all contents in default Kubernetes and CNI directories (/var/lib/cni, /etc/cni/net.d, etc). " +
+	"Do not use this flag if you store your own data in these locations. " +
+	"Starting from nodeadm v1.0.9, the --force command no longer deletes the /var/lib/kubelet directory " +
+	"as it may contain Pod volumes and volume-subpath directories that sometimes include the mounted node filesystem. " +
+	"SAFE-HANDLING-TIPS: Before manually deleting /var/lib/kubelet, carefully inspect all active mounts and unmount volumes safely to avoid data loss."
+
 const uninstallHelpText = `Examples:
   # Uninstall all components
   nodeadm uninstall
@@ -43,7 +50,7 @@ func NewCommand() cli.Command {
 	fc.Description = "Uninstall components installed using the install sub-command"
 	fc.AdditionalHelpAppend = uninstallHelpText
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of uninstall to skip. Allowed values: [pod-validation, node-validation].")
-	fc.Bool(&cmd.force, "f", "force", "Force delete additional directories that might contain leftovers from the node process. WARNING: This will delete all contents in default Kubernetes and CNI directories (/var/lib/cni, /etc/cni/net.d, etc). Do not use this flag if you store your own data in these locations.")
+	fc.Bool(&cmd.force, "f", "force", forceWarningText)
 	cmd.flaggy = fc
 
 	return &cmd
