@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"go.uber.org/zap"
-
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
@@ -20,26 +18,47 @@ var localhostReferenceIDs = []string{
 }
 
 // NTPValidator validates NTP synchronization status
-type NTPValidator struct {
-	logger *zap.Logger
+type NTPValidator struct{}
+
+type baseError struct {
+	message string
+	cause   error
+}
+
+func (e *baseError) Error() string {
+	if e.cause != nil {
+		return fmt.Sprintf("%s: %v", e.message, e.cause)
+	}
+	return e.message
+}
+
+func (e *baseError) Unwrap() error {
+	return e.cause
+}
+
+type ChronycSynchronizationError struct {
+	baseError
+}
+
+type TimedatectlSynchronizationError struct {
+	baseError
 }
 
 // NewNTPValidator creates a new NTP validator
-func NewNTPValidator(logger *zap.Logger) *NTPValidator {
-	return &NTPValidator{
-		logger: logger,
-	}
+func NewNTPValidator() *NTPValidator {
+	return &NTPValidator{}
 }
 
 // Run validates NTP synchronization
 func (v *NTPValidator) Run(ctx context.Context, informer validation.Informer, nodeConfig *api.NodeConfig) error {
 	var err error
-	informer.Starting(ctx, "ntp-sync", "Checking NTP synchronization status")
+	informer.Starting(ctx, "ntp-sync", "Validating NTP synchronization status")
 	defer func() {
 		informer.Done(ctx, "ntp-sync", err)
 	}()
 	if err = v.Validate(); err != nil {
-		return err
+		err = addNTPRemediation(err)
+		return nil
 	}
 
 	return nil
@@ -48,52 +67,40 @@ func (v *NTPValidator) Run(ctx context.Context, informer validation.Informer, no
 // Validate performs the actual NTP validation
 func (v *NTPValidator) Validate() error {
 	if v.commandExists("chronyc") {
-		if chronySynchronized, err := v.checkChronyd(); err != nil {
-			v.logger.Error("NTP synchronization validation via chronyd failed", zap.Error(err))
-			if !chronySynchronized {
-				return validation.WithRemediation(err,
-					"Ensure the hybrid node is synchronized with NTP through chronyd services. "+
-						"Verify NTP server configuration in /etc/chrony.conf. "+
-						"If using airgapped networks, ensure chrony is configured with local NTP sources and adjusted manually.",
-				)
+		if commandFailed, err := v.checkChronyc(); err != nil {
+			if commandFailed {
+				return err
 			}
-			return err
+			return &ChronycSynchronizationError{baseError{message: "validating NTP synchronization via chronyc", cause: err}}
 		}
 	}
 
 	if v.commandExists("timedatectl") {
-		if systemdTimesyncSynchronized, err := v.checkSystemdTimesyncd(); err != nil {
-			v.logger.Error("NTP synchronization validation via timedatectl failed", zap.Error(err))
-			if !systemdTimesyncSynchronized {
-				return validation.WithRemediation(err,
-					"Ensure the hybrid node is synchronized with NTP through systemd-timesyncd services. "+
-						"Verify NTP server configuration in /etc/systemd/timesyncd.conf. ",
-				)
+		if commandFailed, err := v.checkTimedatectl(); err != nil {
+			if commandFailed {
+				return err
 			}
-			return err
+			return &TimedatectlSynchronizationError{baseError{message: "validating NTP synchronization via timedatectl", cause: err}}
 		}
 	}
 
 	return nil
 }
 
-// checkChronyd checks if chronyd is synchronized
-func (v *NTPValidator) checkChronyd() (bool, error) {
-	cmd := exec.Command("chronyc", "tracking")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return true, fmt.Errorf("failed to get chrony tracking status: %s, error: %w", output, err)
-	}
-
-	// Parse the output to check if synchronized
-	lines := strings.Split(string(output), "\n")
+// checkChronyd uses chronyc to check if system clock is synchronized
+func (v *NTPValidator) checkChronyc() (bool, error) {
 	hasReference := false
 	leapStatusNormal := false
 
+	cmd := exec.Command("chronyc", "tracking")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return true, fmt.Errorf("getting system clock settings from chronyc: %s, error: %w", strings.TrimSpace(string(output)), err)
+	}
+
+	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-
-		// Check for reference ID (indicates time source)
 		if strings.Contains(line, "Reference ID") {
 			parts := strings.Fields(line)
 			if len(parts) >= 5 && !slices.Contains(localhostReferenceIDs, parts[4]) {
@@ -106,40 +113,57 @@ func (v *NTPValidator) checkChronyd() (bool, error) {
 		}
 	}
 
-	if !hasReference && !leapStatusNormal {
+	if !hasReference || !leapStatusNormal {
 		return false, fmt.Errorf("chronyd not synchronized")
 	}
 
-	return true, nil
+	return false, nil
 }
 
-// checkSystemdTimesyncd checks if systemd-timesyncd is synchronized
-func (v *NTPValidator) checkSystemdTimesyncd() (bool, error) {
+// checkTimedatectl uses timedatectl to check if system clock is synchronized
+func (v *NTPValidator) checkTimedatectl() (bool, error) {
+	ntpSynchronized := false
+
 	cmd := exec.Command("timedatectl", "status")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return true, fmt.Errorf("failed to get timedatectl status: %s, error: %w", output, err)
+		return true, fmt.Errorf("getting system clock settings from timedatectl: %s, error: %w", strings.TrimSpace(string(output)), err)
 	}
 
 	lines := strings.Split(string(output), "\n")
-	ntpSynchronized := false
-
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-
 		if strings.Contains(line, "System clock synchronized: yes") {
 			ntpSynchronized = true
 		}
 	}
 
 	if !ntpSynchronized {
-		return false, fmt.Errorf("systemd-timesyncd not synchronized")
+		return false, fmt.Errorf("System clock not synchronized")
 	}
 
-	return true, nil
+	return false, nil
 }
 
 func (v *NTPValidator) commandExists(command string) bool {
 	_, err := exec.LookPath(command)
 	return err == nil
+}
+
+func addNTPRemediation(err error) error {
+	errWithContext := fmt.Errorf("validating NTP synchronization: %w", err)
+
+	switch err.(type) {
+	case *ChronycSynchronizationError:
+		return validation.WithRemediation(err,
+			"Ensure the hybrid node is synchronized with NTP through chronyd services. "+
+				"Verify NTP server configuration in /etc/chrony.conf. "+
+				"If using airgapped networks, ensure chrony is configured with local NTP sources and adjusted manually.",
+		)
+	case *TimedatectlSynchronizationError:
+		return validation.WithRemediation(err,
+			"Ensure the hybrid node is synchronized with NTP by running `timedatectl set-ntp true`.",
+		)
+	}
+	return errWithContext
 }

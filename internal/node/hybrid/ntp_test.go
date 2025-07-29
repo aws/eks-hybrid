@@ -1,6 +1,7 @@
 package hybrid
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,10 +10,12 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/certificate"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 func TestHybridNodeProvider_Validate_NTPSkipped(t *testing.T) {
+	ctx := context.Background()
 	logger := zap.NewNop()
 	nodeConfig := &api.NodeConfig{
 		Spec: api.NodeConfigSpec{
@@ -37,11 +40,12 @@ func TestHybridNodeProvider_Validate_NTPSkipped(t *testing.T) {
 	}
 
 	// Validate should succeed without running NTP validation
-	err = hnp.Validate()
+	err = hnp.Validate(ctx)
 	assert.NoError(t, err)
 }
 
 func TestHybridNodeProvider_Validate_NTPIncluded(t *testing.T) {
+	ctx := context.Background()
 	logger := zaptest.NewLogger(t)
 	nodeConfig := &api.NodeConfig{
 		Spec: api.NodeConfigSpec{
@@ -65,7 +69,7 @@ func TestHybridNodeProvider_Validate_NTPIncluded(t *testing.T) {
 	}
 
 	// Validate will run NTP validation
-	err = hnp.Validate()
+	err = hnp.Validate(ctx)
 	if err != nil {
 		// Check if it's a remediable error
 		if validation.IsRemediable(err) {
@@ -82,6 +86,7 @@ func TestHybridNodeProvider_NTPValidationIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
+	ctx := context.Background()
 	logger := zaptest.NewLogger(t)
 	nodeConfig := &api.NodeConfig{
 		Spec: api.NodeConfigSpec{
@@ -105,10 +110,10 @@ func TestHybridNodeProvider_NTPValidationIntegration(t *testing.T) {
 
 	// Test NTP validation through full validation flow
 	// Skip other validations to focus on NTP
-	skipPhases := []string{nodeIpValidation, kubeletCertValidation, kubeletVersionSkew}
+	skipPhases := []string{nodeIpValidation, certificate.KubeletCertValidation, kubeletVersionSkew, apiServerEndpointResolution}
 	hybridProvider.skipPhases = skipPhases
 
-	fullErr := hnp.Validate()
+	fullErr := hnp.Validate(ctx)
 
 	// Verify behavior based on result
 	if fullErr != nil {

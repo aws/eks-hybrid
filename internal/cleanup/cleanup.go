@@ -11,7 +11,6 @@ import (
 
 // Directories to clean up when force flag is enabled
 var cleanupDirs = []string{
-	"/var/lib/kubelet",
 	"/var/lib/cni",
 	"/etc/cni/net.d",
 }

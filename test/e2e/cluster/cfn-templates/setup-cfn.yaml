@@ -592,6 +592,8 @@ Resources:
             Action:
               - sts:AssumeRole
               - sts:TagSession
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSPrivateCAConnectorForKubernetesPolicy
       Policies:
         - PolicyName: pod-identity-association-role-policy
           PolicyDocument:

@@ -1,6 +1,7 @@
 package hybrid_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -441,6 +442,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
+			ctx := context.Background()
 
 			hnp, err := hybrid.NewHybridNodeProvider(
 				tt.nodeConfig,
@@ -451,7 +453,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 			)
 			g.Expect(err).To(Succeed())
 
-			err = hnp.Validate()
+			err = hnp.Validate(ctx)
 
 			if tt.expectedErr != "" {
 				g.Expect(err).To(HaveOccurred())
@@ -469,7 +471,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 				hybrid.WithNetwork(tt.network),
 			)
 			g.Expect(err).To(Succeed())
-			err = hnp.Validate()
+			err = hnp.Validate(ctx)
 			g.Expect(err).NotTo(HaveOccurred())
 		})
 	}

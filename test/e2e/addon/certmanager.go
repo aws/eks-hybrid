@@ -23,22 +23,20 @@ const (
 	certManagerName           = "cert-manager"
 	certManagerCainjectorName = "cert-manager-cainjector"
 	certManagerWebhookName    = "cert-manager-webhook"
-	certName                  = "test-cert"
-	certTestNamespace         = "cert-test"
-	issuerName                = "selfsigned-issuer"
-	certSecretName            = "selfsigned-cert-tls"
 	certManagerWaitTimeout    = 5 * time.Minute
 )
 
 // CertManagerTest tests the cert-manager addon
 type CertManagerTest struct {
-	Cluster    string
-	addon      *Addon
-	K8S        clientgo.Interface
-	EKSClient  *eks.Client
-	K8SConfig  *rest.Config
-	Logger     logr.Logger
-	CertClient certmanagerclientset.Interface
+	Cluster                                             string
+	addon                                               *Addon
+	K8S                                                 clientgo.Interface
+	EKSClient                                           *eks.Client
+	K8SConfig                                           *rest.Config
+	Logger                                              logr.Logger
+	CertClient                                          certmanagerclientset.Interface
+	PCAIssuer                                           *PCAIssuerTest
+	CertName, CertNamespace, CertSecretName, IssuerName string
 }
 
 // Create installs the cert-manager addon
@@ -68,6 +66,10 @@ func (c *CertManagerTest) Create(ctx context.Context) error {
 		return err
 	}
 
+	if err := c.PCAIssuer.Setup(ctx); err != nil {
+		return fmt.Errorf("failed to setup AWS PCA Issuer: %v", err)
+	}
+
 	c.Logger.Info("Cert-manager setup is complete")
 	return nil
 }
@@ -77,24 +79,33 @@ func (c *CertManagerTest) Validate(ctx context.Context) error {
 	c.Logger.Info("Starting cert-manager validation")
 
 	// Create test namespace if it doesn't exist
-	if err := kubernetes.CreateNamespace(ctx, c.K8S, certTestNamespace); err != nil {
+	if err := kubernetes.CreateNamespace(ctx, c.K8S, c.CertNamespace); err != nil {
 		return fmt.Errorf("failed to create test namespace: %w", err)
 	}
 
 	// Create self-signed issuer
-	if err := createSelfSignedIssuer(ctx, c.Logger, c.CertClient, certTestNamespace, issuerName); err != nil {
+	if err := createSelfSignedIssuer(ctx, c.Logger, c.CertClient, c.CertNamespace, c.IssuerName); err != nil {
 		return fmt.Errorf("failed to create self-signed issuer: %w", err)
 	}
 
 	// Create certificate
-	if err := createCertificate(ctx, c.Logger, c.CertClient, certTestNamespace, certName, issuerName, certSecretName); err != nil {
+	if err := createCertificate(ctx, c.Logger, c.CertClient, c.CertNamespace, c.CertName, c.IssuerName, c.CertSecretName); err != nil {
 		return fmt.Errorf("failed to create certificate: %w", err)
 	}
 
 	// Validate certificate
-	if err := validateCertificate(ctx, c.Logger, c.CertClient, certTestNamespace, certName); err != nil {
+	if err := validateCertificate(ctx, c.Logger, c.CertClient, c.CertNamespace, c.CertName); err != nil {
 		return fmt.Errorf("failed to validate certificate: %w", err)
 	}
+
+	// AWS PCA Issuer validation if it's configured
+	c.Logger.Info("Starting AWS PCA Issuer validation")
+
+	if err := c.PCAIssuer.Validate(ctx); err != nil {
+		return fmt.Errorf("AWS PCA Issuer validation failed: %w", err)
+	}
+
+	c.Logger.Info("AWS PCA Issuer validation completed successfully")
 
 	c.Logger.Info("Cert-manager validation completed successfully")
 	return nil
@@ -108,6 +119,10 @@ func (c *CertManagerTest) PrintLogs(ctx context.Context) error {
 		return fmt.Errorf("failed to collect logs for %s: %w", c.addon.Name, err)
 	}
 
+	if err := c.PCAIssuer.PrintLogs(ctx); err != nil {
+		c.Logger.Error(err, "Failed to collect AWS PCA Issuer logs")
+	}
+
 	c.Logger.Info("Logs for cert-manager", "controller", logs)
 	return nil
 }
@@ -117,20 +132,25 @@ func (c *CertManagerTest) Delete(ctx context.Context) error {
 	// Clean up test resources
 	c.Logger.Info("Cleaning up cert-manager test resources")
 
+	c.Logger.Info("Cleaning up AWS PCA Issuer resources")
+	if err := c.PCAIssuer.Cleanup(ctx); err != nil {
+		c.Logger.Error(err, "Failed to clean up AWS PCA Issuer resources")
+	}
+
 	// Delete certificate
-	err := ik8s.IdempotentDelete(ctx, c.CertClient.CertmanagerV1().Certificates(certTestNamespace), certName)
+	err := ik8s.IdempotentDelete(ctx, c.CertClient.CertmanagerV1().Certificates(c.CertNamespace), c.CertName)
 	if err != nil {
 		return fmt.Errorf("failed to delete certificate: %w", err)
 	}
 
 	// Delete issuer
-	err = ik8s.IdempotentDelete(ctx, c.CertClient.CertmanagerV1().Issuers(certTestNamespace), issuerName)
+	err = ik8s.IdempotentDelete(ctx, c.CertClient.CertmanagerV1().Issuers(c.CertNamespace), c.IssuerName)
 	if err != nil {
 		return fmt.Errorf("failed to delete issuer: %w", err)
 	}
 
 	// Delete test namespace
-	err = kubernetes.DeleteNamespace(ctx, c.K8S, certTestNamespace)
+	err = kubernetes.DeleteNamespace(ctx, c.K8S, c.CertNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to delete test namespace: %w", err)
 	}

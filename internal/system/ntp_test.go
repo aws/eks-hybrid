@@ -6,21 +6,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 )
 
 func TestNewNTPValidator(t *testing.T) {
-	logger := zap.NewNop()
-	validator := NewNTPValidator(logger)
+	validator := NewNTPValidator()
 
 	assert.NotNil(t, validator)
-	assert.Equal(t, logger, validator.logger)
 }
 
 func TestNTPValidator_Run(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	validator := NewNTPValidator(logger)
+	validator := NewNTPValidator()
 
 	// Create a mock informer for testing
 	informer := &ntpMockInformer{}
@@ -40,8 +35,7 @@ func TestNTPValidator_Run(t *testing.T) {
 }
 
 func TestNTPValidator_commandExists(t *testing.T) {
-	logger := zap.NewNop()
-	validator := NewNTPValidator(logger)
+	validator := NewNTPValidator()
 
 	tests := []struct {
 		name     string
@@ -74,8 +68,7 @@ func TestNTPValidator_commandExists(t *testing.T) {
 }
 
 func TestNTPValidator_Validate(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	validator := NewNTPValidator(logger)
+	validator := NewNTPValidator()
 
 	// Test validation - this will check the actual system
 	err := validator.Validate()
@@ -92,43 +85,41 @@ func TestNTPValidator_Validate(t *testing.T) {
 	}
 }
 
-func TestNTPValidator_checkChronyd_CommandNotFound(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	validator := NewNTPValidator(logger)
+func TestNTPValidator_checkChronyc_CommandNotFound(t *testing.T) {
+	validator := NewNTPValidator()
 
 	// Test checkChronyd behavior - this will depend on whether chronyc exists
-	_, err := validator.checkChronyd()
+	_, err := validator.checkChronyc()
 
 	if validator.commandExists("chronyc") {
 		// If chronyc exists, we expect either success or a specific error
 		if err != nil {
 			// Should contain meaningful error message
-			assert.Contains(t, err.Error(), "failed to get chrony tracking status")
+			assert.Contains(t, err.Error(), "getting system clock settings from chronyc")
 		}
 	} else {
 		// If chronyc doesn't exist, the command should fail with exec error
 		assert.NotNil(t, err, "Expected error when chronyc command doesn't exist")
-		assert.Contains(t, err.Error(), "failed to get chrony tracking status")
+		assert.Contains(t, err.Error(), "getting system clock settings from chronyc")
 	}
 }
 
-func TestNTPValidator_checkSystemdTimesyncd_CommandNotFound(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	validator := NewNTPValidator(logger)
+func TestNTPValidator_checkTimedatectl_CommandNotFound(t *testing.T) {
+	validator := NewNTPValidator()
 
 	// Test checkSystemdTimesyncd behavior - this will depend on whether timedatectl exists
-	_, err := validator.checkSystemdTimesyncd()
+	_, err := validator.checkTimedatectl()
 
 	if validator.commandExists("timedatectl") {
 		// If timedatectl exists, we expect either success or a specific error
 		if err != nil {
 			// Should contain meaningful error message
-			assert.Contains(t, err.Error(), "failed to get timedatectl status")
+			assert.Contains(t, err.Error(), "getting system clock settings from timedatectl")
 		}
 	} else {
 		// If timedatectl doesn't exist, the command should fail with exec error
 		assert.NotNil(t, err, "Expected error when timedatectl command doesn't exist")
-		assert.Contains(t, err.Error(), "failed to get timedatectl status")
+		assert.Contains(t, err.Error(), "getting system clock settings from timedatectl")
 	}
 }
 

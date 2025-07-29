@@ -69,7 +69,7 @@ type NodeCreate struct {
 }
 
 // PeeredInstance represents a Hybrid node running as an EC2 instance in a peered VPC
-// The Name is the name of the kubenretes node object
+// The Name is the name of the Kubernetes node object
 // The Instance is the underlying EC2 instance
 type PeeredInstance struct {
 	ec2.Instance
@@ -111,7 +111,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		c.Logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
 	}
 
-	userdata, err := spec.OS.BuildUserData(e2e.UserDataInput{
+	userdataInput := e2e.UserDataInput{
 		EKSEndpoint:       spec.EKSEndpoint,
 		KubernetesVersion: spec.NodeK8sVersion,
 		NodeadmUrls:       c.NodeadmURLs,
@@ -126,12 +126,13 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		HostName:            nodeSpec.Name,
 		ClusterName:         c.Cluster.Name,
 		ClusterCert:         c.K8sClientConfig.CAData,
-	})
+	}
+	userdata, err := spec.OS.BuildUserData(ctx, userdataInput)
 	if err != nil {
 		return PeeredInstance{}, fmt.Errorf("expected to successfully build user data: %w", err)
 	}
 
-	amiId, err := spec.OS.AMIName(ctx, c.AWS, spec.NodeK8sVersion)
+	amiId, err := spec.OS.AMIName(ctx, c.AWS, spec.NodeK8sVersion, spec.ComputeType)
 	if err != nil {
 		return PeeredInstance{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
 	}
@@ -160,7 +161,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		return PeeredInstance{}, fmt.Errorf("EC2 Instance should have been created successfully: %w", err)
 	}
 
-	c.Logger.Info("A Hybrid EC2 instace is created", "instanceID", instance.ID)
+	c.Logger.Info("A Hybrid EC2 instance is created", "instanceID", instance.ID)
 	return PeeredInstance{
 		Instance: instance,
 		Name:     spec.NodeName,

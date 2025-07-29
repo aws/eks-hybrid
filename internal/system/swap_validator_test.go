@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
 )
@@ -43,8 +42,7 @@ func TestSwapValidator_Run(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			logger := zap.NewNop()
-			validator := NewSwapValidator(logger)
+			validator := NewSwapValidator()
 			informer := &mockInformer{}
 			nodeConfig := &api.NodeConfig{}
 			ctx := context.Background()
@@ -75,9 +73,7 @@ func TestSwapValidator_Run(t *testing.T) {
 }
 
 func TestNewSwapValidator(t *testing.T) {
-	logger := zap.NewNop()
-	validator := NewSwapValidator(logger)
+	validator := NewSwapValidator()
 
 	assert.NotNil(t, validator)
-	assert.Equal(t, logger, validator.logger)
 }

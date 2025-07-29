@@ -32,7 +32,6 @@
     "nodefs.inodesFree": "5%"
   },
   "featureGates": {
-    "KubeletCredentialProviders": true,
     "RotateKubeletServerCertificate": true
   },
   "hairpinMode": "hairpin-veth",

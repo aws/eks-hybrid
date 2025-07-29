@@ -39,17 +39,6 @@ type VerifyPodIdentityAddon struct {
 	Region              string
 }
 
-type PolicyDocument struct {
-	Version   string
-	Statement []StatementEntry
-}
-
-type StatementEntry struct {
-	Effect   string
-	Action   []string
-	Resource []string
-}
-
 func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	v.Logger.Info("Verify pod identity add-on is installed")
 

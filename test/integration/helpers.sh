@@ -435,3 +435,41 @@ function mock::iamra-certificate-path() {
       exit 1
   fi
 }
+
+function mock::bind-mount() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: mock::bind-mount SOURCE_PATH TARGET_PATH"
+    exit 1
+  fi
+
+  local SOURCE_PATH=$1
+  local TARGET_PATH=$2
+
+  # Create target directory if it doesn't exist
+  mkdir -p "$TARGET_PATH"
+
+  # Create a bind mount
+  if ! mount --bind "$SOURCE_PATH" "$TARGET_PATH"; then
+    echo "Failed to create bind mount from $SOURCE_PATH to $TARGET_PATH"
+    exit 1
+  fi
+
+  echo "Created bind mount: $SOURCE_PATH -> $TARGET_PATH"
+}
+
+function mock::unbind-mount() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: mock::unbind-mount TARGET_PATH"
+    exit 1
+  fi
+
+  local TARGET_PATH=$1
+
+  # Unmount the bind mount
+  if ! umount "$TARGET_PATH"; then
+    echo "Failed to unmount $TARGET_PATH"
+    exit 1
+  fi
+
+  echo "Unmounted bind mount: $TARGET_PATH"
+}

@@ -46,7 +46,7 @@ func (i *Initer) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := i.NodeProvider.Validate(); err != nil {
+	if err := i.NodeProvider.Validate(ctx); err != nil {
 		return err
 	}
 

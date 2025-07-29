@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 )
@@ -32,4 +33,15 @@ func IsAwsError(err error, code string) bool {
 	var awsErr smithy.APIError
 	ok := errors.As(err, &awsErr)
 	return err != nil && ok && awsErr.ErrorCode() == code
+}
+
+// IsIAMRoleNotFound returns true if the error is an IAM role not found error.
+func IsIAMRoleNotFound(err error) bool {
+	if IsType(err, &iamTypes.NoSuchEntityException{}) {
+		return true
+	}
+
+	var ae smithy.APIError
+	return errors.As(err, &ae) &&
+		ae.ErrorCode() == "NoSuchEntity"
 }

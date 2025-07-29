@@ -132,6 +132,18 @@ func WaitForPodsToBeRunning(ctx context.Context, k8s kubernetes.Interface, listO
 	return nil
 }
 
+// WaitForPodToBeCompleted waits until the pod is in Completed phase.
+func WaitForPodToBeCompleted(ctx context.Context, k8s kubernetes.Interface, name, namespace string) error {
+	_, err := ik8s.GetAndWait(ctx, nodePodWaitTimeout, k8s.CoreV1().Pods(namespace), name, func(pod *corev1.Pod) bool {
+		return pod != nil && pod.Status.Phase == corev1.PodSucceeded
+	})
+	if err != nil {
+		return fmt.Errorf("waiting for pod %s in namespace %s to be completed: %w", name, namespace, err)
+	}
+
+	return nil
+}
+
 func waitForPodToBeDeleted(ctx context.Context, k8s kubernetes.Interface, name, namespace string) error {
 	_, err := ik8s.ListAndWait(ctx, nodePodWaitTimeout, k8s.CoreV1().Pods(namespace), func(pods *corev1.PodList) bool {
 		return len(pods.Items) == 0

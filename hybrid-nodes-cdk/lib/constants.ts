@@ -1,5 +1,5 @@
 export const builderBaseImage = 'public.ecr.aws/eks-distro-build-tooling/builder-base:standard-latest.al2';
-export const kubernetesVersions = ['1.27', '1.28', '1.29', '1.30', '1.31', '1.32', '1.33'];
+export const kubernetesVersions = ['1.28', '1.29', '1.30', '1.31', '1.32', '1.33'];
 export const betaKubeVersions: Array<string> = [];
 export const cnis = ['calico', 'cilium'];
 export const eksHybridBetaBucketARN = 'arn:aws:s3:::eks-hybrid-beta';
