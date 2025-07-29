@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	MinimumVersion = "1.27"
+	MinimumVersion = "1.28"
 )
 
 func PreviousVersion(kubernetesVersion string) (string, error) {
