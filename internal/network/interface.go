@@ -48,7 +48,7 @@ func (v NetworkInterfaceValidator) Run(ctx context.Context, informer validation.
 		informer.Done(ctx, name, err)
 	}()
 
-	if err := ValidateClusterRemoteNetworkConfig(cluster); err != nil {
+	if err = ValidateClusterRemoteNetworkConfig(cluster); err != nil {
 		err = validation.WithRemediation(err,
 			"Ensure the EKS cluster has remote network configuration set up properly. "+
 				"The cluster must have remote node networks configured to validate hybrid node connectivity.")

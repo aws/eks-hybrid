@@ -58,7 +58,7 @@ func (v *NTPValidator) Run(ctx context.Context, informer validation.Informer, _ 
 	}()
 	if err = v.Validate(); err != nil {
 		err = addNTPRemediation(err)
-		return nil
+		return err
 	}
 
 	return nil

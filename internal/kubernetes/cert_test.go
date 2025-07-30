@@ -175,7 +175,7 @@ func TestCheckKubeletCertificate(t *testing.T) {
 				g.Expect(err).NotTo(HaveOccurred())
 			}
 
-			err := kubernetes.NewKubeletCertificateValidator(kubernetes.NewClusterProvider(tt.config), kubernetes.WithCertPath(certPath)).Run(ctx, informer, tt.node)
+			err := kubernetes.NewKubeletCertificateValidator(&tt.node.Spec.Cluster, kubernetes.WithCertPath(certPath)).Run(ctx, informer, tt.node)
 
 			if tt.expectedError == "" {
 				g.Expect(err).NotTo(HaveOccurred())

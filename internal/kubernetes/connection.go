@@ -14,30 +14,21 @@ import (
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
-// ConnectionValidator validates endpoint connection status
-type ConnectionValidator struct{}
-
-// NewConnectionValidator creates a new NTP validator
-func NewConnectionValidator() *ConnectionValidator {
-	return &ConnectionValidator{}
-}
-
-// Run validates NTP synchronization
-func (v *ConnectionValidator) Run(ctx context.Context, informer validation.Informer, nodeConfig *api.NodeConfig) error {
+// ValidateAPIServerEndpointResolution validates access to the Kubernetes API endpoint
+// This function conforms to the validation framework signature
+func ValidateAPIServerEndpointResolution(ctx context.Context, informer validation.Informer, nodeConfig *api.NodeConfig) error {
 	var err error
 	name := "kubernetes-endpoint-access"
 	informer.Starting(ctx, name, "Validating access to Kubernetes API endpoint")
 	defer func() {
 		informer.Done(ctx, name, err)
 	}()
-	if err = v.CheckConnection(ctx, nodeConfig); err != nil {
-		return err
-	}
 
-	return nil
+	err = checkAPIServerConnection(ctx, nodeConfig)
+	return err
 }
 
-func (v *ConnectionValidator) CheckConnection(ctx context.Context, node *api.NodeConfig) error {
+func checkAPIServerConnection(ctx context.Context, node *api.NodeConfig) error {
 	endpoint, err := url.ParseRequestURI(node.Spec.Cluster.APIServerEndpoint)
 	if err != nil {
 		return validation.WithRemediation(err, "Ensure the Kubernetes API server endpoint provided is correct.")
