@@ -43,6 +43,7 @@ func Phases() []string {
 		"kubelet-version-skew-validation",
 		"api-server-endpoint-resolution-validation",
 		"proxy-validation",
+		"node-inactive-validation",
 		"preprocess",
 		"config",
 		"run",

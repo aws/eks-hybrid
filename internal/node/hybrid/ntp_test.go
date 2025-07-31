@@ -27,7 +27,7 @@ func TestHybridNodeProvider_Validate_NTPSkipped(t *testing.T) {
 	}
 
 	// Create provider with NTP validation skipped
-	skipPhases := []string{ntpSyncValidation}
+	skipPhases := []string{ntpSyncValidation, apiServerEndpointResolution}
 	hnp, err := NewHybridNodeProvider(nodeConfig, skipPhases, logger)
 	require.NoError(t, err)
 
@@ -57,7 +57,14 @@ func TestHybridNodeProvider_Validate_NTPIncluded(t *testing.T) {
 	}
 
 	// Create provider without skipping NTP validation
-	hnp, err := NewHybridNodeProvider(nodeConfig, []string{}, logger)
+	hnp, err := NewHybridNodeProvider(nodeConfig,
+		[]string{
+			"node-ip-validation",
+			"kubelet-cert-validation",
+			"api-server-endpoint-resolution-validation",
+			"node-inactive-validation",
+		},
+		logger)
 	require.NoError(t, err)
 
 	// Cast to concrete type to access internal fields
