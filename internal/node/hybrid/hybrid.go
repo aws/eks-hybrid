@@ -26,6 +26,7 @@ const (
 	awsCredentialsValidation    = "aws-credentials-validation"
 	apiServerEndpointResolution = "api-server-endpoint-resolution-validation"
 	proxyValidation             = "proxy-validation"
+	nodeInActiveValidation      = "node-inactive-validation"
 )
 
 type HybridNodeProvider struct {
@@ -100,6 +101,13 @@ func WithKubelet(kubelet Kubelet) NodeProviderOpt {
 	}
 }
 
+// WithDaemonManager adds a DaemonManager to the HybridNodeProvider for testing purposes.
+func WithDaemonManager(dm daemon.DaemonManager) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.daemonManager = dm
+	}
+}
+
 func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
@@ -120,11 +128,9 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 		if err := certificate.Validate(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
 			// Ignore date validation errors in the hybrid provider since kubelet will regenerate them
 			// Ignore no cert errors since we expect it to not exist
-			if certificate.IsDateValidationError(err) || certificate.IsNoCertError(err) {
-				return nil
+			if !certificate.IsDateValidationError(err) && !certificate.IsNoCertError(err) {
+				return certificate.AddKubeletRemediation(hnp.certPath, err)
 			}
-
-			return certificate.AddKubeletRemediation(hnp.certPath, err)
 		}
 	}
 
@@ -157,6 +163,15 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 		proxyValidator := network.NewProxyValidator()
 		if err := proxyValidator.Validate(hnp.nodeConfig); err != nil {
 			return err
+		}
+	}
+
+	if !slices.Contains(hnp.skipPhases, nodeInActiveValidation) {
+		hnp.logger.Info("Validating node is inactive...")
+		if err := hnp.ValidateNodeIsInactive(); err != nil {
+			hnp.logger.Warn("Validation failed",
+				zap.Error(err),
+				zap.String("remediation", "Ensure the hybrid node is made inactive by running 'nodeadm uninstall' before attaching to the EKS cluster"))
 		}
 	}
 
