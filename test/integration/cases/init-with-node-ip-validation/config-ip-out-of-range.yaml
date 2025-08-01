@@ -5,6 +5,7 @@ spec:
   cluster:
     name: test-cluster
     region: us-west-2
+    apiServerEndpoint: https://example.com
   kubelet:
     flags:
       - --node-ip=1.2.3.4

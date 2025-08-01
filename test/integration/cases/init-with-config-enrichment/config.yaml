@@ -5,6 +5,7 @@ spec:
   cluster:
     name: my-cluster
     region: us-west-2
+    apiServerEndpoint: https://example.com
   hybrid:
     enableCredentialsFile: false
     iamRolesAnywhere:

@@ -16,11 +16,10 @@ func (hnp *HybridNodeProvider) ValidateCertificateIfExists(ctx context.Context, 
 		informer.Done(ctx, name, err)
 	}()
 	if err = certificate.Validate(hnp.certPath, node.Spec.Cluster.CertificateAuthority); err != nil {
-		if certificate.IsDateValidationError(err) || certificate.IsNoCertError(err) {
-			return nil
+		if !certificate.IsDateValidationError(err) && !certificate.IsNoCertError(err) {
+			err = certificate.AddKubeletRemediation(hnp.certPath, err)
+			return err
 		}
-		err = certificate.AddKubeletRemediation(hnp.certPath, err)
-		return err
 	}
 
 	return nil
