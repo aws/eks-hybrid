@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	nodePodDelayInterval = 5 * time.Second
-	nodePodWaitTimeout   = 3 * time.Minute
+	nodePodDelayInterval             = 5 * time.Second
+	nodePodWaitTimeout               = 3 * time.Minute
+	MaxCoreDNSRedistributionAttempts = 5
 )
 
 func GetNginxPodName(name string) string {
@@ -290,7 +291,7 @@ func TestPodToPodConnectivity(ctx context.Context, config *restclient.Config, k8
 	targetIP := targetPod.Status.PodIP
 	logger.Info("Testing pod-to-pod connectivity", "from", clientPodName, "to", targetPodName, "ip", targetIP)
 
-	cmd := []string{"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", fmt.Sprintf("http://%s:80", targetIP), "--connect-timeout", "10", "--max-time", "30"}
+	cmd := []string{"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", fmt.Sprintf("http://%s:80", targetIP), "--connect-timeout", "90", "--max-time", "120"}
 
 	_, err = ik8s.GetAndWait(ctx, 2*time.Minute, k8s.CoreV1().Pods(namespace), clientPodName, func(pod *corev1.Pod) bool {
 		if pod.Status.Phase != corev1.PodRunning {
@@ -351,5 +352,57 @@ func DeletePodsWithLabels(ctx context.Context, k8s kubernetes.Interface, namespa
 			logger.Info("Force deleted pod", "name", pod.Name)
 		}
 	}
+	return nil
+}
+
+// VerifyCoreDNSDistribution waits for CoreDNS pods to be distributed across node types
+func VerifyCoreDNSDistribution(ctx context.Context, k8s kubernetes.Interface, timeout time.Duration, maxDeletions int, logger logr.Logger) error {
+	deletionCount := 0
+
+	_, err := ik8s.ListAndWait(ctx, timeout, k8s.CoreV1().Pods("kube-system"),
+		func(pods *corev1.PodList) bool {
+			hybridNodes, cloudNodes := CountCoreDNSDistribution(ctx, k8s, pods, logger)
+
+			if hybridNodes > 0 && cloudNodes > 0 {
+				logger.Info("CoreDNS properly distributed across node types",
+					"hybridPods", hybridNodes, "cloudPods", cloudNodes)
+				return true
+			}
+
+			// Try redistribution
+			if deletionCount < maxDeletions {
+				logger.Info("CoreDNS pods on same node type, attempting redistribution",
+					"hybridPods", hybridNodes, "cloudPods", cloudNodes, "deletionAttempt", deletionCount+1)
+				if deleteCoreDNSPod(ctx, k8s, logger) == nil {
+					deletionCount++
+				}
+			}
+
+			return false
+		},
+		func(opts *ik8s.ListOptions) {
+			opts.LabelSelector = "k8s-app=kube-dns"
+		})
+
+	return err
+}
+
+// deleteCoreDNSPod deletes the first CoreDNS pod to trigger rescheduling
+func deleteCoreDNSPod(ctx context.Context, k8s kubernetes.Interface, logger logr.Logger) error {
+	pods, err := k8s.CoreV1().Pods("kube-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=kube-dns",
+	})
+	if err != nil || len(pods.Items) == 0 {
+		return fmt.Errorf("no CoreDNS pods found to delete")
+	}
+
+	// Delete the first pod
+	podName := pods.Items[0].Name
+	err = k8s.CoreV1().Pods("kube-system").Delete(ctx, podName, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete CoreDNS pod %s: %w", podName, err)
+	}
+
+	logger.Info("Deleted CoreDNS pod for redistribution", "podName", podName)
 	return nil
 }

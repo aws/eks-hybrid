@@ -40,3 +40,9 @@ func CreateNamespace(ctx context.Context, k8s kubernetes.Interface, namespace st
 func DeleteNamespace(ctx context.Context, k8s kubernetes.Interface, namespace string) error {
 	return ik8s.IdempotentDelete(ctx, k8s.CoreV1().Namespaces(), namespace)
 }
+
+// CheckNamespaceExists checks if a namespace exists
+func CheckNamespaceExists(ctx context.Context, k8s kubernetes.Interface, namespace string) error {
+	_, err := k8s.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	return err
+}

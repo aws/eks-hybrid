@@ -4,6 +4,8 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -65,16 +67,17 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	}
 
 	podName := fmt.Sprintf("awscli-%s", node.Name)
+	sanitizedPodName := sanitizeContainerName(podName)
 	v.Logger.Info("Creating a test pod on the hybrid node for pod identity add-on to access aws resources")
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
+			Name:      sanitizedPodName,
 			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:  podName,
+					Name:  sanitizeContainerName(podName),
 					Image: fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/aws-cli/aws-cli:latest", constants.EcrAccounId, v.Region),
 					Env: []corev1.EnvVar{
 						// default value for AWS_MAX_ATTEMPTS is 3. We are seeing the s3 cp command
@@ -115,22 +118,22 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 
 	// Deploy a pod with service account then run aws cli to access aws resources
 	if err = kubernetes.CreatePod(ctx, v.K8S, pod, v.Logger); err != nil {
-		return fmt.Errorf("creating the awscli pod %s: %w", podName, err)
+		return fmt.Errorf("creating the awscli pod %s: %w", sanitizedPodName, err)
 	}
 
 	defer func() {
-		if err := kubernetes.DeletePod(ctx, v.K8S, podName, namespace); err != nil {
+		if err := kubernetes.DeletePod(ctx, v.K8S, sanitizedPodName, namespace); err != nil {
 			// it's okay not fail this operation as the pod would be eventually deleted when the cluster is deleted
-			v.Logger.Info("Fail to delete aws pod", "podName", podName, "error", err)
+			v.Logger.Info("Fail to delete aws pod", "podName", sanitizedPodName, "error", err)
 		}
 	}()
 
 	execCommand := []string{
 		"bash", "-c", fmt.Sprintf("aws s3 cp s3://%s/%s . > /dev/null && cat ./%s", v.PodIdentityS3Bucket, bucketObjectKey, bucketObjectKey),
 	}
-	stdout, stdErr, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, podName, namespace, execCommand...)
+	stdout, stdErr, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, sanitizedPodName, namespace, execCommand...)
 	if err != nil {
-		return fmt.Errorf("exec aws s3 cp command on pod %s: err: %w, stdout: %s, stderr: %s", podName, err, stdout, stdErr)
+		return fmt.Errorf("exec aws s3 cp command on pod %s: err: %w, stdout: %s, stderr: %s", sanitizedPodName, err, stdout, stdErr)
 	}
 
 	if stdout != bucketObjectContent {
@@ -149,4 +152,28 @@ func (v VerifyPodIdentityAddon) waitForPodIdentityPodOnNode(ctx context.Context,
 	}
 
 	return kubernetes.WaitForPodsToBeRunning(ctx, v.K8S, listOptions, "kube-system", v.Logger)
+}
+
+// sanitizeContainerName removes dots and other invalid characters from container names
+// Kubernetes container names must be RFC 1123 compliant (alphanumeric + hyphens)
+func sanitizeContainerName(name string) string {
+	// Replace dots, periods, and other invalid characters with hyphens
+	reg := regexp.MustCompile(`[^a-zA-Z0-9\-]`)
+	sanitized := reg.ReplaceAllString(name, "-")
+
+	// Ensure it starts and ends with alphanumeric characters
+	sanitized = strings.Trim(sanitized, "-")
+
+	// Convert to lowercase (RFC 1123 requirement)
+	sanitized = strings.ToLower(sanitized)
+
+	// Ensure it's not empty and doesn't exceed 63 characters
+	if len(sanitized) == 0 {
+		sanitized = "awscli"
+	}
+	if len(sanitized) > 63 {
+		sanitized = sanitized[:63]
+	}
+
+	return sanitized
 }

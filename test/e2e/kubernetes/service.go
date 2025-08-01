@@ -185,9 +185,27 @@ func DeleteServicesWithLabels(ctx context.Context, k8s kubernetes.Interface, nam
 	for _, service := range services.Items {
 		if err := DeleteServiceAndWait(ctx, k8s, service.Name, namespace, logger); err != nil {
 			logger.Info("Service cleanup: resource not found or already deleted", "name", service.Name)
+		} else {
+			logger.Info("Deleted service", "name", service.Name)
 		}
 	}
+	return nil
+}
 
-	logger.Info("Completed services deletion", "selector", labelSelector, "count", len(services.Items))
+// ConfigureKubeDNSTrafficDistribution configures kube-dns service for traffic distribution
+func ConfigureKubeDNSTrafficDistribution(ctx context.Context, k8s kubernetes.Interface, logger logr.Logger) error {
+	serviceTrafficPatch := `{
+		"spec": {
+			"trafficDistribution": "PreferClose"
+		}
+	}`
+
+	_, err := k8s.CoreV1().Services("kube-system").Patch(ctx, "kube-dns",
+		"application/merge-patch+json", []byte(serviceTrafficPatch), metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to configure kube-dns traffic distribution: %w", err)
+	}
+
+	logger.Info("Configured kube-dns service with PreferClose traffic distribution")
 	return nil
 }

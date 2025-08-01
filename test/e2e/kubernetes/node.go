@@ -31,6 +31,7 @@ const (
 
 // WaitForNode wait for the node to join the cluster and fetches the node info which has the nodeName label
 func WaitForNode(ctx context.Context, k8s kubernetes.Interface, nodeName string, logger logr.Logger) (*corev1.Node, error) {
+	labelSelector := constants.TestInstanceNameKubernetesLabel + "=" + nodeName
 	nodes, err := ik8s.ListAndWait(ctx, hybridNodeWaitTimeout, k8s.CoreV1().Nodes(), func(nodes *corev1.NodeList) bool {
 		if len(nodes.Items) == 0 {
 			logger.Info("Node with e2e label doesn't exist yet", "nodeName", nodeName)
@@ -39,17 +40,29 @@ func WaitForNode(ctx context.Context, k8s kubernetes.Interface, nodeName string,
 		logger.Info("Node with e2e label exists", "nodeName", nodeName)
 		return true
 	}, func(opts *ik8s.ListOptions) {
-		opts.LabelSelector = constants.TestInstanceNameKubernetesLabel + "=" + nodeName
+		opts.LabelSelector = labelSelector
+	})
+
+	if err == nil {
+		if len(nodes.Items) > 1 {
+			return nil, fmt.Errorf("found multiple nodes with e2e label %s: %v", nodeName, nodes.Items)
+		}
+		return &nodes.Items[0], nil
+	}
+
+	// Node not found by label - try direct node name lookup
+	logger.Info("Node not found by e2e label, trying direct node name lookup ", "nodeName", nodeName)
+	node, err := ik8s.GetAndWait(ctx, hybridNodeWaitTimeout, k8s.CoreV1().Nodes(), nodeName, func(node *corev1.Node) bool {
+		if node.Status.Phase == corev1.NodeRunning || len(node.Status.Conditions) > 0 {
+			logger.Info("Found node by direct name lookup", "nodeName", nodeName)
+			return true
+		}
+		return false
 	})
 	if err != nil {
-		return nil, fmt.Errorf("waiting for node %s to join the cluster: %w", nodeName, err)
+		return nil, fmt.Errorf("waiting for node %s to join the cluster : %w", nodeName, err)
 	}
-
-	if len(nodes.Items) > 1 {
-		return nil, fmt.Errorf("found multiple nodes with e2e label %s: %v", nodeName, nodes.Items)
-	}
-
-	return &nodes.Items[0], nil
+	return node, nil
 }
 
 func GetNodeInternalIP(node *corev1.Node) string {
@@ -319,4 +332,66 @@ func PatchNode(ctx context.Context, k8s kubernetes.Interface, nodeName string, p
 	}
 	logger.Info("Successfully patched node", "node", nodeName)
 	return nil
+}
+
+// LabelHybridNodesForTopology adds topology.kubernetes.io/zone=onprem label to hybrid nodes
+func LabelHybridNodesForTopology(ctx context.Context, k8s kubernetes.Interface, logger logr.Logger) error {
+	// Find all hybrid nodes
+	nodes, err := ListNodesWithLabels(ctx, k8s, "eks.amazonaws.com/compute-type=hybrid")
+	if err != nil {
+		return fmt.Errorf("failed to list hybrid nodes: %w", err)
+	}
+
+	if len(nodes.Items) == 0 {
+		logger.Info("No hybrid nodes found to label")
+		return nil
+	}
+
+	// Label each hybrid node with topology zone
+	for _, node := range nodes.Items {
+		labelPatch := `{
+			"metadata": {
+				"labels": {
+					"topology.kubernetes.io/zone": "onprem"
+				}
+			}
+		}`
+
+		err = PatchNode(ctx, k8s, node.Name, []byte(labelPatch), logger)
+		if err != nil {
+			return fmt.Errorf("failed to label hybrid node %s: %w", node.Name, err)
+		}
+
+		logger.Info("Labeled hybrid node with topology zone", "node", node.Name, "zone", "onprem")
+	}
+
+	return nil
+}
+
+// CountCoreDNSDistribution returns count of CoreDNS pods on hybrid vs cloud nodes
+func CountCoreDNSDistribution(ctx context.Context, k8s kubernetes.Interface, pods *corev1.PodList, logger logr.Logger) (hybridCount, cloudCount int) {
+	hybridCount = 0
+	cloudCount = 0
+
+	for _, pod := range pods.Items {
+		if pod.Status.Phase != corev1.PodRunning ||
+			pod.Spec.NodeName == "" ||
+			pod.DeletionTimestamp != nil {
+			continue
+		}
+
+		node, err := k8s.CoreV1().Nodes().Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
+		if err != nil {
+			logger.Info("Failed to get node details", "node", pod.Spec.NodeName, "error", err.Error())
+			continue
+		}
+
+		if computeType, exists := node.Labels["eks.amazonaws.com/compute-type"]; exists && computeType == "hybrid" {
+			hybridCount++
+		} else {
+			cloudCount++
+		}
+	}
+
+	return hybridCount, cloudCount
 }

@@ -50,11 +50,11 @@ func (a *AddonEc2Test) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyP
 	return &addon.VerifyPodIdentityAddon{
 		Cluster:             a.Cluster.Name,
 		NodeName:            nodeName,
-		PodIdentityS3Bucket: a.podIdentityS3Bucket,
+		PodIdentityS3Bucket: a.PodIdentityS3Bucket,
 		K8S:                 a.K8sClient,
 		EKSClient:           a.EKSClient,
-		IAMClient:           a.iamClient,
-		S3Client:            a.s3Client,
+		IAMClient:           a.IAMClient,
+		S3Client:            a.S3Client,
 		Logger:              a.Logger,
 		K8SConfig:           a.K8sClientConfig,
 		Region:              a.Cluster.Region,
@@ -131,7 +131,7 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 	pcaClient := acmpca.NewFromConfig(a.aws)
 
 	// Get pod identity role ARN
-	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.iamClient, a.Cluster.Name)
+	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.IAMClient, a.Cluster.Name)
 	if err != nil {
 		a.Logger.Error(err, "Failed to get pod identity role ARN")
 		return nil, err

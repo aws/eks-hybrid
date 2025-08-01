@@ -18,12 +18,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	smithyTime "github.com/aws/smithy-go/time"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
@@ -50,8 +50,9 @@ var (
 	podCIDR       = "10.87.0.0/16"
 
 	// Port constants
-	httpPort int32 = 80
-	dnsPort  int32 = 53
+	httpPort    int32 = 80
+	dnsPort     int32 = 53
+	webhookPort int32 = 443
 
 	// Timing constants
 	crossVPCPropagationWait = 120 * time.Second
@@ -183,14 +184,14 @@ var _ = Describe("Mixed Mode Testing", func() {
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
 
 				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "nginx-cloud", testCaseLabels)
-				Expect(err).NotTo(HaveOccurred(), "creating cloud pod")
+				Expect(err).NotTo(HaveOccurred(), "should create nginx pod 'nginx-cloud' on cloud node %s", cloudNodeName)
 				test.Logger.Info("Cloud pod created and ready", "name", "nginx-cloud")
 
 				// Find hybrid node and create client nginx pod
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
 
 				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-hybrid", testCaseLabels)
-				Expect(err).NotTo(HaveOccurred(), "creating client pod")
+				Expect(err).NotTo(HaveOccurred(), "should create client pod 'test-client-hybrid' on hybrid node %s", hybridNodeName)
 				test.Logger.Info("Client pod created and ready", "name", "test-client-hybrid")
 
 				test.Logger.Info("Testing cross-VPC pod-to-pod connectivity (hybrid → cloud)")
@@ -207,14 +208,14 @@ var _ = Describe("Mixed Mode Testing", func() {
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
 
 				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "nginx-hybrid-reverse", testCaseLabels)
-				Expect(err).NotTo(HaveOccurred(), "creating hybrid pod")
+				Expect(err).NotTo(HaveOccurred(), "should create nginx pod 'nginx-hybrid-reverse' on hybrid node %s", hybridNodeName)
 				test.Logger.Info("Hybrid pod created and ready", "name", "nginx-hybrid-reverse")
 
 				// Find cloud node and create client nginx pod
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
 
 				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-cloud", testCaseLabels)
-				Expect(err).NotTo(HaveOccurred(), "creating client pod")
+				Expect(err).NotTo(HaveOccurred(), "should create client pod 'test-client-cloud' on cloud node %s", cloudNodeName)
 				test.Logger.Info("Cloud client pod created and ready", "name", "test-client-cloud")
 
 				err = kubernetes.TestPodToPodConnectivity(ctx, test.K8sClientConfig, test.K8sClient.Interface, "test-client-cloud", "nginx-hybrid-reverse", testNamespace, test.Logger)
@@ -287,6 +288,148 @@ var _ = Describe("Mixed Mode Testing", func() {
 				test.Logger.Info("Bidirectional service discovery test (cloud → hybrid) completed successfully")
 			})
 		})
+
+		Context("CloudWatch Observability Mixed Mode", func() {
+			It("should support CloudWatch Observability webhook functionality in mixed mode", func(ctx context.Context) {
+				testCaseLabels["test-case"] = "cloudwatch-mixed-mode"
+
+				test.Logger.Info("Starting mixed mode test with CloudWatch Observability addon")
+
+				// Create CloudWatch addon instance
+				cloudwatchAddon := addon.NewCloudWatchAddon(test.Cluster.Name)
+
+				// Validate addon creation
+				Expect(cloudwatchAddon).NotTo(BeNil(), "CloudWatch addon should be created")
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(cloudwatchAddon.Delete(ctx, test.EKSClient, test.Logger)).To(Succeed(), "should cleanup CloudWatch addon successfully")
+				})
+
+				DeferCleanup(func(ctx context.Context) {
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := cloudwatchAddon.Cleanup(ctx, test.K8sClient.Interface, testNamespace, testCaseLabels, test.Logger)
+						if err != nil {
+							GinkgoWriter.Printf("Failed to cleanup CloudWatch test resources: %v\n", err)
+						}
+					}
+				})
+
+				// Test CloudWatch webhook functionality in mixed mode
+				err := cloudwatchAddon.VerifyWebhookFunctionality(
+					ctx,
+					test.EKSClient,
+					test.K8sClient.Interface,
+					test.Cluster.Region,
+					hybridNodeSelector,
+					testCaseLabels,
+					test.Logger,
+				)
+				Expect(err).NotTo(HaveOccurred(), "CloudWatch webhook functionality in mixed mode")
+
+				test.Logger.Info("CloudWatch Observability mixed mode test successful - cross-VPC webhook communication confirmed")
+			})
+		})
+
+		Context("Pod Identity Agent Mixed Mode", func() {
+			It("should support Pod Identity Agent functionality in mixed mode", func(ctx context.Context) {
+				testCaseLabels["test-case"] = "podidentity-mixed-mode"
+
+				test.Logger.Info("Starting mixed mode test with Pod Identity addon")
+
+				// Step 2: Test Pod Identity on hybrid node
+				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
+				hybridVerifier := test.NewVerifyPodIdentityAddon(hybridNodeName)
+				err := hybridVerifier.Run(ctx)
+				Expect(err).NotTo(HaveOccurred(), "Pod Identity should work on hybrid node")
+
+				test.Logger.Info("Pod Identity test on hybrid node completed successfully")
+
+				// Step 3: Test Pod Identity on cloud node
+				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
+				cloudVerifier := test.NewVerifyPodIdentityAddon(cloudNodeName)
+				err = cloudVerifier.Run(ctx)
+				Expect(err).NotTo(HaveOccurred(), "Pod Identity should work on cloud node")
+
+				test.Logger.Info("Pod Identity mixed mode test successful - verified on both hybrid and cloud nodes")
+			})
+		})
+
+		Context("cert-manager Mixed Mode", func() {
+			It("should support cert-manager webhook functionality in mixed mode", func(ctx context.Context) {
+				testCaseLabels["test-case"] = "certmanager-mixed-mode"
+
+				test.Logger.Info("Starting mixed mode test with cert-manager addon")
+
+				addonTest := &suite.AddonEc2Test{PeeredVPCTest: test}
+
+				certManagerTest, err := addonTest.NewCertManagerTest(ctx)
+				Expect(err).NotTo(HaveOccurred(), "cert-manager test should be created successfully")
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(certManagerTest.Delete(ctx)).To(Succeed(), "should cleanup cert-manager addon successfully")
+				})
+
+				DeferCleanup(func(ctx context.Context) {
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := certManagerTest.PrintLogs(ctx)
+						if err != nil {
+							GinkgoWriter.Printf("Failed to get cert-manager logs: %v\n", err)
+						}
+					}
+				})
+
+				test.Logger.Info("Created cert-manager test instance")
+				err = certManagerTest.Create(ctx)
+				Expect(err).NotTo(HaveOccurred(), "cert-manager addon should be created successfully")
+
+				test.Logger.Info("cert-manager addon created and ready")
+
+				err = certManagerTest.Validate(ctx)
+				Expect(err).NotTo(HaveOccurred(), "cert-manager should validate certificates in mixed mode")
+
+				test.Logger.Info("Cert-manager mixed mode test successful ")
+			})
+		})
+
+		Context("Metrics Server Mixed Mode", func() {
+			It("should support metrics server functionality in mixed mode", func(ctx context.Context) {
+				testCaseLabels["test-case"] = "metricsserver-mixed-mode"
+
+				test.Logger.Info("Starting mixed mode test with Metrics Server addon")
+
+				addonTest := &suite.AddonEc2Test{PeeredVPCTest: test}
+
+				metricsServerTest := addonTest.NewMetricsServerTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(metricsServerTest.Delete(ctx)).To(Succeed(), "should cleanup metrics-server addon successfully")
+				})
+
+				DeferCleanup(func(ctx context.Context) {
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := metricsServerTest.PrintLogs(ctx)
+						if err != nil {
+							GinkgoWriter.Printf("Failed to get metrics-server logs: %v\n", err)
+						}
+					}
+				})
+
+				test.Logger.Info("Created metrics server test instance")
+
+				err := metricsServerTest.Create(ctx)
+				Expect(err).NotTo(HaveOccurred(), "metrics server addon should be created successfully")
+
+				test.Logger.Info("metrics server addon created and ready")
+
+				err = metricsServerTest.Validate(ctx)
+				Expect(err).NotTo(HaveOccurred(), "metrics server should collect metrics in mixed mode")
+
+				test.Logger.Info("Metrics server mixed mode test successful")
+			})
+		})
 	})
 })
 
@@ -346,6 +489,10 @@ func ensureMixedModeConnectivity(ctx context.Context, test *suite.PeeredVPCTest,
 		{"udp", dnsPort, podCIDR, "DNS UDP from pod CIDR"},
 		{"tcp", dnsPort, hybridVPCCIDR, "DNS TCP from hybrid subnet"},
 		{"udp", dnsPort, hybridVPCCIDR, "DNS UDP from hybrid subnet"},
+		// HTTPS webhook connectivity for CloudWatch admission controllers
+		{"tcp", webhookPort, cloudVPCCIDR, "HTTPS webhook from cloud VPC"},
+		{"tcp", webhookPort, podCIDR, "HTTPS webhook from pod CIDR"},
+		{"tcp", webhookPort, hybridVPCCIDR, "HTTPS webhook from hybrid subnet"},
 	}
 
 	// Apply rules to both cluster security group and hybrid node security group
@@ -378,6 +525,11 @@ func ensureMixedModeConnectivity(ctx context.Context, test *suite.PeeredVPCTest,
 		test.Logger.Info("CoreDNS distribution configuration had issues - mixed mode will still work", "error", err.Error())
 	} else {
 		test.Logger.Info("CoreDNS distribution configured for optimal mixed mode performance")
+	}
+
+	// Verify CoreDNS pods are distributed across node types
+	if err := kubernetes.VerifyCoreDNSDistribution(ctx, test.K8sClient.Interface, 10*time.Minute, kubernetes.MaxCoreDNSRedistributionAttempts, test.Logger); err != nil {
+		test.Logger.Info("CoreDNS distribution verification had issues", "error", err.Error())
 	}
 
 	return nil
@@ -447,114 +599,24 @@ func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest,
 
 // ensureCoreDNSDistribution configures CoreDNS for optimal mixed mode distribution using AWS best practices
 func ensureCoreDNSDistribution(ctx context.Context, test *suite.PeeredVPCTest) error {
-	test.Logger.Info("Configuring CoreDNS distribution using AWS best practices")
+	test.Logger.Info("Configuring CoreDNS distribution across each node type for mixed mode testing")
 
 	// Step 1: Label hybrid nodes with topology.kubernetes.io/zone=onprem
-	err := labelHybridNodesForTopology(ctx, test)
+	err := kubernetes.LabelHybridNodesForTopology(ctx, test.K8sClient.Interface, test.Logger)
 	if err != nil {
 		return fmt.Errorf("failed to label hybrid nodes: %w", err)
 	}
 
-	// Step 2: Apply AWS recommended preferred anti-affinity configuration
-	coreDNSPatch := `{
-		"spec": {
-			"replicas": 2,
-			"template": {
-				"spec": {
-					"affinity": {
-						"podAntiAffinity": {
-							"preferredDuringSchedulingIgnoredDuringExecution": [
-								{
-									"weight": 100,
-									"podAffinityTerm": {
-										"labelSelector": {
-											"matchExpressions": [
-												{
-													"key": "k8s-app",
-													"operator": "In",
-													"values": ["kube-dns"]
-												}
-											]
-										},
-										"topologyKey": "kubernetes.io/hostname"
-									}
-								},
-								{
-									"weight": 50,
-									"podAffinityTerm": {
-										"labelSelector": {
-											"matchExpressions": [
-												{
-													"key": "k8s-app",
-													"operator": "In", 
-													"values": ["kube-dns"]
-												}
-											]
-										},
-										"topologyKey": "topology.kubernetes.io/zone"
-									}
-								}
-							]
-						}
-					}
-				}
-			}
-		}
-	}`
-
-	_, err = test.K8sClient.Interface.AppsV1().Deployments("kube-system").Patch(ctx, "coredns",
-		types.MergePatchType, []byte(coreDNSPatch), metav1.PatchOptions{})
+	err = kubernetes.ConfigureCoreDNSAntiAffinity(ctx, test.K8sClient.Interface, test.Logger)
 	if err != nil {
-		return fmt.Errorf("failed to configure CoreDNS preferred anti-affinity: %w", err)
+		return fmt.Errorf("failed to configure CoreDNS anti-affinity: %w", err)
 	}
 
-	// Step 3: Configure kube-dns service for traffic distribution
-	serviceTrafficPatch := `{
-		"spec": {
-			"trafficDistribution": "PreferClose"
-		}
-	}`
-
-	_, err = test.K8sClient.Interface.CoreV1().Services("kube-system").Patch(ctx, "kube-dns",
-		types.MergePatchType, []byte(serviceTrafficPatch), metav1.PatchOptions{})
+	err = kubernetes.ConfigureKubeDNSTrafficDistribution(ctx, test.K8sClient.Interface, test.Logger)
 	if err != nil {
 		return fmt.Errorf("failed to configure kube-dns traffic distribution: %w", err)
 	}
 
-	test.Logger.Info("CoreDNS configured with AWS best practices: preferred anti-affinity, traffic distribution, and optimal pod placement")
-	return nil
-}
-
-// labelHybridNodesForTopology adds topology.kubernetes.io/zone=onprem label to hybrid nodes
-func labelHybridNodesForTopology(ctx context.Context, test *suite.PeeredVPCTest) error {
-	// Find all hybrid nodes
-	nodes, err := kubernetes.ListNodesWithLabels(ctx, test.K8sClient.Interface, "eks.amazonaws.com/compute-type=hybrid")
-	if err != nil {
-		return fmt.Errorf("failed to list hybrid nodes: %w", err)
-	}
-
-	if len(nodes.Items) == 0 {
-		test.Logger.Info("No hybrid nodes found to label")
-		return nil
-	}
-
-	// Label each hybrid node with topology zone
-	for _, node := range nodes.Items {
-		labelPatch := `{
-			"metadata": {
-				"labels": {
-					"topology.kubernetes.io/zone": "onprem"
-				}
-			}
-		}`
-
-		err = kubernetes.PatchNode(ctx, test.K8sClient.Interface, node.Name, []byte(labelPatch), test.Logger)
-		if err != nil {
-			return fmt.Errorf("failed to label hybrid node %s: %w", node.Name, err)
-		}
-
-		test.Logger.Info("Labeled hybrid node with topology zone", "node", node.Name, "zone", "onprem")
-	}
-
+	test.Logger.Info("CoreDNS configured with preferred anti-affinity, traffic distribution, and optimal pod placement")
 	return nil
 }

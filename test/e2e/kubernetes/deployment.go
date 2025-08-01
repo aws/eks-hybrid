@@ -145,9 +145,67 @@ func DeleteDeploymentsWithLabels(ctx context.Context, k8s kubernetes.Interface, 
 	for _, deployment := range deployments.Items {
 		if err := DeleteDeploymentAndWait(ctx, k8s, deployment.Name, namespace, logger); err != nil {
 			logger.Info("Deployment cleanup: resource not found or already deleted", "name", deployment.Name)
+		} else {
+			logger.Info("Deleted deployment", "name", deployment.Name)
 		}
 	}
+	return nil
+}
 
-	logger.Info("Completed deployments deletion", "selector", labelSelector, "count", len(deployments.Items))
+// ConfigureCoreDNSAntiAffinity configures CoreDNS deployment with preferred anti-affinity rules
+func ConfigureCoreDNSAntiAffinity(ctx context.Context, k8s kubernetes.Interface, logger logr.Logger) error {
+	coreDNSPatch := `{
+		"spec": {
+			"replicas": 2,
+			"template": {
+				"spec": {
+					"affinity": {
+						"podAntiAffinity": {
+							"preferredDuringSchedulingIgnoredDuringExecution": [
+								{
+									"weight": 100,
+									"podAffinityTerm": {
+										"labelSelector": {
+											"matchExpressions": [
+												{
+													"key": "k8s-app",
+													"operator": "In",
+													"values": ["kube-dns"]
+												}
+											]
+										},
+										"topologyKey": "kubernetes.io/hostname"
+									}
+								},
+								{
+									"weight": 50,
+									"podAffinityTerm": {
+										"labelSelector": {
+											"matchExpressions": [
+												{
+													"key": "k8s-app",
+													"operator": "In", 
+													"values": ["kube-dns"]
+												}
+											]
+										},
+										"topologyKey": "topology.kubernetes.io/zone"
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	_, err := k8s.AppsV1().Deployments("kube-system").Patch(ctx, "coredns",
+		"application/merge-patch+json", []byte(coreDNSPatch), metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to configure CoreDNS preferred anti-affinity: %w", err)
+	}
+
+	logger.Info("Configured CoreDNS deployment with preferred anti-affinity rules")
 	return nil
 }

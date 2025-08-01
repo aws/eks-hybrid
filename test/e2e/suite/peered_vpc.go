@@ -65,8 +65,8 @@ type PeeredVPCTest struct {
 	cfnClient       *cloudformation.Client
 	K8sClient       peeredtypes.K8s
 	K8sClientConfig *rest.Config
-	s3Client        *s3v2.Client
-	iamClient       *iam.Client
+	S3Client        *s3v2.Client
+	IAMClient       *iam.Client
 
 	Logger        logr.Logger
 	loggerControl e2e.PausableLogger
@@ -85,7 +85,7 @@ type PeeredVPCTest struct {
 
 	publicKey string
 
-	podIdentityS3Bucket string
+	PodIdentityS3Bucket string
 
 	// failureMessageLogged tracks if a terminal error due to a failed gomega
 	// expectation has already been registered and logged . It avoids logging
@@ -122,9 +122,9 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	test.EKSClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
 	test.EC2Client = ec2v2.NewFromConfig(aws)
 	test.SSMClient = ssmv2.NewFromConfig(aws)
-	test.s3Client = s3v2.NewFromConfig(aws)
+	test.S3Client = s3v2.NewFromConfig(aws)
 	test.cfnClient = cloudformation.NewFromConfig(aws)
-	test.iamClient = iam.NewFromConfig(aws)
+	test.IAMClient = iam.NewFromConfig(aws)
 
 	ca, err := credentials.ParseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
 	if err != nil {
@@ -159,13 +159,13 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 
-	urls, err := s3.BuildNodeamURLs(ctx, test.s3Client, suite.TestConfig.NodeadmUrlAMD, suite.TestConfig.NodeadmUrlARM)
+	urls, err := s3.BuildNodeamURLs(ctx, test.S3Client, suite.TestConfig.NodeadmUrlAMD, suite.TestConfig.NodeadmUrlARM)
 	if err != nil {
 		return nil, err
 	}
 	test.nodeadmURLs = *urls
 
-	test.podIdentityS3Bucket, err = addon.PodIdentityBucket(ctx, test.s3Client, test.Cluster.Name)
+	test.PodIdentityS3Bucket, err = addon.PodIdentityBucket(ctx, test.S3Client, test.Cluster.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 		NodeCleanup: peered.NodeCleanup{
 			EC2:        t.EC2Client,
 			SSM:        t.SSMClient,
-			S3:         t.s3Client,
+			S3:         t.S3Client,
 			K8s:        t.K8sClient,
 			Logger:     logger,
 			SkipDelete: t.SkipCleanup,
@@ -254,11 +254,11 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 	return &addon.VerifyPodIdentityAddon{
 		Cluster:             t.Cluster.Name,
 		NodeName:            nodeName,
-		PodIdentityS3Bucket: t.podIdentityS3Bucket,
+		PodIdentityS3Bucket: t.PodIdentityS3Bucket,
 		K8S:                 t.K8sClient,
 		EKSClient:           t.EKSClient,
-		IAMClient:           t.iamClient,
-		S3Client:            t.s3Client,
+		IAMClient:           t.IAMClient,
+		S3Client:            t.S3Client,
 		Logger:              t.Logger,
 		K8SConfig:           t.K8sClientConfig,
 		Region:              t.Cluster.Region,
@@ -636,7 +636,7 @@ func (t *PeeredVPCTest) waitForNodegroupActive(ctx context.Context, nodeGroupNam
 			err = deleteWaiter.Wait(ctx, &eks.DescribeNodegroupInput{
 				ClusterName:   aws.String(t.Cluster.Name),
 				NodegroupName: aws.String(nodeGroupName),
-			}, 10*time.Minute)
+			}, 15*time.Minute)
 			if err != nil {
 				t.Logger.Error(err, "Failed to wait for managed node group deletion")
 				return
