@@ -32,7 +32,8 @@ func (v *UlimitValidator) Run(ctx context.Context, informer validation.Informer,
 
 	noFileLimit, nProcLimit, err := getUlimits()
 	if err != nil {
-		return fmt.Errorf("unable to read ulimit configuration: %w", err)
+		err = fmt.Errorf("unable to read ulimit configuration: %w", err)
+		return err
 	}
 
 	issues := v.checkCriticalLimits(noFileLimit, nProcLimit)

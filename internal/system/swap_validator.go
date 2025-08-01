@@ -26,13 +26,15 @@ func (v *SwapValidator) Run(ctx context.Context, informer validation.Informer, _
 
 	swapfiles, err := getSwapfilePaths()
 	if err != nil {
-		return fmt.Errorf("getting swapfile paths : %w", err)
+		err = fmt.Errorf("getting swapfile paths : %w", err)
+		return err
 	}
 
 	// Check for partition-type swap that would cause init to fail
 	hasPartitionSwap, err := partitionSwapExists(swapfiles)
 	if err != nil {
-		return fmt.Errorf("check if partition swap exists: %w", err)
+		err = fmt.Errorf("check if partition swap exists: %w", err)
+		return err
 	}
 
 	if hasPartitionSwap {
@@ -44,7 +46,7 @@ func (v *SwapValidator) Run(ctx context.Context, informer validation.Informer, _
 
 	// Check for any remaining swap (both partition and file types)
 	if len(swapfiles) > 0 {
-		err := fmt.Errorf("swap still active on host: %d swap entries found", len(swapfiles))
+		err = fmt.Errorf("swap still active on host: %d swap entries found", len(swapfiles))
 
 		if len(swapfiles) == 1 && swapfiles[0].swapType == swapTypeFile {
 			err = validation.WithRemediation(err,

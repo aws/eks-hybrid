@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/acmpca"
 	"github.com/aws/aws-sdk-go-v2/service/acmpca/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	awspcav1beta1 "github.com/cert-manager/aws-privateca-issuer/pkg/api/v1beta1"
 	awspcaclientset "github.com/cert-manager/aws-privateca-issuer/pkg/clientset/v1beta1"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -22,7 +21,6 @@ import (
 	clientgo "k8s.io/client-go/kubernetes"
 
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
-	e2errors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -328,12 +326,6 @@ func (p *PCAIssuerTest) setupPodIdentityForPCAIssuer(ctx context.Context) error 
 	}
 
 	createAssociationOutput, err := p.EKSClient.CreatePodIdentityAssociation(ctx, createAssociationInput)
-
-	if err != nil && e2errors.IsType(err, &ekstypes.ResourceInUseException{}) {
-		p.Logger.Info("Pod Identity Association already exists for service account: %s", awsPcaServiceAccountName)
-		return nil
-	}
-
 	if err != nil {
 		return fmt.Errorf("failed to create Pod Identity Association: %v", err)
 	}

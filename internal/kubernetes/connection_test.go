@@ -17,6 +17,7 @@ import (
 func TestCheckConnectionSuccess(t *testing.T) {
 	g := NewGomegaWithT(t)
 	ctx := context.Background()
+	informer := test.NewFakeInformer()
 
 	server := test.NewHTTPSServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -30,8 +31,9 @@ func TestCheckConnectionSuccess(t *testing.T) {
 		},
 	}
 
-	validator := kubernetes.NewConnectionValidator()
-	g.Expect(validator.CheckConnection(ctx, config)).To(Succeed())
+	err := kubernetes.ValidateAPIServerEndpointResolution(ctx, informer, config)
+	g.Expect(err).To(Succeed())
+	g.Expect(informer.Started).To(BeTrue())
 }
 
 func TestCheckConnectionInvalidURL(t *testing.T) {
@@ -47,12 +49,10 @@ func TestCheckConnectionInvalidURL(t *testing.T) {
 		},
 	}
 
-	validator := kubernetes.NewConnectionValidator()
-	err := validator.Run(ctx, informer, config)
+	err := kubernetes.ValidateAPIServerEndpointResolution(ctx, informer, config)
 	g.Expect(err).NotTo(Succeed())
 	g.Expect(informer.Started).To(BeTrue())
-	g.Expect(informer.DoneWith).To(HaveOccurred())
-	g.Expect(validation.Remediation(informer.DoneWith)).To(Equal("Ensure the Kubernetes API server endpoint provided is correct."))
+	g.Expect(validation.Remediation(err)).To(Equal("Ensure the Kubernetes API server endpoint provided is correct."))
 }
 
 func TestCheckConnectionFailureWithAccess(t *testing.T) {
@@ -68,10 +68,9 @@ func TestCheckConnectionFailureWithAccess(t *testing.T) {
 		},
 	}
 
-	validator := kubernetes.NewConnectionValidator()
-	err := validator.Run(ctx, informer, config)
+	err := kubernetes.ValidateAPIServerEndpointResolution(ctx, informer, config)
 	g.Expect(err).NotTo(Succeed())
 	g.Expect(informer.Started).To(BeTrue())
-	g.Expect(informer.DoneWith).To(MatchError(ContainSubstring("connect: connection refused")))
-	g.Expect(validation.Remediation(informer.DoneWith)).To(Equal("Ensure your network configuration allows the node to access the Kubernetes API endpoint."))
+	g.Expect(err).To(MatchError(ContainSubstring("connect: connection refused")))
+	g.Expect(validation.Remediation(err)).To(Equal("Ensure your network configuration allows the node to access the Kubernetes API endpoint."))
 }

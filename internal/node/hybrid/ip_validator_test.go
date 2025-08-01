@@ -446,7 +446,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 
 			hnp, err := hybrid.NewHybridNodeProvider(
 				tt.nodeConfig,
-				[]string{},
+				[]string{"kubelet-cert-validation", "kubelet-version-skew-validation", "ntp-sync-validation", "api-server-endpoint-resolution-validation"},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),
 				hybrid.WithNetwork(tt.network),
@@ -465,7 +465,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 			// Check that all cases pass when node-ip-validation is skipped
 			hnp, err = hybrid.NewHybridNodeProvider(
 				tt.nodeConfig,
-				[]string{"node-ip-validation"},
+				[]string{"node-ip-validation", "kubelet-cert-validation", "kubelet-version-skew-validation", "ntp-sync-validation", "api-server-endpoint-resolution-validation"},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),
 				hybrid.WithNetwork(tt.network),

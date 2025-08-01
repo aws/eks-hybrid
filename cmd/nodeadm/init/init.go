@@ -32,8 +32,8 @@ func Phases() []string {
 	return []string{
 		"install-validation",
 		"cni-validation",
-		"ntp-sync-validation",
 		"node-ip-validation",
+		"credentials-validation",
 		"kubelet-cert-validation",
 		"ssm-api-network-validation",
 		"iam-ra-api-network-validation",
