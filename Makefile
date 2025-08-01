@@ -61,8 +61,8 @@ generate-doc: crd-ref-docs
 	rm doc/api.md.tmp
 
 .PHONY: fmt
-fmt: ## Run go fmt against code.
-	$(GO) fmt ./...
+fmt: gofumpt ## Run gofumpt against code.
+	$(GOFUMPT) -l -w -extra .
 
 .PHONY: vet
 vet: ## Run go vet against code.
@@ -148,6 +148,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT_CONFIG ?= .github/workflows/golangci-lint.yml
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 GINKGO ?= $(LOCALBIN)/ginkgo
+GOFUMPT ?= $(LOCALBIN)/gofumpt
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.1
@@ -155,8 +156,9 @@ CONTROLLER_TOOLS_VERSION ?= v0.16.3
 CODE_GENERATOR_VERSION ?= v0.30.6
 CRD_REF_DOCS_VERSION ?= v0.1.0
 GINKGO_VERSION ?= $(word 2,$(shell $(GO) list -m all | grep github.com/onsi/ginkgo/v2 | tail -1))
+GOFUMPT_VERSION ?= v0.8.0
 
-tools: kustomize controller-gen conversion-gen crd-ref-docs ginkgo ## Install the toolchain.
+tools: kustomize controller-gen conversion-gen crd-ref-docs ginkgo gofumpt ## Install the toolchain.
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
@@ -215,3 +217,9 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint.
 $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 	$(eval GOLANGCI_LINT_VERSION?=$(shell cat .github/workflows/golangci-lint.yml | yq e '.jobs.golangci.steps[] | select(.name == "golangci-lint") .with.version' -))
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION)
+
+.PHONY: gofumpt
+gofumpt: $(GOFUMPT) ## Download gofumpt locally if necessary.
+$(GOFUMPT): $(LOCALBIN)
+	test -s $(LOCALBIN)/gofumpt || \
+	GOBIN=$(LOCALBIN) $(GO) install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
