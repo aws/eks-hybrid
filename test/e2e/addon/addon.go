@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientgo "k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/test/e2e/errors"
@@ -21,7 +22,9 @@ type Addon struct {
 }
 
 const (
-	backoff = 10 * time.Second
+	backoff           = 10 * time.Second
+	addonPollInterval = 10 * time.Second
+	addonPollTimeout  = 10 * time.Minute
 )
 
 func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
@@ -108,9 +111,21 @@ func (a Addon) Delete(ctx context.Context, client *eks.Client, logger logr.Logge
 
 	_, err := client.DeleteAddon(ctx, params)
 
-	if err == nil || errors.IsType(err, &types.ResourceNotFoundException{}) {
-		// Ignore if add-on doesn't exist
+	// Add-on is deleted already
+	if errors.IsType(err, &types.ResourceNotFoundException{}) {
 		return nil
 	}
+
+	// Otherwise let's poll until it's deleted
+	err = wait.PollUntilContextTimeout(ctx, addonPollInterval, addonPollTimeout, true, func(ctx context.Context) (bool, error) {
+		_, err := a.describe(ctx, client)
+		if errors.IsType(err, &types.ResourceNotFoundException{}) {
+			return true, nil
+		}
+
+		logger.Info("Waiting for add-on to be deleted", "ClusterAddon", a.Name)
+		return false, nil
+	})
+
 	return err
 }
