@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -58,7 +57,7 @@ func (c Cilium) Deploy(ctx context.Context) error {
 	}
 	values := map[string]string{
 		"PodCIDR":           c.podCIDR,
-		"ContainerRegistry": constants.EcrAccounId + ".dkr.ecr." + c.region + ".amazonaws.com/quay.io",
+		"ContainerRegistry": "public.ecr.aws/eks",
 	}
 	installation := &bytes.Buffer{}
 	err = tmpl.Execute(installation, values)
