@@ -94,6 +94,7 @@ func (r *Runner[O]) Sequentially(ctx context.Context, obj O) error {
 			}
 		}
 	}
+	r.validations = nil
 
 	if !reflect.DeepEqual(obj, copyObj) {
 		panic("validations must not modify the object under validation")

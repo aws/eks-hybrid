@@ -29,7 +29,7 @@ VALIDATION_CERT="$PKI_DIR/my-server_cert_validation.crt"
 VALIDATION_KEY="$PKI_DIR/my-server_key_validation.key"
 
 # Test 1: Verify that nodeadm init fails when the certificate doesn't exist
-if nodeadm init --skip run,node-ip-validation --config-source file://config-certificate-validation.yaml; then
+if nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config-certificate-validation.yaml; then
     echo "nodeadm init should have failed with iam-roles-anywhere certificate not exist but succeeded unexpectedly"
     exit 1
 fi
@@ -37,7 +37,7 @@ fi
 # Test 2: Verify that INIT fails when the certificate is empty
 touch $VALIDATION_CERT
 touch $VALIDATION_KEY
-if nodeadm init --skip run,node-ip-validation --config-source file://config-certificate-validation.yaml; then
+if nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config-certificate-validation.yaml; then
     echo "nodeadm init should have failed with iam-roles-anywhere certificate file empty but succeeded unexpectedly"
     exit 1
 fi
@@ -48,7 +48,7 @@ rm $VALIDATION_KEY
 # Test 3: Verify that INIT fails when the certificate is corrupted by adding random data
 echo "CORRUPTED_DATA" >> $VALIDATION_CERT
 cp $KEY $VALIDATION_KEY
-if nodeadm init --skip run,node-ip-validation --config-source file://config-certificate-validation.yaml; then
+if nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config-certificate-validation.yaml; then
     echo "nodeadm init should have failed with iam-roles-anywhere certificate wrong file but succeeded unexpectedly"
     exit 1
 fi
@@ -60,7 +60,7 @@ VALIDATION_CERT="$PKI_DIR/my-server_cert_validation.crt"
 cp $CERT $VALIDATION_CERT
 cp $KEY $VALIDATION_KEY
 sed -i '2s/$/A/' "$VALIDATION_CERT"
-if nodeadm init --skip run,node-ip-validation --config-source file://config-certificate-validation.yaml; then
+if nodeadm init --skip run,node-ip-validation,aws-auth-validatio,k8s-authentication-validation --config-source file://config-certificate-validation.yaml; then
     echo "nodeadm init should have failed with iam-roles-anywhere certificate with corrupted file but succeeded unexpectedly"
     exit 1
 fi
@@ -68,6 +68,6 @@ rm $VALIDATION_CERT
 rm $VALIDATION_KEY
 
 # Success case
-nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
+nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config.yaml
 validate-file /etc/systemd/system/aws_signing_helper_update.service 644 expected-aws-signing-helper-systemd-unit
 validate-file /.aws/config 644 expected-aws-config

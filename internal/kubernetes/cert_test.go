@@ -14,10 +14,11 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/test"
 )
+
+const kubeletCurrentCertPath = "/var/lib/kubelet/pki/kubelet-server-current.pem"
 
 func TestCheckKubeletCertificate(t *testing.T) {
 	g := NewGomegaWithT(t)
@@ -168,7 +169,7 @@ func TestCheckKubeletCertificate(t *testing.T) {
 			informer := test.NewFakeInformer()
 
 			tmpDir := t.TempDir()
-			certPath := filepath.Join(tmpDir, kubelet.KubeletCurrentCertPath)
+			certPath := filepath.Join(tmpDir, kubeletCurrentCertPath)
 			g.Expect(os.MkdirAll(filepath.Dir(certPath), 0o755)).To(Succeed())
 			if tt.cert != nil {
 				err := os.WriteFile(certPath, tt.cert, 0o600)

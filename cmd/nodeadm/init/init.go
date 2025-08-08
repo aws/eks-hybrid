@@ -83,7 +83,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 	ctx = logger.NewContext(ctx, log)
 
-	log.Info("Checking user is root..")
+	log.Info("Checking user is root...")
 	root, err := cli.IsRunningAsRoot()
 	if err != nil {
 		return err

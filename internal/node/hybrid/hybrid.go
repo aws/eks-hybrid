@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/aws/sts"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
@@ -18,20 +19,27 @@ import (
 )
 
 const (
+	awsAuthValidation           = "aws-auth-validation"
 	nodeIpValidation            = "node-ip-validation"
 	kubeletCertValidation       = "kubelet-cert-validation"
 	kubeletVersionSkew          = "kubelet-version-skew-validation"
 	ntpSyncValidation           = "ntp-sync-validation"
 	apiServerEndpointResolution = "api-server-endpoint-resolution-validation"
 	proxyValidation             = "proxy-validation"
-	nodeInActiveValidation      = "node-inactive-validation"
+	nodeInactiveValidation      = "node-inactive-validation"
+	kubeletCurrentCertPath      = "/var/lib/kubelet/pki/kubelet-server-current.pem"
 )
+
+type ValidationRunner interface {
+	Run(ctx context.Context, obj *api.NodeConfig, validations ...validation.Validation[*api.NodeConfig]) error
+}
 
 type HybridNodeProvider struct {
 	nodeConfig    *api.NodeConfig
 	validator     func(config *api.NodeConfig) error
 	awsConfig     *aws.Config
 	daemonManager daemon.DaemonManager
+	runner        *validation.Runner[*api.NodeConfig]
 	logger        *zap.Logger
 	cluster       *types.Cluster
 	skipPhases    []string
@@ -50,13 +58,19 @@ func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logg
 		logger:     logger,
 		skipPhases: skipPhases,
 		network:    network.NewDefaultNetwork(),
-		certPath:   kubelet.KubeletCurrentCertPath,
+		certPath:   kubeletCurrentCertPath,
 		kubelet:    kubelet.New(),
 	}
 	np.withHybridValidators()
 	if err := np.withDaemonManager(); err != nil {
 		return nil, err
 	}
+
+	// Create logger printer for structured validation logging
+	printer := validation.NewLoggerPrinterWithLogger(np.logger)
+
+	// Create validation runner with skip phases support
+	np.runner = validation.NewRunner[*api.NodeConfig](printer, validation.WithSkipValidations(np.skipPhases...))
 
 	for _, opt := range opts {
 		opt(np)
@@ -115,19 +129,16 @@ func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 }
 
 func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
-	// Create logger printer for structured validation logging
-	printer := validation.NewLoggerPrinterWithLogger(hnp.logger)
-
-	// Create validation runner with skip phases support
-	runner := validation.NewRunner[*api.NodeConfig](printer, validation.WithSkipValidations(hnp.skipPhases...))
-
 	// Register AWS credential validations if AWS config is available
 	if hnp.awsConfig != nil {
-		runner.Register(creds.Validations(*hnp.awsConfig, hnp.nodeConfig)...)
+		hnp.runner.Register(creds.Validations(*hnp.awsConfig, hnp.nodeConfig)...)
+		hnp.runner.Register(
+			validation.New(awsAuthValidation, sts.NewAuthenticationValidator(*hnp.awsConfig).Run),
+		)
 	}
 
 	// Register all hybrid node validations
-	runner.Register(
+	hnp.runner.Register(
 		validation.New(nodeIpValidation, network.NewNetworkInterfaceValidator(
 			network.WithMTUValidation(false),
 			network.WithCluster(hnp.cluster)).Run),
@@ -138,11 +149,11 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 		validation.New(kubeletVersionSkew, hnp.ValidateKubeletVersionSkew),
 		validation.New(apiServerEndpointResolution, kubernetes.ValidateAPIServerEndpointResolution),
 		validation.New(proxyValidation, network.NewProxyValidator().Run),
-		validation.New(nodeInActiveValidation, hnp.ValidateNodeIsInactive),
+		validation.New(nodeInactiveValidation, hnp.ValidateNodeIsInactive),
 	)
 
 	// Run all validations sequentially
-	if err := runner.Sequentially(ctx, hnp.nodeConfig); err != nil {
+	if err := hnp.runner.Sequentially(ctx, hnp.nodeConfig); err != nil {
 		hnp.logger.Error("Hybrid node validation failures detected", zap.Error(err))
 		return err
 	}
