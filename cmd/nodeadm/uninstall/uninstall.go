@@ -87,7 +87,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	log.Info("Creating daemon manager..")
+	log.Info("Creating daemon manager...")
 	daemonManager, err := daemon.NewDaemonManager()
 	if err != nil {
 		return err

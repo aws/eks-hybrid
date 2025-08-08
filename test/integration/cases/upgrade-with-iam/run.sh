@@ -49,7 +49,7 @@ assert::file-permission-matches /usr/local/bin/aws-iam-authenticator 755
 
 # mock iam-ra update service credentials file
 mock::iamra_aws_credentials
-nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
+nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config.yaml
 validate-file /etc/systemd/system/aws_signing_helper_update.service 644 expected-aws-signing-helper-systemd-unit
 validate-file /.aws/config 644 expected-aws-config
 # The memory reserved by kubelet is dynamic depending on the host that builts the docker image
@@ -84,7 +84,7 @@ systemctl disable aws_signing_helper_update.service
 systemctl daemon-reload
 systemctl reset-failed
 
-nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,node-ip-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,node-ip-validation,k8s-authentication-validation --config-source file://config.yaml
 
 # We expect these artifacts to have changed with upgrade, so their stat files would be different now
 assert::birth-not-match /usr/bin/kubelet
@@ -131,7 +131,7 @@ generate::birth-file /usr/bin/kubelet
 generate::birth-file /usr/local/bin/kubectl
 generate::birth-file /etc/eks/image-credential-provider/ecr-credential-provider
 
-nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation,k8s-authentication-validation --config-source file://config.yaml
 assert::birth-match /usr/bin/kubelet
 assert::birth-match /usr/local/bin/kubectl
 assert::birth-match /usr/bin/containerd

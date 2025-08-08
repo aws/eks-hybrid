@@ -7,9 +7,14 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/kubernetes"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
-const KubeletDaemonName = "kubelet"
+const (
+	KubeletDaemonName                  = "kubelet"
+	kubernetesAuthenticationValidation = "k8s-authentication-validation"
+)
 
 var _ daemon.Daemon = &kubelet{}
 
@@ -27,9 +32,10 @@ type kubelet struct {
 	// kubelet config flags without leading dashes
 	flags                       map[string]string
 	credentialProviderAwsConfig CredentialProviderAwsConfig
+	runner                      *validation.Runner[*api.NodeConfig]
 }
 
-func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config, credentialProviderAwsConfig CredentialProviderAwsConfig) daemon.Daemon {
+func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config, credentialProviderAwsConfig CredentialProviderAwsConfig, runner *validation.Runner[*api.NodeConfig]) daemon.Daemon {
 	return &kubelet{
 		daemonManager:               daemonManager,
 		nodeConfig:                  cfg,
@@ -37,6 +43,7 @@ func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, a
 		environment:                 make(map[string]string),
 		flags:                       make(map[string]string),
 		credentialProviderAwsConfig: credentialProviderAwsConfig,
+		runner:                      runner,
 	}
 }
 
@@ -56,6 +63,16 @@ func (k *kubelet) Configure(ctx context.Context) error {
 	if err := k.writeKubeletEnvironment(); err != nil {
 		return err
 	}
+
+	if k.runner != nil {
+		k.runner.Register(
+			validation.New(kubernetesAuthenticationValidation, kubernetes.NewAPIServerValidator(New()).MakeAuthenticatedRequest),
+		)
+		if err := k.runner.Sequentially(ctx, k.nodeConfig); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

@@ -20,9 +20,9 @@ const (
 // ValidateNodeIsInactive checks to see if the node is potentially active.
 func (hnp *HybridNodeProvider) ValidateNodeIsInactive(ctx context.Context, informer validation.Informer, _ *api.NodeConfig) error {
 	var err error
-	informer.Starting(ctx, nodeInActiveValidation, "Validating that the node is inactive")
+	informer.Starting(ctx, nodeInactiveValidation, "Validating that the node is inactive")
 	defer func() {
-		informer.Done(ctx, nodeInActiveValidation, err)
+		informer.Done(ctx, nodeInactiveValidation, err)
 	}()
 
 	if _, statErr := os.Stat(kubeletEnvironmentFilePath); !os.IsNotExist(statErr) {

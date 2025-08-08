@@ -54,7 +54,7 @@ func (i *Initer) Run(ctx context.Context) error {
 	i.Logger.Info("Setting up system aspects...")
 	for _, aspect := range aspects {
 		nameField := zap.String("name", aspect.Name())
-		i.Logger.Info("Setting up system aspect..", nameField)
+		i.Logger.Info("Setting up system aspect...", nameField)
 		if err := aspect.Setup(); err != nil {
 			return err
 		}
@@ -97,13 +97,13 @@ func initDaemons(ctx context.Context, nodeProvider nodeprovider.NodeProvider, sk
 		for _, daemon := range daemons {
 			nameField := zap.String("name", daemon.Name())
 
-			logger.Info("Ensuring daemon is running..", nameField)
+			logger.Info("Ensuring daemon is running...", nameField)
 			if err := daemon.EnsureRunning(ctx); err != nil {
 				return err
 			}
 			logger.Info("Daemon is running", nameField)
 
-			logger.Info("Running post-launch tasks..", nameField)
+			logger.Info("Running post-launch tasks...", nameField)
 			if err := daemon.PostLaunch(); err != nil {
 				return err
 			}

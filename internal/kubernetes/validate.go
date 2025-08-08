@@ -1,4 +1,4 @@
-package node
+package kubernetes
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	k8s "github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/retry"
 	"github.com/aws/eks-hybrid/internal/validation"
@@ -54,7 +53,7 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 		return err
 	}
 
-	_, err = k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
+	_, err = GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -146,7 +145,7 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 		return err
 	}
 
-	kubeEndpoint, err := k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
+	kubeEndpoint, err := GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err

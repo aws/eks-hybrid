@@ -18,7 +18,7 @@ import (
 var containerdSandboxImageRegex = regexp.MustCompile(`sandbox_image = "(.*)"`)
 
 func cacheSandboxImage(awsConfig *aws.Config) error {
-	zap.L().Info("Looking up current sandbox image in containerd config..")
+	zap.L().Info("Looking up current sandbox image in containerd config...")
 	// capture the output of a `containerd config dump`, which is the final
 	// containerd configuration used after all of the applied transformations
 	dump, err := exec.Command("containerd", "config", "dump").Output()
@@ -32,7 +32,7 @@ func cacheSandboxImage(awsConfig *aws.Config) error {
 	sandboxImage := string(matches[1])
 	zap.L().Info("Found sandbox image", zap.String("image", sandboxImage))
 
-	zap.L().Info("Fetching ECR authorization token..")
+	zap.L().Info("Fetching ECR authorization token...")
 	ecrUserToken, err := ecr.GetAuthorizationToken(awsConfig)
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func cacheSandboxImage(awsConfig *aws.Config) error {
 	authConfig := &v1.AuthConfig{Auth: ecrUserToken}
 
 	return util.RetryExponentialBackoff(3, 2*time.Second, func() error {
-		zap.L().Info("Pulling sandbox image..", zap.String("image", sandboxImage))
+		zap.L().Info("Pulling sandbox image...", zap.String("image", sandboxImage))
 		imageRef, err := client.PullImage(imageSpec, authConfig, nil)
 		if err != nil {
 			return err

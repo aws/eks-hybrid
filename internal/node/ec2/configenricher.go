@@ -15,7 +15,7 @@ import (
 )
 
 func (enp *ec2NodeProvider) Enrich(ctx context.Context, opts ...configenricher.ConfigEnricherOption) error {
-	enp.logger.Info("Fetching instance details..")
+	enp.logger.Info("Fetching instance details...")
 	imdsClient := imds.New(imds.Options{})
 	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithClientLogMode(aws.LogRetries), config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
 		o.Client = imdsClient

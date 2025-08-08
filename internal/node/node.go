@@ -10,7 +10,7 @@ import (
 )
 
 func NewNodeProvider(configSource string, skipPhases []string, logger *zap.Logger) (nodeprovider.NodeProvider, error) {
-	logger.Info("Loading configuration..", zap.String("configSource", configSource))
+	logger.Info("Loading configuration...", zap.String("configSource", configSource))
 	provider, err := configprovider.BuildConfigProvider(configSource)
 	if err != nil {
 		return nil, err
