@@ -9,10 +9,10 @@ affinity:
           - hybrid
 operator:
   image:
-    repository: "{{.ContainerRegistry}}/cilium/operator"
-    tag: "v1.16.7"
+    repository: "public.ecr.aws/eks/cilium/operator"
+    tag: "v1.17.6-0"
     imagePullPolicy: "IfNotPresent"
-    digest: "sha256:25a41ac50bcebfb780ed2970e55a5ba1a5f26996850ed5a694dc69b312e0b5a0"
+    digest: "sha256:5172f58fef324075e9e927090e17a6b7d3d3a630e35c16c700d0377fc2305127"
   replicas: 1
   unmanagedPodWatcher:
     restart: false
@@ -31,13 +31,13 @@ ipam:
 envoy:
   enabled: false
 image:
-  repository: "{{.ContainerRegistry}}/cilium/cilium"
-  tag: "v1.16.7"
+  repository: "public.ecr.aws/eks/cilium/cilium"
+  tag: "v1.17.6-0"
   imagePullPolicy: "IfNotPresent"
-  digest: "sha256:294d2432507fed393b26e9fbfacb25c2e37095578cb34dabac7312b66ed0782e"
+  digest: "sha256:07607f99e841df9d7087003ac3618ba6c3476b87163ddfb631ab6d3368a71ad2"
 preflight:
   image:
-    repository: "{{.ContainerRegistry}}/cilium/cilium"
-    tag: "v1.16.7"
+    repository: "public.ecr.aws/eks/cilium/cilium"
+    tag: "v1.17.6-0"
     imagePullPolicy: "IfNotPresent"
-    digest: "sha256:294d2432507fed393b26e9fbfacb25c2e37095578cb34dabac7312b66ed0782e"
+    digest: "sha256:07607f99e841df9d7087003ac3618ba6c3476b87163ddfb631ab6d3368a71ad2"

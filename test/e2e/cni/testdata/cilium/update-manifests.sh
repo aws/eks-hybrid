@@ -19,8 +19,8 @@ set -o pipefail
 
 CILIUM_VERSION=$1
 
-OPERATOR_DIGEST=$(docker buildx imagetools inspect quay.io/cilium/operator-generic:$CILIUM_VERSION --format '{{json .Manifest.Digest}}')
-CILIUM_DIGEST=$(docker buildx imagetools inspect quay.io/cilium/cilium:$CILIUM_VERSION --format '{{json .Manifest.Digest}}')
+OPERATOR_DIGEST=$(docker buildx imagetools inspect public.ecr.aws/eks/cilium/operator-generic:$CILIUM_VERSION --format '{{json .Manifest.Digest}}')
+CILIUM_DIGEST=$(docker buildx imagetools inspect public.ecr.aws/eks/cilium/cilium:$CILIUM_VERSION --format '{{json .Manifest.Digest}}')
 
 cat <<EOF > ./cilium-values.yaml
 affinity:
@@ -34,7 +34,7 @@ affinity:
           - hybrid
 operator:
   image:
-    repository: "{{.ContainerRegistry}}/cilium/operator"
+    repository: "public.ecr.aws/eks/cilium/operator"
     tag: "$CILIUM_VERSION"
     imagePullPolicy: "IfNotPresent"
     digest: $OPERATOR_DIGEST
@@ -56,22 +56,20 @@ ipam:
 envoy:
   enabled: false
 image:
-  repository: "{{.ContainerRegistry}}/cilium/cilium"
+  repository: "public.ecr.aws/eks/cilium/cilium"
   tag: "$CILIUM_VERSION"
   imagePullPolicy: "IfNotPresent"
   digest: $CILIUM_DIGEST
 preflight:
   image:
-    repository: "{{.ContainerRegistry}}/cilium/cilium"
+    repository: "public.ecr.aws/eks/cilium/cilium"
     tag: "$CILIUM_VERSION"
     imagePullPolicy: "IfNotPresent"
     digest: $CILIUM_DIGEST
 EOF
 
-helm repo add cilium https://helm.cilium.io/
-helm repo update cilium
 # the cilium chart generates different apparmor configuration depending on if the kube version is 1.29 and less vs 1.30 and above
-helm template cilium cilium/cilium --version ${CILIUM_VERSION:1} --kube-version 1.29 --namespace kube-system --values ./cilium-values.yaml --set ipam.operator.clusterPoolIPv4PodCIDRList='\{\{.PodCIDR\}\}' >  ./cilium-template-129.yaml
-helm template cilium cilium/cilium --version ${CILIUM_VERSION:1} --kube-version 1.30 --namespace kube-system --values ./cilium-values.yaml --set ipam.operator.clusterPoolIPv4PodCIDRList='\{\{.PodCIDR\}\}' >  ./cilium-template-130.yaml
+helm template cilium oci://public.ecr.aws/eks/cilium/cilium --version ${CILIUM_VERSION:1} --kube-version 1.29 --namespace kube-system --values ./cilium-values.yaml --set ipam.operator.clusterPoolIPv4PodCIDRList='\{\{.PodCIDR\}\}' >  ./cilium-template-129.yaml
+helm template cilium oci://public.ecr.aws/eks/cilium/cilium --version ${CILIUM_VERSION:1} --kube-version 1.30 --namespace kube-system --values ./cilium-values.yaml --set ipam.operator.clusterPoolIPv4PodCIDRList='\{\{.PodCIDR\}\}' >  ./cilium-template-130.yaml
 
 echo "$CILIUM_VERSION" > VERSION
