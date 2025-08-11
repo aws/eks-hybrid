@@ -230,41 +230,17 @@ func (ksc *kubeletConfig) withResolvConf(resolvConfPath string) {
 }
 
 func (ksc *kubeletConfig) withVersionToggles(kubeletVersion string, flags map[string]string) {
-	// TODO: remove when 1.26 is EOL
-	if semver.Compare(kubeletVersion, "v1.27.0") < 0 {
-		// --container-runtime flag is gone in 1.27+
-		flags["container-runtime"] = "remote"
-		// --container-runtime-endpoint moved to kubelet config start from 1.27
-		// https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.27.md?plain=1#L1800-L1801
-		flags["container-runtime-endpoint"] = ksc.ContainerRuntimeEndpoint
-	}
-
-	// TODO: Remove this during 1.27 EOL
-	// Enable Feature Gate for KubeletCredentialProviders in versions less than 1.28 since this feature flag was removed in 1.28.
-	if semver.Compare(kubeletVersion, "v1.28.0") < 0 {
-		ksc.FeatureGates["KubeletCredentialProviders"] = true
-	}
-
-	// for K8s versions that suport API Priority & Fairness, increase our API server QPS
-	// in 1.27, the default is already increased to 50/100, so use the higher defaults
-	if semver.Compare(kubeletVersion, "v1.22.0") >= 0 && semver.Compare(kubeletVersion, "v1.27.0") < 0 {
-		ksc.KubeAPIQPS = ptr.Int(10)
-		ksc.KubeAPIBurst = ptr.Int(20)
-	}
+	// No version toggles currently
 }
 
 func (ksc *kubeletConfig) withCloudProvider(kubeletVersion string, cfg *api.NodeConfig, flags map[string]string) {
-	if semver.Compare(kubeletVersion, "v1.26.0") >= 0 {
-		// ref: https://github.com/kubernetes/kubernetes/pull/121367
-		flags["cloud-provider"] = "external"
-		// provider ID needs to be specified when the cloud provider is external
-		ksc.ProviderID = ptr.String(getProviderId(cfg.Status.Instance.AvailabilityZone, cfg.Status.Instance.ID))
-		// the name of the Node object must equal the EC2 PrivateDnsName
-		// see: https://github.com/awslabs/amazon-eks-ami/pull/1264
-		flags["hostname-override"] = cfg.Status.Instance.PrivateDNSName
-	} else {
-		flags["cloud-provider"] = "aws"
-	}
+	// ref: https://github.com/kubernetes/kubernetes/pull/121367
+	flags["cloud-provider"] = "external"
+	// provider ID needs to be specified when the cloud provider is external
+	ksc.ProviderID = ptr.String(getProviderId(cfg.Status.Instance.AvailabilityZone, cfg.Status.Instance.ID))
+	// the name of the Node object must equal the EC2 PrivateDnsName
+	// see: https://github.com/awslabs/amazon-eks-ami/pull/1264
+	flags["hostname-override"] = cfg.Status.Instance.PrivateDNSName
 }
 
 // withHybridCloudProvider sets the cloud-provider to "" and sets the appropriate provider-id for the node

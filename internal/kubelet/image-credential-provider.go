@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/mod/semver"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	config "k8s.io/kubelet/config/v1"
 
@@ -53,16 +52,8 @@ func (k *kubelet) writeImageCredentialProviderConfig() error {
 }
 
 func generateImageCredentialProviderConfig(cfg *api.NodeConfig, ecrCredentialProviderBinPath string, kubeletCredentialProviderAwsConfig CredentialProviderAwsConfig) ([]byte, error) {
-	kubeletVersion, err := GetKubeletVersion()
-	if err != nil {
-		return nil, err
-	}
 	configApiVersion := "kubelet.config.k8s.io/v1"
 	providerApiVersion := "credentialprovider.kubelet.k8s.io/v1"
-	if semver.Compare(kubeletVersion, "v1.27.0") < 0 {
-		configApiVersion = "kubelet.config.k8s.io/v1alpha1"
-		providerApiVersion = "credentialprovider.kubelet.k8s.io/v1alpha1"
-	}
 
 	env := []config.ExecEnvVar{}
 	if cfg.IsIAMRolesAnywhere() {
