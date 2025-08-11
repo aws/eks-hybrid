@@ -22,7 +22,7 @@ systemctl start firewalld
 # allow cilium vxlan
 firewall-cmd --permanent --add-port=4789/udp
 
-nodeadm init --skip run,install-validation,node-ip-validation --config-source file://config.yaml
+nodeadm init --skip run,install-validation,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config.yaml
 
 # Check if aws config file has been created as specifed in NodeConfig
 assert::files-equal /.aws/config expected-aws-config
@@ -41,7 +41,7 @@ assert::allowed-by-firewalld "30000-32767" "tcp"
 
 exit_code=0
 systemctl stop firewalld
-STDERR=$(nodeadm init --skip run,install-validation --config-source file://config.yaml 2>&1) || exit_code=$?
+STDERR=$(nodeadm init --skip run,install-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config.yaml 2>&1) || exit_code=$?
 if [ $exit_code -ne 0]; then
   echo "nodeadm init should not fail with firewall-cmd installed but firewalld service not running"
   exit 1

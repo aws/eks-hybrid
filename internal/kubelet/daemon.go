@@ -4,12 +4,18 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/kubernetes"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
-const KubeletDaemonName = "kubelet"
+const (
+	KubeletDaemonName                  = "kubelet"
+	kubernetesAuthenticationValidation = "k8s-authentication-validation"
+)
 
 var _ daemon.Daemon = &kubelet{}
 
@@ -27,10 +33,11 @@ type kubelet struct {
 	// kubelet config flags without leading dashes
 	flags                       map[string]string
 	credentialProviderAwsConfig CredentialProviderAwsConfig
+	validationRunner            *validation.Runner[*api.NodeConfig]
 }
 
-func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config, credentialProviderAwsConfig CredentialProviderAwsConfig) daemon.Daemon {
-	return &kubelet{
+func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config, credentialProviderAwsConfig CredentialProviderAwsConfig, logger *zap.Logger, skipPhases []string) daemon.Daemon {
+	kubeletDaemon := &kubelet{
 		daemonManager:               daemonManager,
 		nodeConfig:                  cfg,
 		awsConfig:                   awsConfig,
@@ -38,6 +45,12 @@ func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, a
 		flags:                       make(map[string]string),
 		credentialProviderAwsConfig: credentialProviderAwsConfig,
 	}
+
+	if logger != nil && skipPhases != nil {
+		kubeletDaemon.validationRunner = validation.NewRunner[*api.NodeConfig](validation.NewLoggerPrinterWithLogger(logger), validation.WithSkipValidations(skipPhases...))
+	}
+
+	return kubeletDaemon
 }
 
 func (k *kubelet) Configure(ctx context.Context) error {
@@ -56,6 +69,16 @@ func (k *kubelet) Configure(ctx context.Context) error {
 	if err := k.writeKubeletEnvironment(); err != nil {
 		return err
 	}
+
+	if k.validationRunner != nil {
+		k.validationRunner.Register(
+			validation.New(kubernetesAuthenticationValidation, kubernetes.NewAPIServerValidator(New()).MakeAuthenticatedRequest),
+		)
+		if err := k.validationRunner.Sequentially(ctx, k.nodeConfig); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

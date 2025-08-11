@@ -19,7 +19,7 @@ assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 
 # mock iam-ra update service credentials file
 mock::iamra_aws_credentials
-nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
+nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config.yaml
 
 nodeadm uninstall --skip run,node-validation,pod-validation
 
@@ -33,7 +33,7 @@ yq -i '.Artifacts.Containerd = ""' /opt/nodeadm/tracker
 
 # mock iam-ra update service credentials file
 mock::iamra_aws_credentials
-nodeadm init --skip run,node-ip-validation --config-source file://config.yaml
+nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config.yaml
 
 nodeadm uninstall --skip run,node-validation,pod-validation
 

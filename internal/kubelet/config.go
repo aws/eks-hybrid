@@ -181,7 +181,7 @@ func (ksc *kubeletConfig) withFallbackClusterDns(cluster *api.ClusterDetails) er
 //     disconnected state.
 func (ksc *kubeletConfig) withOutpostSetup(cfg *api.NodeConfig) error {
 	if enabled := cfg.Spec.Cluster.EnableOutpost; enabled != nil && *enabled {
-		zap.L().Info("Setting up outpost..")
+		zap.L().Info("Setting up outpost...")
 
 		if cfg.Spec.Cluster.ID == "" {
 			return fmt.Errorf("clusterId cannot be empty when outpost is enabled.")
@@ -412,7 +412,7 @@ func (k *kubelet) writeKubeletConfigToFile() error {
 	configPath := path.Join(kubeletConfigRoot, kubeletConfigFile)
 	k.flags["config"] = configPath
 
-	zap.L().Info("Writing kubelet config to file..", zap.String("path", configPath))
+	zap.L().Info("Writing kubelet config to file...", zap.String("path", configPath))
 	return util.WriteFileWithDir(configPath, kubeletConfigBytes, kubeletConfigPerm)
 }
 
@@ -433,7 +433,7 @@ func (k *kubelet) writeKubeletConfigToDir() error {
 	configPath := path.Join(kubeletConfigRoot, kubeletConfigFile)
 	k.flags["config"] = configPath
 
-	zap.L().Info("Writing kubelet config to file..", zap.String("path", configPath))
+	zap.L().Info("Writing kubelet config to file...", zap.String("path", configPath))
 	if err := util.WriteFileWithDir(configPath, kubeletConfigBytes, kubeletConfigPerm); err != nil {
 		return err
 	}
@@ -442,7 +442,7 @@ func (k *kubelet) writeKubeletConfigToDir() error {
 		dirPath := path.Join(kubeletConfigRoot, kubeletConfigDir)
 		k.flags["config-dir"] = dirPath
 
-		zap.L().Info("Enabling kubelet config drop-in dir..")
+		zap.L().Info("Enabling kubelet config drop-in dir...")
 		k.setEnv("KUBELET_CONFIG_DROPIN_DIR_ALPHA", "on")
 		filePath := path.Join(dirPath, "00-nodeadm.conf")
 
@@ -454,7 +454,7 @@ func (k *kubelet) writeKubeletConfigToDir() error {
 			return err
 		}
 
-		zap.L().Info("Writing user kubelet config to drop-in file..", zap.String("path", filePath))
+		zap.L().Info("Writing user kubelet config to drop-in file...", zap.String("path", filePath))
 		userKubeletConfigBytes, err := json.MarshalIndent(userKubeletConfigMap, "", strings.Repeat(" ", 4))
 		if err != nil {
 			return err

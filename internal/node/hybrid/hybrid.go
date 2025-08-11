@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/aws/sts"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
@@ -18,13 +19,15 @@ import (
 )
 
 const (
+	awsAuthValidation           = "aws-auth-validation"
 	nodeIpValidation            = "node-ip-validation"
 	kubeletCertValidation       = "kubelet-cert-validation"
 	kubeletVersionSkew          = "kubelet-version-skew-validation"
 	ntpSyncValidation           = "ntp-sync-validation"
 	apiServerEndpointResolution = "api-server-endpoint-resolution-validation"
 	proxyValidation             = "proxy-validation"
-	nodeInActiveValidation      = "node-inactive-validation"
+	nodeInactiveValidation      = "node-inactive-validation"
+	kubeletCurrentCertPath      = "/var/lib/kubelet/pki/kubelet-server-current.pem"
 )
 
 type HybridNodeProvider struct {
@@ -50,7 +53,7 @@ func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logg
 		logger:     logger,
 		skipPhases: skipPhases,
 		network:    network.NewDefaultNetwork(),
-		certPath:   kubelet.KubeletCurrentCertPath,
+		certPath:   kubeletCurrentCertPath,
 		kubelet:    kubelet.New(),
 	}
 	np.withHybridValidators()
@@ -124,6 +127,9 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 	// Register AWS credential validations if AWS config is available
 	if hnp.awsConfig != nil {
 		runner.Register(creds.Validations(*hnp.awsConfig, hnp.nodeConfig)...)
+		runner.Register(
+			validation.New(awsAuthValidation, sts.NewAuthenticationValidator(*hnp.awsConfig).Run),
+		)
 	}
 
 	// Register all hybrid node validations
@@ -138,7 +144,7 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 		validation.New(kubeletVersionSkew, hnp.ValidateKubeletVersionSkew),
 		validation.New(apiServerEndpointResolution, kubernetes.ValidateAPIServerEndpointResolution),
 		validation.New(proxyValidation, network.NewProxyValidator().Run),
-		validation.New(nodeInActiveValidation, hnp.ValidateNodeIsInactive),
+		validation.New(nodeInactiveValidation, hnp.ValidateNodeIsInactive),
 	)
 
 	// Run all validations sequentially

@@ -120,6 +120,7 @@ func TestHybridNodeProvider_ValidateKubeletVersionSkew(t *testing.T) {
 					"api-server-endpoint-resolution-validation",
 					"proxy-validation",
 					"node-inactive-validation",
+					"aws-auth-validation",
 				},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),

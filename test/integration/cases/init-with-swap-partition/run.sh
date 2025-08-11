@@ -21,7 +21,7 @@ mount --bind $(pwd)/swaps-partition /proc/swaps
 assert::path-exists /usr/bin/containerd
 
 exit_code=0
-STDERR=$(nodeadm init --config-source file://config.yaml --skip node-ip-validation 2>&1) || exit_code=$?
+STDERR=$(nodeadm init --config-source file://config.yaml --skip node-ip-validation,aws-auth-validation,k8s-authentication-validation 2>&1) || exit_code=$?
 if [ $exit_code -ne 0 ]; then
     assert::is-substring "$STDERR" "partition type swap found on the host"
 else
@@ -30,7 +30,7 @@ else
 fi
 
 mount --bind $(pwd)/swaps-file /proc/swaps
-if ! nodeadm init --skip run,node-ip-validation --config-source file://config.yaml; then
+if ! nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config.yaml; then
     echo "nodeadm should have successfully completed init"
     exit 1
 fi

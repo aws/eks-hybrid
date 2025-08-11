@@ -16,5 +16,5 @@ wait::dbus-ready
 #
 # see: https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/
 
-nodeadm init --skip run,install-validation --config-source file://config.yaml
+nodeadm init --skip run,install-validation,k8s-authentication-validation --config-source file://config.yaml
 assert::json-files-equal /etc/kubernetes/kubelet/config.json expected-kubelet-config.json

@@ -119,7 +119,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
-	log.Info("Loading configuration..", zap.String("configSource", c.configSource))
+	log.Info("Loading configuration...", zap.String("configSource", c.configSource))
 	nodeProvider, err := node.NewNodeProvider(c.configSource, c.skipPhases, log)
 	if err != nil {
 		return err
@@ -157,7 +157,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 
-	log.Info("Creating daemon manager..")
+	log.Info("Creating daemon manager...")
 	daemonManager, err := daemon.NewDaemonManager()
 	if err != nil {
 		return err

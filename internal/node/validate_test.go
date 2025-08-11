@@ -21,7 +21,7 @@ import (
 	fakeTesting "k8s.io/client-go/testing"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/node"
+	k8s "github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/test"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
@@ -60,7 +60,7 @@ func TestAPIServerValidator_MakeAuthenticatedRequest(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, "v1.28.0")
 
-			v := node.NewAPIServerValidator(kubelet)
+			v := k8s.NewAPIServerValidator(kubelet)
 			err := v.MakeAuthenticatedRequest(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -83,7 +83,7 @@ func TestAPIServerValidator_MakeAuthenticatedRequest_FailBuildingClient(t *testi
 	kubelet := newMockKubelet(nil, "v1.28.0")
 	kubelet.clientError = errors.New("can't build client")
 
-	v := node.NewAPIServerValidator(kubelet)
+	v := k8s.NewAPIServerValidator(kubelet)
 	err := v.MakeAuthenticatedRequest(ctx, informer, nodeConfig)
 
 	g.Expect(err).To(MatchError(ContainSubstring("can't build client")))
@@ -214,7 +214,7 @@ func TestAPIServerValidator_CheckVPCEndpointAccess(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, "v1.28.0")
 
-			v := node.NewAPIServerValidator(kubelet)
+			v := k8s.NewAPIServerValidator(kubelet)
 			err := v.CheckVPCEndpointAccess(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -329,7 +329,7 @@ func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 			nodeConfig := &api.NodeConfig{}
 			kubelet := newMockKubelet(client, tc.kubeletVersion)
 
-			v := node.NewAPIServerValidator(kubelet)
+			v := k8s.NewAPIServerValidator(kubelet)
 			err := v.CheckIdentity(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())

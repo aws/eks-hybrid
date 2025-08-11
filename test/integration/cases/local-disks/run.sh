@@ -12,6 +12,6 @@ mock::kubelet 1.29.0
 
 mock::setup-local-disks
 
-nodeadm init --skip run,install-validation --config-source file://config.yaml
+nodeadm init --skip run,install-validation,k8s-authentication-validation --config-source file://config.yaml
 
 assert::file-contains /var/log/setup-local-disks.log 'raid0'

@@ -41,13 +41,13 @@ func writeContainerdConfig(cfg *api.NodeConfig) error {
 	if err != nil {
 		return err
 	}
-	zap.L().Info("Writing containerd config to file..", zap.String("path", containerdConfigFile))
+	zap.L().Info("Writing containerd config to file...", zap.String("path", containerdConfigFile))
 	if err := util.WriteFileWithDir(containerdConfigFile, containerdConfig, containerdConfigPerm); err != nil {
 		return err
 	}
 	if len(cfg.Spec.Containerd.Config) > 0 {
 		containerConfigImportPath := filepath.Join(containerdConfigImportDir, "00-nodeadm.toml")
-		zap.L().Info("Writing user containerd config to drop-in file..", zap.String("path", containerConfigImportPath))
+		zap.L().Info("Writing user containerd config to drop-in file...", zap.String("path", containerConfigImportPath))
 		return util.WriteFileWithDir(containerConfigImportPath, []byte(cfg.Spec.Containerd.Config), containerdConfigPerm)
 	}
 	return nil

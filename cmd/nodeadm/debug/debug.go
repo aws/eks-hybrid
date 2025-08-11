@@ -21,7 +21,6 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/network"
-	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
@@ -93,7 +92,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	os.Stderr = printer.File
 
 	runner := validation.NewRunner[*api.NodeConfig](printer)
-	apiServerValidator := node.NewAPIServerValidator(kubelet.New())
+	apiServerValidator := kubernetes.NewAPIServerValidator(kubelet.New())
 	clusterProvider := kubernetes.NewClusterProvider(awsConfig)
 
 	// Register validations that do not require cluster details first

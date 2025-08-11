@@ -5,9 +5,10 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/certificate"
-	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
+
+const kubeletCurrentCertPath = "/var/lib/kubelet/pki/kubelet-server-current.pem"
 
 type KubeletCertificateValidator struct {
 	// CertPath is the full path to the kubelet certificate
@@ -32,7 +33,7 @@ func WithIgnoreDateAndNoCertErrors(ignore bool) func(*KubeletCertificateValidato
 func NewKubeletCertificateValidator(cluster *api.ClusterDetails, opts ...func(*KubeletCertificateValidator)) KubeletCertificateValidator {
 	v := &KubeletCertificateValidator{
 		cluster:  cluster,
-		certPath: kubelet.KubeletCurrentCertPath,
+		certPath: kubeletCurrentCertPath,
 	}
 	for _, opt := range opts {
 		opt(v)
