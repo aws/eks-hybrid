@@ -24,7 +24,7 @@ type Addon struct {
 const (
 	backoff           = 10 * time.Second
 	addonPollInterval = 10 * time.Second
-	addonPollTimeout  = 10 * time.Minute
+	addonPollTimeout  = 5 * time.Minute
 )
 
 func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
