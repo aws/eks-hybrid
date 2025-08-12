@@ -25,7 +25,7 @@ func (enp *ec2NodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 	}
 	return []daemon.Daemon{
 		containerd.NewContainerdDaemon(enp.daemonManager, enp.nodeConfig, enp.awsConfig, enp.logger),
-		kubelet.NewKubeletDaemon(enp.daemonManager, enp.nodeConfig, enp.awsConfig, kubelet.CredentialProviderAwsConfig{}, nil, nil),
+		kubelet.NewKubeletDaemon(enp.daemonManager, enp.nodeConfig, enp.awsConfig, kubelet.CredentialProviderAwsConfig{}, enp.logger, nil),
 	}, nil
 }
 

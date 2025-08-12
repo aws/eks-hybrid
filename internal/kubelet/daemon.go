@@ -2,6 +2,8 @@ package kubelet
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"go.uber.org/zap"
@@ -34,6 +36,7 @@ type kubelet struct {
 	flags                       map[string]string
 	credentialProviderAwsConfig CredentialProviderAwsConfig
 	validationRunner            *validation.Runner[*api.NodeConfig]
+	logger                      *zap.Logger
 }
 
 func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config, credentialProviderAwsConfig CredentialProviderAwsConfig, logger *zap.Logger, skipPhases []string) daemon.Daemon {
@@ -44,9 +47,10 @@ func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, a
 		environment:                 make(map[string]string),
 		flags:                       make(map[string]string),
 		credentialProviderAwsConfig: credentialProviderAwsConfig,
+		logger:                      logger,
 	}
 
-	if logger != nil && skipPhases != nil {
+	if skipPhases != nil {
 		kubeletDaemon.validationRunner = validation.NewRunner[*api.NodeConfig](validation.NewLoggerPrinterWithLogger(logger), validation.WithSkipValidations(skipPhases...))
 	}
 
@@ -86,11 +90,23 @@ func (k *kubelet) EnsureRunning(ctx context.Context) error {
 	if err := k.daemonManager.DaemonReload(); err != nil {
 		return err
 	}
-	err := k.daemonManager.EnableDaemon(KubeletDaemonName)
-	if err != nil {
+	if err := k.daemonManager.EnableDaemon(KubeletDaemonName); err != nil {
 		return err
 	}
-	return k.daemonManager.RestartDaemon(ctx, KubeletDaemonName)
+	if err := k.daemonManager.RestartDaemon(ctx, KubeletDaemonName); err != nil {
+		return err
+	}
+
+	runningCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	k.logger.Info("Waiting for kubelet to be running...")
+	if err := daemon.WaitForStatus(runningCtx, k.logger, k.daemonManager, KubeletDaemonName, daemon.DaemonStatusRunning, 5*time.Second); err != nil {
+		return fmt.Errorf("waiting for kubelet to be running: %w", err)
+	}
+	k.logger.Info("kubelet is running")
+
+	return nil
 }
 
 func (k *kubelet) PostLaunch() error {
