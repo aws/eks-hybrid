@@ -28,6 +28,6 @@ for region in "us-west-2" "us-west-1"; do
 		# inspecting the image, which returns the manifest/digests
 		# will trigger the pull through cache if the image does not already exist in the repo.
 		# using inspect instead of pull since we do not need the image locally
-		docker buildx imagetools inspect "${registry}/quay.io/${repo}:${CILIUM_VERSION}"
+		docker buildx imagetools inspect "public.ecr.aws/eks/${repo}:${CILIUM_VERSION}"
 	done
 done
