@@ -24,6 +24,8 @@ import (
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
 	e2errors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -198,6 +200,7 @@ func (p *PCAIssuerTest) createPCA(ctx context.Context) (*string, error) {
 			},
 		},
 		CertificateAuthorityType: types.CertificateAuthorityTypeRoot,
+		IdempotencyToken:         aws.String(uuid.New().String()),
 	}
 
 	result, err := p.PCAClient.CreateCertificateAuthority(ctx, input)
