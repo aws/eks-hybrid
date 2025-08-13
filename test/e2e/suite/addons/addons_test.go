@@ -142,318 +142,328 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 
 		When("using ec2 instance as hybrid nodes", func() {
-			It("runs node monitoring agent tests", func(ctx context.Context) {
-				nodeMonitoringAgent := addonEc2Test.NewNodeMonitoringAgentTest()
+			Context("runs node monitoring agent tests", Ordered, func() {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
+					nodeMonitoringAgent := addonEc2Test.NewNodeMonitoringAgentTest()
 
-				DeferCleanup(func(ctx context.Context) {
-					Expect(nodeMonitoringAgent.Delete(ctx)).To(Succeed(), "should cleanup node monitoring agent successfully")
-				})
+					DeferCleanup(func(ctx context.Context) {
+						Expect(nodeMonitoringAgent.Delete(ctx)).To(Succeed(), "should cleanup node monitoring agent successfully")
+					})
 
-				Expect(nodeMonitoringAgent.Create(ctx)).To(
-					Succeed(), "node monitoring agent should have created successfully",
-				)
+					Expect(nodeMonitoringAgent.Create(ctx)).To(
+						Succeed(), "node monitoring agent should have created successfully",
+					)
 
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := nodeMonitoringAgent.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get node monitoring agent logs: %v\n", err)
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := nodeMonitoringAgent.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get node monitoring agent logs: %v\n", err)
+							}
 						}
-					}
-				})
+					})
 
-				Expect(nodeMonitoringAgent.Validate(ctx)).To(
-					Succeed(), "node monitoring agent should have been validated successfully",
-				)
+					Expect(nodeMonitoringAgent.Validate(ctx)).To(
+						Succeed(), "node monitoring agent should have been validated successfully",
+					)
+				}, Label("regular-os"))
+
+				It("uses Bottlerocket OS", func(ctx context.Context) {
+					// Create the node monitoring agent test using the standard method
+					nodeMonitoringAgent := addonEc2Test.NewNodeMonitoringAgentTest()
+					nodeMonitoringAgent.Command = "echo 'watchdog: BUG: soft lockup - CPU#6 stuck for 23s! [VM Thread:4054]' | sudo /usr/sbin/chroot /.bottlerocket/rootfs/ tee -a /dev/kmsg"
+					nodeMonitoringAgent.CommandRunner = ssm.NewBottlerocketSSHOnSSMCommandRunner(addonEc2Test.SSMClient, addonEc2Test.JumpboxInstanceId, addonEc2Test.Logger)
+					labelReq, _ := labels.NewRequirement("os.bottlerocket.aws/version", selection.Exists, []string{})
+					nodeMonitoringAgent.NodeFilter = labels.NewSelector().Add(*labelReq)
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(nodeMonitoringAgent.Delete(ctx)).To(Succeed(), "should cleanup node monitoring agent successfully")
+					})
+
+					Expect(nodeMonitoringAgent.Create(ctx)).To(
+						Succeed(), "node monitoring agent should have created successfully",
+					)
+
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := nodeMonitoringAgent.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get node monitoring agent logs: %v\n", err)
+							}
+						}
+					})
+
+					Expect(nodeMonitoringAgent.Validate(ctx)).To(
+						Succeed(), "node monitoring agent should have been validated successfully",
+					)
+				}, Label("bottlerocket"))
 			}, Label("node-monitoring-agent"))
 
-			It("runs kube state metrics tests", func(ctx context.Context) {
-				kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
+			Context("runs kube state metrics tests", Ordered, func() {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
+					kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
 
-				DeferCleanup(func(ctx context.Context) {
-					Expect(kubeStateMetrics.Delete(ctx)).To(Succeed(), "should cleanup kube state metrics successfully")
-				})
+					DeferCleanup(func(ctx context.Context) {
+						Expect(kubeStateMetrics.Delete(ctx)).To(Succeed(), "should cleanup kube state metrics successfully")
+					})
 
-				Expect(kubeStateMetrics.Create(ctx)).To(
-					Succeed(), "kube state metrics should have created successfully",
-				)
+					Expect(kubeStateMetrics.Create(ctx)).To(
+						Succeed(), "kube state metrics should have created successfully",
+					)
 
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := kubeStateMetrics.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get kube state metrics logs: %v\n", err)
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := kubeStateMetrics.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get kube state metrics logs: %v\n", err)
+							}
 						}
-					}
-				})
+					})
 
-				Expect(kubeStateMetrics.Validate(ctx)).To(
-					Succeed(), "kube state metrics should have been validated successfully",
-				)
+					Expect(kubeStateMetrics.Validate(ctx)).To(
+						Succeed(), "kube state metrics should have been validated successfully",
+					)
+				}, Label("regular-os"))
+
+				It("uses Bottlerocket OS", func(ctx context.Context) {
+					kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(kubeStateMetrics.Delete(ctx)).To(Succeed(), "should cleanup kube state metrics successfully")
+					})
+
+					Expect(kubeStateMetrics.Create(ctx)).To(
+						Succeed(), "kube state metrics should have created successfully",
+					)
+
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := kubeStateMetrics.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get kube state metrics logs: %v\n", err)
+							}
+						}
+					})
+
+					Expect(kubeStateMetrics.Validate(ctx)).To(
+						Succeed(), "kube state metrics should have been validated successfully",
+					)
+				}, Label("bottlerocket"))
 			}, Label("kube-state-metrics"))
 
-			It("runs metrics server tests", func(ctx context.Context) {
-				metricsServer := addonEc2Test.NewMetricsServerTest()
+			Context("runs metrics server tests", Ordered, func() {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
+					metricsServer := addonEc2Test.NewMetricsServerTest()
 
-				DeferCleanup(func(ctx context.Context) {
-					Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
-				})
+					DeferCleanup(func(ctx context.Context) {
+						Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
+					})
 
-				Expect(metricsServer.Create(ctx)).To(
-					Succeed(), "metrics server should have created successfully",
-				)
+					Expect(metricsServer.Create(ctx)).To(
+						Succeed(), "metrics server should have created successfully",
+					)
 
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := metricsServer.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get metrics server logs: %v\n", err)
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := metricsServer.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get metrics server logs: %v\n", err)
+							}
 						}
-					}
-				})
+					})
 
-				Expect(metricsServer.Validate(ctx)).To(
-					Succeed(), "metrics server should have been validated successfully",
-				)
+					Expect(metricsServer.Validate(ctx)).To(
+						Succeed(), "metrics server should have been validated successfully",
+					)
+				}, Label("regular-os"))
+
+				It("uses Bottlerocket OS", func(ctx context.Context) {
+					metricsServer := addonEc2Test.NewMetricsServerTest()
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
+					})
+
+					Expect(metricsServer.Create(ctx)).To(
+						Succeed(), "metrics server should have created successfully",
+					)
+
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := metricsServer.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get metrics server logs: %v\n", err)
+							}
+						}
+					})
+
+					Expect(metricsServer.Validate(ctx)).To(
+						Succeed(), "metrics server should have been validated successfully",
+					)
+				}, Label("bottlerocket"))
 			}, Label("metrics-server"))
 
-			It("runs prometheus node exporter tests", func(ctx context.Context) {
-				prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
+			Context("runs prometheus node exporter tests", Ordered, func() {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
+					prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
 
-				DeferCleanup(func(ctx context.Context) {
-					Expect(prometheusNodeExporter.Delete(ctx)).To(Succeed(), "should cleanup prometheus node exporter successfully")
-				})
+					DeferCleanup(func(ctx context.Context) {
+						Expect(prometheusNodeExporter.Delete(ctx)).To(Succeed(), "should cleanup prometheus node exporter successfully")
+					})
 
-				Expect(prometheusNodeExporter.Create(ctx)).To(
-					Succeed(), "prometheus node exporter should have created successfully",
-				)
+					Expect(prometheusNodeExporter.Create(ctx)).To(
+						Succeed(), "prometheus node exporter should have created successfully",
+					)
 
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := prometheusNodeExporter.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get prometheus node exporter logs: %v\n", err)
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := prometheusNodeExporter.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get prometheus node exporter logs: %v\n", err)
+							}
 						}
-					}
-				})
+					})
 
-				Expect(prometheusNodeExporter.Validate(ctx)).To(
-					Succeed(), "prometheus node exporter should have been validated successfully",
-				)
+					Expect(prometheusNodeExporter.Validate(ctx)).To(
+						Succeed(), "prometheus node exporter should have been validated successfully",
+					)
+				}, Label("regular-os"))
+
+				It("uses Bottlerocket OS", func(ctx context.Context) {
+					prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(prometheusNodeExporter.Delete(ctx)).To(Succeed(), "should cleanup prometheus node exporter successfully")
+					})
+
+					Expect(prometheusNodeExporter.Create(ctx)).To(
+						Succeed(), "prometheus node exporter should have created successfully",
+					)
+
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := prometheusNodeExporter.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get prometheus node exporter logs: %v\n", err)
+							}
+						}
+					})
+
+					Expect(prometheusNodeExporter.Validate(ctx)).To(
+						Succeed(), "prometheus node exporter should have been validated successfully",
+					)
+				}, Label("bottlerocket"))
 			}, Label("prometheus-node-exporter"))
 
-			It("runs nvidia device plugin tests", func(ctx context.Context) {
-				// wait for nvidia drivers to be installed
-				addonEc2Test.Logger.Info("Checking NVIDIA drivers on pre-created GPU node", "nodeName", standardLinuxGPUNodeName)
-				devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(standardLinuxGPUNodeName)
-				Expect(devicePluginTest.WaitForNvidiaDriverReady(ctx)).NotTo(HaveOccurred(), "NVIDIA drivers should be ready")
-				Expect(devicePluginTest.Create(ctx)).To(Succeed(), "nvidia device plugin should have created successfully")
-				Expect(devicePluginTest.Validate(ctx)).To(Succeed(), "nvidia device plugin should have been validated successfully")
-				Expect(devicePluginTest.Delete(ctx)).To(Succeed(), "should clean up nvidia device plugin")
+			Context("runs nvidia device plugin tests", Ordered, func() {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
+					// wait for nvidia drivers to be installed
+					addonEc2Test.Logger.Info("Checking NVIDIA drivers on pre-created GPU node", "nodeName", standardLinuxGPUNodeName)
+					devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(standardLinuxGPUNodeName)
+					Expect(devicePluginTest.WaitForNvidiaDriverReady(ctx)).NotTo(HaveOccurred(), "NVIDIA drivers should be ready")
+					Expect(devicePluginTest.Create(ctx)).To(Succeed(), "nvidia device plugin should have created successfully")
+					Expect(devicePluginTest.Validate(ctx)).To(Succeed(), "nvidia device plugin should have been validated successfully")
+					Expect(devicePluginTest.Delete(ctx)).To(Succeed(), "should clean up nvidia device plugin")
+				}, Label("regular-os"))
+
+				It("uses Bottlerocket OS", func(ctx context.Context) {
+					// wait for nvidia drivers to be installed
+					addonEc2Test.Logger.Info("Checking NVIDIA drivers on pre-created Bottlerocket GPU node", "nodeName", bottlerocketGPUNodeName)
+					devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(bottlerocketGPUNodeName)
+					devicePluginTest.Command = "sudo /usr/sbin/chroot /.bottlerocket/rootfs/ nvidia-smi"
+					devicePluginTest.CommandRunner = ssm.NewBottlerocketSSHOnSSMCommandRunner(addonEc2Test.SSMClient, addonEc2Test.JumpboxInstanceId, addonEc2Test.Logger)
+
+					Expect(devicePluginTest.WaitForNvidiaDriverReady(ctx)).NotTo(HaveOccurred(), "NVIDIA drivers should be ready")
+				}, Label("bottlerocket"))
 			}, Label("nvidia-device-plugin"))
 
-			It("runs cert manager and AWS PCA issuer tests", func(ctx context.Context) {
-				certManager, err := addonEc2Test.NewCertManagerTest(ctx)
-				Expect(err).To(Succeed(), "should have created cert-manager test")
+			Context("runs cert manager and AWS PCA issuer tests", Ordered, func() {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
+					certManager, err := addonEc2Test.NewCertManagerTest(ctx)
+					Expect(err).To(Succeed(), "should have created cert-manager test")
 
-				DeferCleanup(func(ctx context.Context) {
-					Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
-				})
+					DeferCleanup(func(ctx context.Context) {
+						Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
+					})
 
-				Expect(certManager.Create(ctx)).To(
-					Succeed(), "cert manager should have created successfully",
-				)
+					Expect(certManager.Create(ctx)).To(
+						Succeed(), "cert manager should have created successfully",
+					)
 
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := certManager.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get cert manager logs: %v\n", err)
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := certManager.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get cert manager logs: %v\n", err)
+							}
 						}
-					}
-				})
+					})
 
-				Expect(certManager.Validate(ctx)).To(
-					Succeed(), "cert manager and AWS PCA issuer should have been validated successfully",
-				)
+					Expect(certManager.Validate(ctx)).To(
+						Succeed(), "cert manager and AWS PCA issuer should have been validated successfully",
+					)
+				}, Label("regular-os"))
+
+				It("uses Bottlerocket OS", func(ctx context.Context) {
+					certManager, err := addonEc2Test.NewCertManagerTest(ctx)
+					Expect(err).To(Succeed(), "should have created cert-manager test for bottlerocket")
+					certManager.CertName = "bottlerocket-test-cert"
+					certManager.CertNamespace = "bottlerocket-cert-test"
+					certManager.CertSecretName = "bottlerocket-selfsigned-cert-tls"
+					certManager.IssuerName = "bottlerocket-selfsigned-issuer"
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
+					})
+
+					Expect(certManager.Create(ctx)).To(
+						Succeed(), "cert manager should have created successfully",
+					)
+
+					DeferCleanup(func(ctx context.Context) {
+						// only print logs after addon successfully created
+						report := CurrentSpecReport()
+						if report.State.Is(types.SpecStateFailed) {
+							err := certManager.PrintLogs(ctx)
+							if err != nil {
+								// continue cleanup even if logs collection fails
+								GinkgoWriter.Printf("Failed to get cert manager logs: %v\n", err)
+							}
+						}
+					})
+
+					Expect(certManager.Validate(ctx)).To(
+						Succeed(), "cert manager should have been validated successfully",
+					)
+				}, Label("bottlerocket"))
 			}, Label("cert-manager"))
-		})
-
-		When("using Bottlerocket ec2 instance as hybrid nodes", func() {
-			It("runs node monitoring agent tests on Bottlerocket", func(ctx context.Context) {
-				// Create the node monitoring agent test using the standard method
-				nodeMonitoringAgent := addonEc2Test.NewNodeMonitoringAgentTest()
-				nodeMonitoringAgent.Command = "echo 'watchdog: BUG: soft lockup - CPU#6 stuck for 23s! [VM Thread:4054]' | sudo /usr/sbin/chroot /.bottlerocket/rootfs/ tee -a /dev/kmsg"
-				nodeMonitoringAgent.CommandRunner = ssm.NewBottlerocketSSHOnSSMCommandRunner(addonEc2Test.SSMClient, addonEc2Test.JumpboxInstanceId, addonEc2Test.Logger)
-				labelReq, _ := labels.NewRequirement("os.bottlerocket.aws/version", selection.Exists, []string{})
-				nodeMonitoringAgent.NodeFilter = labels.NewSelector().Add(*labelReq)
-
-				DeferCleanup(func(ctx context.Context) {
-					Expect(nodeMonitoringAgent.Delete(ctx)).To(Succeed(), "should cleanup node monitoring agent successfully")
-				})
-
-				Expect(nodeMonitoringAgent.Create(ctx)).To(
-					Succeed(), "node monitoring agent should have created successfully",
-				)
-
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := nodeMonitoringAgent.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get node monitoring agent logs: %v\n", err)
-						}
-					}
-				})
-
-				Expect(nodeMonitoringAgent.Validate(ctx)).To(
-					Succeed(), "node monitoring agent should have been validated successfully",
-				)
-			}, Label("node-monitoring-agent", "bottlerocket"))
-
-			It("runs metrics server tests on Bottlerocket", func(ctx context.Context) {
-				metricsServer := addonEc2Test.NewMetricsServerTest()
-
-				DeferCleanup(func(ctx context.Context) {
-					Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
-				})
-
-				Expect(metricsServer.Create(ctx)).To(
-					Succeed(), "metrics server should have created successfully",
-				)
-
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := metricsServer.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get metrics server logs: %v\n", err)
-						}
-					}
-				})
-
-				Expect(metricsServer.Validate(ctx)).To(
-					Succeed(), "metrics server should have been validated successfully",
-				)
-			}, Label("metrics-server", "bottlerocket"))
-
-			It("runs kube state metrics tests on Bottlerocket", func(ctx context.Context) {
-				kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
-
-				DeferCleanup(func(ctx context.Context) {
-					Expect(kubeStateMetrics.Delete(ctx)).To(Succeed(), "should cleanup kube state metrics successfully")
-				})
-
-				Expect(kubeStateMetrics.Create(ctx)).To(
-					Succeed(), "kube state metrics should have created successfully",
-				)
-
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := kubeStateMetrics.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get kube state metrics logs: %v\n", err)
-						}
-					}
-				})
-
-				Expect(kubeStateMetrics.Validate(ctx)).To(
-					Succeed(), "kube state metrics should have been validated successfully",
-				)
-			}, Label("kube-state-metrics", "bottlerocket"))
-
-			It("runs prometheus node exporter tests on Bottlerocket", func(ctx context.Context) {
-				prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
-
-				DeferCleanup(func(ctx context.Context) {
-					Expect(prometheusNodeExporter.Delete(ctx)).To(Succeed(), "should cleanup prometheus node exporter successfully")
-				})
-
-				Expect(prometheusNodeExporter.Create(ctx)).To(
-					Succeed(), "prometheus node exporter should have created successfully",
-				)
-
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := prometheusNodeExporter.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get prometheus node exporter logs: %v\n", err)
-						}
-					}
-				})
-
-				Expect(prometheusNodeExporter.Validate(ctx)).To(
-					Succeed(), "prometheus node exporter should have been validated successfully",
-				)
-			}, Label("prometheus-node-exporter", "bottlerocket"))
-
-			It("runs nvidia device plugin tests on Bottlerocket", func(ctx context.Context) {
-				// wait for nvidia drivers to be installed
-				addonEc2Test.Logger.Info("Checking NVIDIA drivers on pre-created Bottlerocket GPU node", "nodeName", bottlerocketGPUNodeName)
-				devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(bottlerocketGPUNodeName)
-				devicePluginTest.Command = "sudo /usr/sbin/chroot /.bottlerocket/rootfs/ nvidia-smi"
-				devicePluginTest.CommandRunner = ssm.NewBottlerocketSSHOnSSMCommandRunner(addonEc2Test.SSMClient, addonEc2Test.JumpboxInstanceId, addonEc2Test.Logger)
-
-				Expect(devicePluginTest.WaitForNvidiaDriverReady(ctx)).NotTo(HaveOccurred(), "NVIDIA drivers should be ready")
-			}, Label("nvidia-device-plugin", "bottlerocket"))
-
-			It("runs cert manager tests on Bottlerocket", func(ctx context.Context) {
-				certManager, err := addonEc2Test.NewCertManagerTest(ctx)
-				Expect(err).To(Succeed(), "should have created cert-manager test for bottlerocket")
-				certManager.CertName = "bottlerocket-test-cert"
-				certManager.CertNamespace = "bottlerocket-cert-test"
-				certManager.CertSecretName = "bottlerocket-selfsigned-cert-tls"
-				certManager.IssuerName = "bottlerocket-selfsigned-issuer"
-
-				DeferCleanup(func(ctx context.Context) {
-					Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
-				})
-
-				Expect(certManager.Create(ctx)).To(
-					Succeed(), "cert manager should have created successfully",
-				)
-
-				DeferCleanup(func(ctx context.Context) {
-					// only print logs after addon successfully created
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := certManager.PrintLogs(ctx)
-						if err != nil {
-							// continue cleanup even if logs collection fails
-							GinkgoWriter.Printf("Failed to get cert manager logs: %v\n", err)
-						}
-					}
-				})
-
-				Expect(certManager.Validate(ctx)).To(
-					Succeed(), "cert manager should have been validated successfully",
-				)
-			}, Label("cert-manager", "bottlerocket"))
 		})
 	})
 })
