@@ -17,6 +17,7 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgo "k8s.io/client-go/kubernetes"
@@ -198,6 +199,7 @@ func (p *PCAIssuerTest) createPCA(ctx context.Context) (*string, error) {
 			},
 		},
 		CertificateAuthorityType: types.CertificateAuthorityTypeRoot,
+		IdempotencyToken:         aws.String(uuid.New().String()),
 	}
 
 	result, err := p.PCAClient.CreateCertificateAuthority(ctx, input)
