@@ -140,7 +140,7 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 	// Create PCA Issuer test
 	pcaIssuer := &addon.PCAIssuerTest{
 		Cluster:            a.Cluster.Name,
-		Namespace:          "cert-test",
+		Namespace:          defaultCertNamespace,
 		K8S:                a.K8sClient,
 		EKSClient:          a.EKSClient,
 		CertClient:         certClient,

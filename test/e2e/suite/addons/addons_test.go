@@ -438,6 +438,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					certManager.CertNamespace = "bottlerocket-cert-test"
 					certManager.CertSecretName = "bottlerocket-selfsigned-cert-tls"
 					certManager.IssuerName = "bottlerocket-selfsigned-issuer"
+					certManager.PCAIssuer.Namespace = "bottlerocket-cert-test"
 
 					DeferCleanup(func(ctx context.Context) {
 						Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
