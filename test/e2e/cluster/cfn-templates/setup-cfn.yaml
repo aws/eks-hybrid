@@ -351,6 +351,8 @@ Resources:
 
   TransitGatewayRouteTable:
     Type: AWS::EC2::TransitGatewayRouteTable
+    DependsOn:
+      - ClusterToHybridTGW
     Properties:
       TransitGatewayId: !Ref ClusterToHybridTGW
       Tags:
@@ -570,6 +572,10 @@ Resources:
       ResourceSignal:
         Timeout: PT5M
     DeletionPolicy: Delete
+    DependsOn:
+      - HybridNodeVPCPublicSubnet
+      - JumpboxLaunchTemplate
+      - HybridNodeInternetGatewayAttachment
     Properties:
       LaunchTemplateConfigs:
         - LaunchTemplateSpecification:
