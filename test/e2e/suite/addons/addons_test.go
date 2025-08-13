@@ -143,7 +143,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 		When("using ec2 instance as hybrid nodes", func() {
 			Context("runs node monitoring agent tests", Ordered, func() {
-				It("uses non Bottlerocket OS", func(ctx context.Context) {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
 					nodeMonitoringAgent := addonEc2Test.NewNodeMonitoringAgentTest()
 
 					DeferCleanup(func(ctx context.Context) {
@@ -169,7 +169,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(nodeMonitoringAgent.Validate(ctx)).To(
 						Succeed(), "node monitoring agent should have been validated successfully",
 					)
-				}, Label("non-bottlerocket"))
+				}, Label("regular-os"))
 
 				It("uses Bottlerocket OS", func(ctx context.Context) {
 					// Create the node monitoring agent test using the standard method
@@ -206,7 +206,7 @@ var _ = Describe("Hybrid Nodes", func() {
 			}, Label("node-monitoring-agent"))
 
 			Context("runs kube state metrics tests", Ordered, func() {
-				It("uses non Bottlerocket OS", func(ctx context.Context) {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
 					kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
 
 					DeferCleanup(func(ctx context.Context) {
@@ -232,7 +232,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(kubeStateMetrics.Validate(ctx)).To(
 						Succeed(), "kube state metrics should have been validated successfully",
 					)
-				}, Label("non-bottlerocket"))
+				}, Label("regular-os"))
 
 				It("uses Bottlerocket OS", func(ctx context.Context) {
 					kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
@@ -264,7 +264,7 @@ var _ = Describe("Hybrid Nodes", func() {
 			}, Label("kube-state-metrics"))
 
 			Context("runs metrics server tests", Ordered, func() {
-				It("uses non Bottlerocket OS", func(ctx context.Context) {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
 					metricsServer := addonEc2Test.NewMetricsServerTest()
 
 					DeferCleanup(func(ctx context.Context) {
@@ -290,7 +290,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(metricsServer.Validate(ctx)).To(
 						Succeed(), "metrics server should have been validated successfully",
 					)
-				}, Label("non-bottlerocket"))
+				}, Label("regular-os"))
 
 				It("uses Bottlerocket OS", func(ctx context.Context) {
 					metricsServer := addonEc2Test.NewMetricsServerTest()
@@ -322,7 +322,7 @@ var _ = Describe("Hybrid Nodes", func() {
 			}, Label("metrics-server"))
 
 			Context("runs prometheus node exporter tests", Ordered, func() {
-				It("uses non Bottlerocket OS", func(ctx context.Context) {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
 					prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
 
 					DeferCleanup(func(ctx context.Context) {
@@ -348,7 +348,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(prometheusNodeExporter.Validate(ctx)).To(
 						Succeed(), "prometheus node exporter should have been validated successfully",
 					)
-				}, Label("non-bottlerocket"))
+				}, Label("regular-os"))
 
 				It("uses Bottlerocket OS", func(ctx context.Context) {
 					prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
@@ -380,7 +380,7 @@ var _ = Describe("Hybrid Nodes", func() {
 			}, Label("prometheus-node-exporter"))
 
 			Context("runs nvidia device plugin tests", Ordered, func() {
-				It("uses non Bottlerocket OS", func(ctx context.Context) {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
 					// wait for nvidia drivers to be installed
 					addonEc2Test.Logger.Info("Checking NVIDIA drivers on pre-created GPU node", "nodeName", standardLinuxGPUNodeName)
 					devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(standardLinuxGPUNodeName)
@@ -388,7 +388,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(devicePluginTest.Create(ctx)).To(Succeed(), "nvidia device plugin should have created successfully")
 					Expect(devicePluginTest.Validate(ctx)).To(Succeed(), "nvidia device plugin should have been validated successfully")
 					Expect(devicePluginTest.Delete(ctx)).To(Succeed(), "should clean up nvidia device plugin")
-				}, Label("non-bottlerocket"))
+				}, Label("regular-os"))
 
 				It("uses Bottlerocket OS", func(ctx context.Context) {
 					// wait for nvidia drivers to be installed
@@ -402,7 +402,7 @@ var _ = Describe("Hybrid Nodes", func() {
 			}, Label("nvidia-device-plugin"))
 
 			Context("runs cert manager and AWS PCA issuer tests", Ordered, func() {
-				It("uses non Bottlerocket OS", func(ctx context.Context) {
+				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
 					certManager, err := addonEc2Test.NewCertManagerTest(ctx)
 					Expect(err).To(Succeed(), "should have created cert-manager test")
 
@@ -429,7 +429,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(certManager.Validate(ctx)).To(
 						Succeed(), "cert manager and AWS PCA issuer should have been validated successfully",
 					)
-				}, Label("non-bottlerocket"))
+				}, Label("regular-os"))
 
 				It("uses Bottlerocket OS", func(ctx context.Context) {
 					certManager, err := addonEc2Test.NewCertManagerTest(ctx)
