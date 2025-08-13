@@ -22,7 +22,6 @@ type Addon struct {
 }
 
 const (
-	backoff           = 10 * time.Second
 	addonPollInterval = 10 * time.Second
 	addonPollTimeout  = 5 * time.Minute
 )
@@ -62,31 +61,31 @@ func (a Addon) describe(ctx context.Context, client *eks.Client) (*types.Addon, 
 func (a Addon) WaitUntilActive(ctx context.Context, client *eks.Client, logger logr.Logger) error {
 	logger.Info("Describe cluster add-on", "ClusterAddon", a.Name)
 
-	for {
+	err := wait.PollUntilContextTimeout(ctx, addonPollInterval, addonPollTimeout, true, func(ctx context.Context) (bool, error) {
 		addon, err := a.describe(ctx, client)
 		if err != nil {
 			logger.Error(err, "Failed to describe cluster add-on")
-		} else if addon.Status == types.AddonStatusCreateFailed ||
+			return false, nil
+		}
+
+		if addon.Status == types.AddonStatusCreateFailed ||
 			addon.Status == types.AddonStatusDeleteFailed ||
 			addon.Status == types.AddonStatusUpdateFailed {
-			return fmt.Errorf("add-on %s is in errored terminal status: %s", a.Name, addon.Status)
-		} else if addon.Status == types.AddonStatusCreating || addon.Status == types.AddonStatusUpdating {
-			logger.Info("Add-on is still in creating or updating status", "ClusterAddon", a.Name, "Status", addon.Status)
-		} else {
+			return false, fmt.Errorf("add-on %s is in errored terminal status: %s", a.Name, addon.Status)
+		}
+
+		if addon.Status == types.AddonStatusActive || addon.Status == types.AddonStatusDegraded {
 			// Add-on is either active or degraded
 			// in our case degraded is acceptable since this is usually due to there not being enough replicas
 			// which happens as we create and delete nodes
-			return nil
+			return true, nil
 		}
 
 		logger.Info("Waiting for add-on to be ACTIVE", "ClusterAddon", a.Name)
+		return false, nil
+	})
 
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("add-on %s still has status %s: %w", a.Name, addon.Status, ctx.Err())
-		case <-time.After(backoff):
-		}
-	}
+	return err
 }
 
 func (a Addon) CreateAndWaitForActive(ctx context.Context, eksClient *eks.Client, k8s clientgo.Interface, logger logr.Logger) error {
