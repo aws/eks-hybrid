@@ -60,33 +60,34 @@ func (a Addon) describe(ctx context.Context, client *eks.Client) (*types.Addon, 
 }
 
 func (a Addon) WaitUntilActive(ctx context.Context, client *eks.Client, logger logr.Logger) error {
-	logger.Info("Describe cluster add-on", "ClusterAddon", a.Name)
+	logger.Info("Waiting for cluster add-on to become active", "ClusterAddon", a.Name)
 
-	for {
+	err := wait.PollUntilContextTimeout(ctx, addonPollInterval, addonPollTimeout, true, func(ctx context.Context) (bool, error) {
 		addon, err := a.describe(ctx, client)
 		if err != nil {
 			logger.Error(err, "Failed to describe cluster add-on")
-		} else if addon.Status == types.AddonStatusCreateFailed ||
+			return false, nil // Continue polling on describe errors
+		}
+
+		if addon.Status == types.AddonStatusCreateFailed ||
 			addon.Status == types.AddonStatusDeleteFailed ||
 			addon.Status == types.AddonStatusUpdateFailed {
-			return fmt.Errorf("add-on %s is in errored terminal status: %s", a.Name, addon.Status)
-		} else if addon.Status == types.AddonStatusCreating || addon.Status == types.AddonStatusUpdating {
+			return false, fmt.Errorf("add-on %s is in errored terminal status: %s", a.Name, addon.Status)
+		}
+
+		if addon.Status == types.AddonStatusCreating || addon.Status == types.AddonStatusUpdating {
 			logger.Info("Add-on is still in creating or updating status", "ClusterAddon", a.Name, "Status", addon.Status)
-		} else {
-			// Add-on is either active or degraded
-			// in our case degraded is acceptable since this is usually due to there not being enough replicas
-			// which happens as we create and delete nodes
-			return nil
+			return false, nil
 		}
 
-		logger.Info("Waiting for add-on to be ACTIVE", "ClusterAddon", a.Name)
+		// Add-on is either active or degraded
+		// in our case degraded is acceptable since this is usually due to there not being enough replicas
+		// which happens as we create and delete nodes
+		logger.Info("Add-on has reached active/degraded status", "ClusterAddon", a.Name, "Status", addon.Status)
+		return true, nil
+	})
 
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("add-on %s still has status %s: %w", a.Name, addon.Status, ctx.Err())
-		case <-time.After(backoff):
-		}
-	}
+	return err
 }
 
 func (a Addon) CreateAndWaitForActive(ctx context.Context, eksClient *eks.Client, k8s clientgo.Interface, logger logr.Logger) error {

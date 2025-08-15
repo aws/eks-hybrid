@@ -57,7 +57,7 @@ type SuiteConfiguration struct {
 }
 
 type PeeredVPCTest struct {
-	aws             aws.Config
+	AWS             aws.Config
 	eksEndpoint     string
 	EKSClient       *eks.Client
 	EC2Client       *ec2v2.Client
@@ -118,7 +118,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 
-	test.aws = aws
+	test.AWS = aws
 	test.EKSClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
 	test.EC2Client = ec2v2.NewFromConfig(aws)
 	test.SSMClient = ssmv2.NewFromConfig(aws)
@@ -182,7 +182,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 	remoteCommandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger)
 	return &peered.Node{
 		NodeCreate: peered.NodeCreate{
-			AWS:                 t.aws,
+			AWS:                 t.AWS,
 			EC2:                 t.EC2Client,
 			SSM:                 t.SSMClient,
 			K8sClientConfig:     t.K8sClientConfig,
