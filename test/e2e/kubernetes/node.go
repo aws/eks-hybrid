@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -394,4 +395,116 @@ func CountCoreDNSDistribution(ctx context.Context, k8s kubernetes.Interface, pod
 	}
 
 	return hybridCount, cloudCount
+}
+
+// HandleRHELNodes detects RHEL nodes and creates required directories for CloudWatch
+// Fix for issue where FluentBit pods fail on RHEL nodes due to missing /var/log/journal directory,
+// causing CloudWatch addon to hang in CREATING state. RHEL nodes don't create this directory by default.
+func HandleRHELNodes(ctx context.Context, k8sClient kubernetes.Interface, logger logr.Logger) error {
+	logger.Info("Checking for RHEL nodes and creating required directories")
+
+	// Get all nodes
+	nodes, err := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("listing nodes: %w", err)
+	}
+
+	rhelNodes := []string{}
+	for _, node := range nodes.Items {
+		// Check if node is running RHEL
+		osImage, exists := node.Status.NodeInfo.OSImage, true
+		if exists && strings.Contains(strings.ToLower(osImage), "red hat") {
+			rhelNodes = append(rhelNodes, node.Name)
+			logger.Info("Found RHEL node", "nodeName", node.Name, "osImage", osImage)
+		}
+	}
+
+	if len(rhelNodes) == 0 {
+		logger.Info("No RHEL nodes found, skipping directory creation")
+		return nil
+	}
+
+	logger.Info("Creating required directories on RHEL nodes", "rhelNodes", rhelNodes)
+
+	// Create directories on each RHEL node
+	for _, nodeName := range rhelNodes {
+		if err := createDirectoriesOnNode(ctx, k8sClient, nodeName, logger); err != nil {
+			return fmt.Errorf("creating directories on node %s: %w", nodeName, err)
+		}
+	}
+
+	logger.Info("Successfully created required directories on all RHEL nodes")
+	return nil
+}
+
+// createDirectoriesOnNode creates the required directories on a specific RHEL node
+func createDirectoriesOnNode(ctx context.Context, k8sClient kubernetes.Interface, nodeName string, logger logr.Logger) error {
+	logger.Info("Creating /var/log/journal directory on RHEL node", "nodeName", nodeName)
+
+	// Create pod to create directories
+	podName := fmt.Sprintf("create-dirs-%s", strings.ToLower(strings.ReplaceAll(nodeName, ".", "-")))
+
+	// Define the pod spec
+	podSpec := fmt.Sprintf(`
+apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: default
+spec:
+  nodeName: %s
+  hostPID: true
+  restartPolicy: Never
+  containers:
+  - name: mkdir
+    image: busybox:latest
+    command: ["sh", "-c", "mkdir -p /host/var/log/journal && echo 'Successfully created /var/log/journal on %s'"]
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: host
+      mountPath: /host
+  volumes:
+  - name: host
+    hostPath:
+      path: /
+      type: Directory
+`, podName, nodeName, nodeName)
+
+	// Apply the pod
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(podSpec)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("creating directory pod: %w, output: %s", err, string(output))
+	}
+
+	// Wait for pod to complete
+	for i := 0; i < 30; i++ { // 30 second timeout
+		time.Sleep(1 * time.Second)
+
+		cmd := exec.Command("kubectl", "get", "pod", podName, "-o", "jsonpath={.status.phase}")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			continue
+		}
+
+		if strings.TrimSpace(string(output)) == "Succeeded" {
+			logger.Info("Directory creation completed successfully", "nodeName", nodeName)
+
+			// Get pod logs to confirm
+			cmd := exec.Command("kubectl", "logs", podName)
+			if logOutput, err := cmd.CombinedOutput(); err == nil {
+				logger.Info("Directory creation log", "nodeName", nodeName, "log", string(logOutput))
+			}
+
+			// Clean up the pod
+			_ = exec.Command("kubectl", "delete", "pod", podName, "--ignore-not-found").Run()
+			return nil
+		}
+	}
+
+	// Clean up failed pod
+	_ = exec.Command("kubectl", "delete", "pod", podName, "--ignore-not-found").Run()
+	return fmt.Errorf("directory creation pod did not complete within timeout")
 }

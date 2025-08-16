@@ -352,6 +352,38 @@ export function createNodeadmTestsCreationCleanupPolicy(
         actions: ['acm-pca:*'],
         resources: [`arn:aws:acm-pca:${stack.region}:${stack.account}:certificate-authority/*`],
       }),
+      // OIDC Provider permissions for IRSA
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'iam:CreateOpenIDConnectProvider',
+          'iam:GetOpenIDConnectProvider',
+          'iam:ListOpenIDConnectProviders',
+          'iam:TagOpenIDConnectProvider',
+        ],
+        resources: [`arn:aws:iam::${stack.account}:oidc-provider/*`],
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['iam:DeleteOpenIDConnectProvider'],
+        resources: [`arn:aws:iam::${stack.account}:oidc-provider/*`],
+        conditions: resourceTagCondition,
+      }),
+      // CloudWatch IRSA role management
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'iam:CreateRole',
+          'iam:DeleteRole',
+          'iam:AttachRolePolicy',
+          'iam:DetachRolePolicy',
+          'iam:GetRole',
+          'iam:PutRolePolicy',
+          'iam:DeleteRolePolicy',
+        ],
+        resources: [`arn:aws:iam::${stack.account}:role/*CloudWatch*`],
+        conditions: requestTagCondition,
+      }),
     ],
   });
 }
