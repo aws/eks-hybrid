@@ -27,7 +27,7 @@ export class NodeadmBuildStack extends cdk.Stack {
   nodeadmLogsBucket: s3.Bucket | undefined;
   nodeadmVersionVariable: codepipeline.Variable | undefined;
   testsCleanupProject: codebuild.PipelineProject | undefined;
-  testCreationCleanupPolicy: iam.Policy | undefined;
+  testCreationCleanupPolicies: iam.ManagedPolicy[] | undefined;
 
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -142,7 +142,7 @@ export class NodeadmBuildStack extends cdk.Stack {
       throw new Error('Nodeadm binary bucket is not defined');
     }
 
-    this.testCreationCleanupPolicy = createNodeadmTestsCreationCleanupPolicy(
+    this.testCreationCleanupPolicies = createNodeadmTestsCreationCleanupPolicy(
       this,
       constants.testClusterTagKey,
       constants.testClusterPrefix,
@@ -262,8 +262,8 @@ export class NodeadmBuildStack extends cdk.Stack {
     if (this.nodeadmBuildOutput === undefined) {
       throw new Error('`nodeadmBuildOutput` is not defined');
     }
-    if (this.testCreationCleanupPolicy === undefined) {
-      throw new Error('`testCreationCleanupPolicy` is not defined');
+    if (this.testCreationCleanupPolicies === undefined) {
+      throw new Error('`testCreationCleanupPolicies` is not defined');
     }
 
     this.testsCleanupProject = new codebuild.PipelineProject(this, 'nodeadm-cleanup', {
@@ -281,7 +281,9 @@ export class NodeadmBuildStack extends cdk.Stack {
       project: this.testsCleanupProject,
     });
 
-    this.testsCleanupProject.role!.attachInlinePolicy(this.testCreationCleanupPolicy);
+    for (const policy of this.testCreationCleanupPolicies) {
+      this.testsCleanupProject.role!.addManagedPolicy(policy);
+    }
   }
 
   vpcParams() {
@@ -320,8 +322,8 @@ export class NodeadmBuildStack extends cdk.Stack {
     if (this.nodeadmLogsBucket === undefined) {
       throw new Error('`nodeadmLogsBucket` is not defined');
     }
-    if (this.testCreationCleanupPolicy === undefined) {
-      throw new Error('`testCreationCleanupPolicy` is not defined');
+    if (this.testCreationCleanupPolicies === undefined) {
+      throw new Error('`testCreationCleanupPolicies` is not defined');
     }
 
     this.integrationTestProject = new codebuild.PipelineProject(this, 'nodeadm-e2e-tests-project', {
@@ -369,7 +371,9 @@ export class NodeadmBuildStack extends cdk.Stack {
       }),
     );
 
-    this.integrationTestProject.role!.attachInlinePolicy(this.testCreationCleanupPolicy);
+    for (const policy of this.testCreationCleanupPolicies) {
+      this.integrationTestProject.role!.addManagedPolicy(policy);
+    }
   }
 
   createE2EPipeline() {

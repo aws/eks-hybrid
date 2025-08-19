@@ -128,7 +128,7 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 	}
 
 	// Create PCA service client
-	pcaClient := acmpca.NewFromConfig(a.aws)
+	pcaClient := acmpca.NewFromConfig(a.AWS)
 
 	// Get pod identity role ARN
 	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.IAMClient, a.Cluster.Name)

@@ -50,15 +50,16 @@ type hybridCfnTemplateVars struct {
 }
 
 type StackOutput struct {
-	EC2Role            string `json:"EC2Role"`
-	InstanceProfileARN string `json:"instanceProfileARN"`
-	SSMNodeRoleName    string `json:"ssmNodeRoleName"`
-	SSMNodeRoleARN     string `json:"ssmNodeRoleARN"`
-	IRANodeRoleName    string `json:"iraNodeRoleName"`
-	IRANodeRoleARN     string `json:"iraNodeRoleARN"`
-	IRATrustAnchorARN  string `json:"iraTrustAnchorARN"`
-	IRAProfileARN      string `json:"iraProfileARN"`
-	ManagedNodeRoleArn string `json:"managedNodeRoleArn"`
+	EC2Role                        string `json:"EC2Role"`
+	InstanceProfileARN             string `json:"instanceProfileARN"`
+	SSMNodeRoleName                string `json:"ssmNodeRoleName"`
+	SSMNodeRoleARN                 string `json:"ssmNodeRoleARN"`
+	IRANodeRoleName                string `json:"iraNodeRoleName"`
+	IRANodeRoleARN                 string `json:"iraNodeRoleARN"`
+	IRATrustAnchorARN              string `json:"iraTrustAnchorARN"`
+	IRAProfileARN                  string `json:"iraProfileARN"`
+	ManagedNodeRoleArn             string `json:"managedNodeRoleArn"`
+	CloudWatchObservabilityRoleArn string `json:"cloudWatchObservabilityRoleArn"`
 }
 
 func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
@@ -132,6 +133,22 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 	if err != nil && !e2errors.IsCFNStackNotFound(err) {
 		return fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
 	}
+
+	// Get cluster OIDC issuer URL for IRSA
+	clusterResp, err := s.EKS.DescribeCluster(ctx, &eks.DescribeClusterInput{
+		Name: aws.String(s.ClusterName),
+	})
+	if err != nil {
+		return fmt.Errorf("getting cluster OIDC issuer URL: %w", err)
+	}
+
+	var oidcIssuerURL string
+	if clusterResp.Cluster.Identity != nil && clusterResp.Cluster.Identity.Oidc != nil && clusterResp.Cluster.Identity.Oidc.Issuer != nil {
+		oidcIssuerURL = *clusterResp.Cluster.Identity.Oidc.Issuer
+	} else {
+		return fmt.Errorf("cluster OIDC issuer URL not found")
+	}
+
 	params := []cfnTypes.Parameter{
 		{
 			ParameterKey:   aws.String("clusterName"),
@@ -148,6 +165,10 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 		{
 			ParameterKey:   aws.String("rolePathPrefix"),
 			ParameterValue: aws.String(constants.TestRolePathPrefix),
+		},
+		{
+			ParameterKey:   aws.String("ClusterOIDCIssuerURL"),
+			ParameterValue: aws.String(oidcIssuerURL),
 		},
 	}
 
@@ -299,6 +320,8 @@ func (s *Stack) readStackOutput(ctx context.Context, logger logr.Logger) (*Stack
 			result.IRAProfileARN = *output.OutputValue
 		case "ManagedNodeRoleArn":
 			result.ManagedNodeRoleArn = *output.OutputValue
+		case "CloudWatchObservabilityRoleArn":
+			result.CloudWatchObservabilityRoleArn = *output.OutputValue
 		}
 	}
 
