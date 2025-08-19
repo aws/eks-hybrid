@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	kRetry "k8s.io/client-go/util/retry"
 	"k8s.io/kubectl/pkg/drain"
@@ -394,4 +396,79 @@ func CountCoreDNSDistribution(ctx context.Context, k8s kubernetes.Interface, pod
 	}
 
 	return hybridCount, cloudCount
+}
+
+// HandleRHELNodes detects RHEL nodes and patches FluentBit ConfigMap for RHEL compatibility
+// Fix for issue where FluentBit pods fail on RHEL nodes due to hardcoded /var/log/journal path.
+// RHEL stores journal data in /run/log/journal, so we patch the ConfigMap to use the correct path.
+func HandleRHELNodes(ctx context.Context, k8sClient kubernetes.Interface, logger logr.Logger) error {
+	logger.Info("Checking for RHEL nodes and patching FluentBit ConfigMap for compatibility")
+
+	nodes, err := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("listing nodes: %w", err)
+	}
+
+	rhelNodes := []string{}
+	for _, node := range nodes.Items {
+		osImage, exists := node.Status.NodeInfo.OSImage, true
+		if exists && strings.Contains(strings.ToLower(osImage), "red hat") {
+			rhelNodes = append(rhelNodes, node.Name)
+			logger.Info("Found RHEL node", "nodeName", node.Name, "osImage", osImage)
+		}
+	}
+
+	if len(rhelNodes) == 0 {
+		logger.Info("No RHEL nodes found, skipping FluentBit ConfigMap patch")
+		return nil
+	}
+
+	logger.Info("RHEL nodes detected - patching FluentBit ConfigMap to use correct journal path", "rhelNodes", rhelNodes)
+
+	if err := patchFluentBitConfigMapForRHEL(ctx, k8sClient, logger); err != nil {
+		return fmt.Errorf("patching FluentBit ConfigMap for RHEL compatibility: %w", err)
+	}
+
+	logger.Info("Successfully patched FluentBit ConfigMap for RHEL compatibility")
+	return nil
+}
+
+// patchFluentBitConfigMapForRHEL patches FluentBit ConfigMap to use /run/log/journal for RHEL compatibility
+func patchFluentBitConfigMapForRHEL(ctx context.Context, k8sClient kubernetes.Interface, logger logr.Logger) error {
+	logger.Info("Patching FluentBit ConfigMap to use /run/log/journal for RHEL node compatibility")
+
+	maxWaitTime := 3 * time.Minute
+	checkInterval := 5 * time.Second
+
+	err := wait.PollUntilContextTimeout(ctx, checkInterval, maxWaitTime, true, func(ctx context.Context) (bool, error) {
+		checkCmd := exec.Command("kubectl", "get", "configmap", "fluent-bit-config", "-n", "amazon-cloudwatch")
+		if err := checkCmd.Run(); err != nil {
+			logger.Info("FluentBit ConfigMap not found yet, continuing to wait...")
+			return false, nil
+		}
+
+		logger.Info("FluentBit ConfigMap found - applying patch to use /run/log/journal for RHEL compatibility")
+
+		// Apply patch to set path to /run/log/journal
+		patchScript := `kubectl get configmap fluent-bit-config -n amazon-cloudwatch -o yaml | sed 's|Path                /var/log/journal|Path                /run/log/journal|g' | kubectl apply -f -`
+		cmd := exec.Command("bash", "-c", patchScript)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return false, fmt.Errorf("patching FluentBit ConfigMap: %w, output: %s", err, string(output))
+		}
+
+		logger.Info("Successfully patched FluentBit ConfigMap to use /run/log/journal for RHEL compatibility")
+
+		if err := RestartDaemonSetAndWait(ctx, logger, k8sClient, "amazon-cloudwatch", "fluent-bit"); err != nil {
+			return false, fmt.Errorf("restarting FluentBit DaemonSet: %w", err)
+		}
+
+		logger.Info("FluentBit DaemonSet restart initiated - pods will restart with corrected journal path")
+		return true, nil
+	})
+	if err != nil {
+		return fmt.Errorf("timeout or error waiting for FluentBit ConfigMap to exist: %w", err)
+	}
+
+	return nil
 }

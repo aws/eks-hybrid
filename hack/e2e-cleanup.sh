@@ -639,3 +639,23 @@ for managed_instance in $(aws ssm describe-instance-information --max-items 100 
     fi
     aws ssm deregister-managed-instance --instance-id $id
 done
+
+# CloudWatch addon log groups cleanup
+# describe-log-groups does not allow filtering by tags so we check each log group
+# that matches our CloudWatch addon naming patterns (only containerinsights, not EKS control plane logs)
+for log_group_name in $(aws logs describe-log-groups --query "logGroups[?starts_with(logGroupName, '/aws/containerinsights/')].logGroupName" --output text); do
+    if [[ $log_group_name == /aws/containerinsights/nodeadm-e2e-tests* ]]; then
+        # Extract cluster name from log group name
+        cluster_name=""
+        if [[ $log_group_name =~ ^/aws/containerinsights/(.+)/ ]]; then
+            cluster_name="${BASH_REMATCH[1]}"
+        fi
+        
+        if ! should_cleanup_cluster "$cluster_name"; then
+            continue
+        fi
+        
+        echo "Deleting CloudWatch addon log group: $log_group_name"
+        aws logs delete-log-group --log-group-name "$log_group_name"
+    fi
+done
