@@ -105,6 +105,7 @@ type UninstallOptions struct {
 	// InstallRoot is optionally the root directory of the installation
 	// If not provided, the default will be /
 	InstallRoot string
+	Logger      *zap.Logger
 }
 
 func Uninstall(opts UninstallOptions) error {
@@ -127,9 +128,39 @@ func Uninstall(opts UninstallOptions) error {
 		pathsToRemove = append(pathsToRemove, actualCertPath)
 	}
 
-	for _, path := range pathsToRemove {
-		if err := os.RemoveAll(path); err != nil {
-			allErrors = append(allErrors, err)
+	for _, pathToRemove := range pathsToRemove {
+		opts.Logger.Info("SAIB Removing kubelet path Uninstall call ", zap.String("path", pathToRemove))
+		// Check if path exists before attempting to remove
+		if _, err := os.Stat(pathToRemove); os.IsNotExist(err) {
+			// Path doesn't exist, skip it
+			continue
+		} else if err != nil {
+			allErrors = append(allErrors, errors.Wrapf(err, "checking path status: %s", pathToRemove))
+			continue
+		}
+
+		passwdFile := "/etc/passwd"
+		if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+			opts.Logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+		} else if err != nil {
+			opts.Logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+		} else {
+			opts.Logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+		}
+
+		opts.Logger.Info("Removing kubelet path", zap.String("path", pathToRemove))
+		if err := os.RemoveAll(pathToRemove); err != nil {
+			opts.Logger.Error("Failed to remove kubelet path", zap.String("path", pathToRemove), zap.Error(err))
+			allErrors = append(allErrors, errors.Wrapf(err, "removing kubelet path: %s", pathToRemove))
+		} else {
+			opts.Logger.Info("Successfully removed kubelet path", zap.String("path", pathToRemove))
+		}
+		if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+			opts.Logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+		} else if err != nil {
+			opts.Logger.Error("After Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+		} else {
+			opts.Logger.Info("After /etc/passwd file is present", zap.String("path", passwdFile))
 		}
 	}
 	if len(allErrors) > 0 {

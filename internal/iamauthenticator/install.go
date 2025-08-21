@@ -85,8 +85,31 @@ func downloadFileTo(ctx context.Context, opts InstallOptions) error {
 	return nil
 }
 
-func Uninstall() error {
-	return os.RemoveAll(IAMAuthenticatorBinPath)
+func Uninstall(logger *zap.Logger) error {
+
+	passwdFile := "/etc/passwd"
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("Before /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("Before Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("Before /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+
+	logger.Info("Uninstalling IAM authenticator", zap.String("path", IAMAuthenticatorBinPath))
+	if err := os.RemoveAll(IAMAuthenticatorBinPath); err != nil {
+		logger.Error("Failed to remove IAM authenticator binary", zap.String("path", IAMAuthenticatorBinPath), zap.Error(err))
+		return err
+	}
+	logger.Info("Successfully removed IAM authenticator binary", zap.String("path", IAMAuthenticatorBinPath))
+	if _, err := os.Stat(passwdFile); os.IsNotExist(err) {
+		logger.Warn("After /etc/passwd file does not exist", zap.String("path", passwdFile))
+	} else if err != nil {
+		logger.Error("After Error checking /etc/passwd file status", zap.String("path", passwdFile), zap.Error(err))
+	} else {
+		logger.Info("After /etc/passwd file is present", zap.String("path", passwdFile))
+	}
+	return nil
 }
 
 func Upgrade(ctx context.Context, src IAMAuthenticatorSource, log *zap.Logger) error {
