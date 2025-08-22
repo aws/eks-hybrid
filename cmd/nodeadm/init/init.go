@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
@@ -15,6 +16,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
+	nodevalidator "github.com/aws/eks-hybrid/internal/nodevalidator"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
@@ -25,6 +27,7 @@ const (
 	calicoVxLanPort        = "4789"
 	ciliumVxLanPort        = "8472"
 	vxLanProtocol          = "udp"
+	defaultWaitTimeout     = "10m"
 )
 
 // Phases returns the list of valid phases that can be skipped in init command
@@ -58,11 +61,14 @@ Documentation:
   https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_init`
 
 func NewInitCommand() cli.Command {
-	init := initCmd{}
+	init := initCmd{
+		waitTimeout: defaultWaitTimeout,
+	}
 	init.cmd = flaggy.NewSubcommand("init")
 	init.cmd.String(&init.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	init.cmd.StringSlice(&init.daemons, "d", "daemon", "Specify one or more of `containerd` and `kubelet`. This is intended for testing and should not be used in a production environment.")
 	init.cmd.StringSlice(&init.skipPhases, "s", "skip", fmt.Sprintf("Phases of the bootstrap to skip. Allowed values: [%s].", strings.Join(Phases(), ", ")))
+	init.cmd.String(&init.waitTimeout, "w", "wait-timeout", "Wait timeout duration (e.g., 30s, 10m, 1h). This is the timeout for node initialization validation with the Kubernetes cluster. Set to '0s' to disable validation. Default: 10m")
 	init.cmd.Description = "Initialize this instance as a node in an EKS cluster"
 	init.cmd.AdditionalHelpAppend = initHelpText
 	return &init
@@ -73,6 +79,7 @@ type initCmd struct {
 	configSource string
 	skipPhases   []string
 	daemons      []string
+	waitTimeout  string
 }
 
 func (c *initCmd) Flaggy() *flaggy.Subcommand {
@@ -131,7 +138,36 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		Logger:       log,
 	}
 
-	return initer.Run(ctx)
+	err = initer.Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Parse and validate wait-timeout duration for node initialization validation with the Kubernetes cluster
+	var waitTimeout time.Duration
+	waitTimeout, err = time.ParseDuration(c.waitTimeout)
+	if err != nil {
+		return fmt.Errorf("invalid wait-timeout duration '%s': expected format like '15m', '600s', '1h30m', got error: %w", c.waitTimeout, err)
+	}
+
+	// Check if validation is disabled when wait-time is zero (included "0", "0s", "0m", "0h", etc)
+	if waitTimeout == 0 {
+		log.Info("Node initialization finished. Post-initialization validation to check node is active has been skipped since the wait-timeout is disabled")
+		return nil
+	}
+
+	// Performing post-initialization validation to check the node is active
+	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
+	defer cancel()
+
+	log.Info("Node initialization finished. Running post-initialization validation to check node status in cluster", zap.Duration("timeout", waitTimeout))
+	if err := nodevalidator.ExecuteActiveNodeValidator(ctx, log); err != nil {
+		log.Warn("Post-initialization validation encountered issues but init completed successfully", zap.Error(err))
+	} else {
+		log.Info("Post-initialization validation successful. Node is ready in the Kubernetes cluster")
+	}
+
+	return nil
 }
 
 func validateFirewallOpenPorts() error {
