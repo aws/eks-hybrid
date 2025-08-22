@@ -1,0 +1,15 @@
+---
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  cluster:
+    name: my-cluster
+    apiServerEndpoint: https://example.com
+    certificateAuthority: Y2VydGlmaWNhdGVBdXRob3JpdHk=
+    cidr: 10.100.0.0/16
+    region: us-west-2
+  hybrid:
+    enableCredentialsFile: true
+    ssm:
+      activationCode: ys25k3gpt8zzyl9jhn6gq8rj3519owjelyz7
+      activationId: 57be8cce-1137-32d4-ce32-ba044ea5df48
