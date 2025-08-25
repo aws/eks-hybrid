@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
@@ -255,7 +254,7 @@ func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instance
 	if len(instances.Reservations) == 0 || len(instances.Reservations[0].Instances) == 0 {
 		return fmt.Errorf("no instance found with ID %s", instanceID)
 	}
-	logger.Info("Instance details", "instanceID", instanceID, "describeInstanceResponse", awsutil.Prettify(instances.Reservations[0].Instances))
+	logger.Info("Instance details", "instanceID", instanceID, "describeInstanceResponse", instances.Reservations[0].Instances)
 
 	describeStatusOutput, err := ec2Client.DescribeInstanceStatus(ctx, &ec2.DescribeInstanceStatusInput{
 		InstanceIds:         []string{instanceID},
@@ -267,6 +266,6 @@ func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instance
 	if len(describeStatusOutput.InstanceStatuses) == 0 {
 		return fmt.Errorf("no instance status found with ID %s", instanceID)
 	}
-	logger.Info("Instance status", "instanceID", instanceID, "describeInstanceStatusResponse", awsutil.Prettify(describeStatusOutput.InstanceStatuses))
+	logger.Info("Instance status", "instanceID", instanceID, "describeInstanceStatusResponse", describeStatusOutput.InstanceStatuses)
 	return nil
 }
