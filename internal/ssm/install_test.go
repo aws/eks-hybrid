@@ -62,6 +62,7 @@ func TestInstall(t *testing.T) {
 		signature     []byte
 		statusCode    int
 		wantErr       string
+		setupConfig   func(tmpDir string) error
 	}{
 		{
 			name:          "successful installation",
@@ -69,6 +70,22 @@ func TestInstall(t *testing.T) {
 			signature:     generateSignature(t, privateKey, installerData),
 			statusCode:    http.StatusOK,
 			wantErr:       "",
+		},
+		{
+			name:          "successful installation with existing config",
+			installerData: installerData,
+			signature:     generateSignature(t, privateKey, installerData),
+			statusCode:    http.StatusOK,
+			wantErr:       "",
+			setupConfig: func(tmpDir string) error {
+				configDir := filepath.Join(tmpDir, "etc/amazon/ssm")
+				configFile := filepath.Join(configDir, "amazon-ssm-agent.json")
+				if err := os.MkdirAll(configDir, 0o755); err != nil {
+					return err
+				}
+				existingConfig := `{"Identity": {"ConsumptionOrder": ["OnPrem"]},"Ssm": {"OtherSetting": true}}`
+				return os.WriteFile(configFile, []byte(existingConfig), 0o644)
+			},
 		},
 		{
 			name:       "server error",
@@ -96,6 +113,11 @@ func TestInstall(t *testing.T) {
 			g := NewGomegaWithT(t)
 
 			tmpDir := t.TempDir()
+
+			if tt.setupConfig != nil {
+				err := tt.setupConfig(tmpDir)
+				g.Expect(err).NotTo(HaveOccurred())
+			}
 
 			server := test.NewHTTPServer(t, func(w http.ResponseWriter, r *http.Request) {
 				if tt.statusCode != http.StatusOK {
@@ -147,6 +169,38 @@ func TestInstall(t *testing.T) {
 			g.Expect(installedData).To(Equal(tt.installerData))
 
 			g.Expect(tr.Artifacts.Ssm).To(BeTrue())
+
+			// Verify that configureSSMAgent
+			configFile := filepath.Join(tmpDir, "etc/amazon/ssm/amazon-ssm-agent.json")
+			g.Expect(configFile).To(BeAnExistingFile())
+
+			data, err := os.ReadFile(configFile)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]interface{}
+			err = json.Unmarshal(data, &result)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			// Check Hybrid node SSM configuration applied
+			ssmConfig, exists := result["Ssm"].(map[string]interface{})
+			g.Expect(exists).To(BeTrue(), "SSM configuration block not found")
+
+			value, ok := ssmConfig["CredentialRetryMaxSleepSeconds"]
+			g.Expect(ok).To(BeTrue(), "CredentialRetryMaxSleepSeconds not found in SSM config")
+			g.Expect(value).To(Equal(float64(60)), "Expected CredentialRetryMaxSleepSeconds to be 60")
+
+			// If we had existing config, verify it was preserved
+			if tt.setupConfig != nil {
+				otherSetting, exists := ssmConfig["OtherSetting"]
+				g.Expect(exists).To(BeTrue(), "Existing OtherSetting should be preserved")
+				g.Expect(otherSetting).To(Equal(true))
+
+				identity, exists := result["Identity"].(map[string]interface{})
+				g.Expect(exists).To(BeTrue(), "Identity configuration should be preserved")
+				consumptionOrder, exists := identity["ConsumptionOrder"].([]interface{})
+				g.Expect(exists).To(BeTrue(), "ConsumptionOrder should be preserved")
+				g.Expect(consumptionOrder).To(Equal([]interface{}{"OnPrem"}))
+			}
 		})
 	}
 }

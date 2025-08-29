@@ -1,0 +1,11 @@
+{
+    "Identity": {
+        "ConsumptionOrder": [
+            "OnPrem"
+        ],
+        "CustomIdentities": null
+    },
+    "Ssm": {
+        "CredentialRetryMaxSleepSeconds": 60
+    }
+}

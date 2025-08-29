@@ -30,6 +30,8 @@ do
     assert::path-exists /opt/ssm/ssm-setup-cli
     assert::path-exists /usr/bin/amazon-ssm-agent
 
+    validate-json-file /etc/amazon/ssm/amazon-ssm-agent.json 600 expected-ssm-agent-config.json
+
     assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 
     nodeadm uninstall --skip node-validation,pod-validation
@@ -44,5 +46,7 @@ do
     assert::path-not-exist /usr/bin/containerd
     assert::path-not-exist /opt/ssm/ssm-setup-cli
     assert::path-not-exist /usr/bin/amazon-ssm-agent
+    assert::path-not-exist /etc/amazon/ssm/amazon-ssm-agent.json
+    assert::path-not-exist /etc/amazon
     assert::path-not-exist /opt/nodeadm/tracker
 done
