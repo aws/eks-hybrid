@@ -18,6 +18,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -68,7 +69,17 @@ func (i *Installer) installDistroPackages(ctx context.Context) error {
 	}
 
 	i.Logger.Info("Installing iptables...")
-	return iptables.Install(ctx, i.Tracker, i.PackageManager)
+	if err := iptables.Install(ctx, i.Tracker, i.PackageManager); err != nil {
+		return err
+	}
+
+	// Set up RHEL journal compatibility symlink for CloudWatch observability
+	i.Logger.Info("Setting up OS-specific configurations...")
+	if err := system.SetupRHELJournalCompatibility(i.Logger); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (i *Installer) installCredentialProcess(ctx context.Context) error {

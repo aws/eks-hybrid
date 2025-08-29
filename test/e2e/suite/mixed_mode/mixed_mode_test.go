@@ -295,39 +295,22 @@ var _ = Describe("Mixed Mode Testing", func() {
 
 				test.Logger.Info("Starting mixed mode test with CloudWatch Observability addon")
 
-				// Create CloudWatch addon instance
-				cloudwatchAddon := addon.NewCloudWatchAddon(test.Cluster.Name)
+				cloudWatchRoleArn := test.StackOut.CloudWatchObservabilityRoleArn
 
-				// Validate addon creation
-				Expect(cloudwatchAddon).NotTo(BeNil(), "CloudWatch addon should be created")
+				cloudwatchAddon := addon.NewCloudWatchAddon(test.Cluster.Name, cloudWatchRoleArn)
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(cloudwatchAddon.Delete(ctx, test.EKSClient, test.Logger)).To(Succeed(), "should cleanup CloudWatch addon successfully")
 				})
 
-				DeferCleanup(func(ctx context.Context) {
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := cloudwatchAddon.Cleanup(ctx, test.K8sClient.Interface, testNamespace, testCaseLabels, test.Logger)
-						if err != nil {
-							GinkgoWriter.Printf("Failed to cleanup CloudWatch test resources: %v\n", err)
-						}
-					}
-				})
+				err := cloudwatchAddon.SetupCwAddon(ctx, test.EKSClient, test.IAMClient, test.K8sClient.Interface, test.K8sClient.Dynamic, test.AWS, test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "CloudWatch setup for mixed mode should succeed")
 
-				// Test CloudWatch webhook functionality in mixed mode
-				err := cloudwatchAddon.VerifyWebhookFunctionality(
-					ctx,
-					test.EKSClient,
-					test.K8sClient.Interface,
-					test.Cluster.Region,
-					hybridNodeSelector,
-					testCaseLabels,
-					test.Logger,
-				)
-				Expect(err).NotTo(HaveOccurred(), "CloudWatch webhook functionality in mixed mode")
+				// Verify CloudWatch resources including log groups
+				err = cloudwatchAddon.VerifyCwAddon(ctx, test.K8sClient.Interface, test.K8sClient.Dynamic, test.AWS, test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "CloudWatch resources verification should succeed")
 
-				test.Logger.Info("CloudWatch Observability mixed mode test successful - cross-VPC webhook communication confirmed")
+				test.Logger.Info("CloudWatch Observability mixed mode test successful - IRSA authentication, cross-VPC webhook communication, log groups verified")
 			})
 		})
 
