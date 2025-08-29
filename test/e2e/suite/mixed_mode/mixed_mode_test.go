@@ -55,7 +55,7 @@ var (
 	webhookPort int32 = 443
 
 	// Timing constants
-	crossVPCPropagationWait = 120 * time.Second
+	crossVPCPropagationWait = 180 * time.Second
 
 	// Node selector constants
 	cloudNodeSelector  = map[string]string{"node.kubernetes.io/instance-type": "m5.large"}

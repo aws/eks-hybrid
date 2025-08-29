@@ -112,7 +112,17 @@ func TestServiceConnectivityWithRetries(ctx context.Context, config *restclient.
 	logger.Info("Testing service connectivity with retries", "from", clientPodName, "service", serviceName, "port", port)
 
 	serviceURL := fmt.Sprintf("http://%s:%d", serviceName, port)
-	cmd := []string{"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", serviceURL, "--connect-timeout", "300", "--max-time", "420"}
+
+	cmd := []string{
+		"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+		serviceURL,
+		"--connect-timeout", "60",
+		"--max-time", "120",
+		"--retry", "5",
+		"--retry-delay", "30",
+		"--retry-max-time", "600",
+		"--retry-all-errors",
+	}
 
 	_, err := ik8s.GetAndWait(ctx, 15*time.Minute, k8s.CoreV1().Pods(namespace), clientPodName, func(pod *corev1.Pod) bool {
 		if pod.Status.Phase != corev1.PodRunning {
