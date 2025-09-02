@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecrpublic"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
@@ -125,6 +127,15 @@ credential_process = %s credential-process --certificate %s --private-key %s --p
 	// We need to do this since ECR Public is only supported in us-east-1.
 	awsConfig, err := e2e.NewAWSConfig(ctx, config.WithRegion("us-east-1"),
 		config.WithAppID("bottlerocket-e2e-test"),
+		config.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxBackoffDelay(
+				retry.AddWithMaxAttempts(
+					retry.NewStandard(),
+					10, // Max 10 attempts
+				),
+				10*time.Second, // Max backoff delay
+			)
+		}),
 	)
 	if err != nil {
 		return nil, err

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -113,6 +114,15 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		// We use a custom AppId so the requests show that they were
 		// made by this test in the user-agent
 		awsconfig.WithAppID("nodeadm-e2e-test"),
+		awsconfig.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxBackoffDelay(
+				retry.AddWithMaxAttempts(
+					retry.NewStandard(),
+					10, // Max 10 attempts
+				),
+				10*time.Second, // Max backoff delay
+			)
+		}),
 	)
 	if err != nil {
 		return nil, err
@@ -350,6 +360,15 @@ func BeforeSuiteCredentialSetup(ctx context.Context, filePath string) SuiteConfi
 		// We use a custom AppId so the requests show that they were
 		// made by the e2e suite in the user-agent
 		awsconfig.WithAppID("nodeadm-e2e-test-suite"),
+		awsconfig.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxBackoffDelay(
+				retry.AddWithMaxAttempts(
+					retry.NewStandard(),
+					10, // Max 10 attempts
+				),
+				10*time.Second, // Max backoff delay
+			)
+		}),
 	)
 	Expect(err).NotTo(HaveOccurred())
 

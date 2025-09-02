@@ -8,8 +8,11 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/integrii/flaggy"
@@ -49,7 +52,17 @@ func (c *Command) Commands() []cli.Command {
 func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 
-	cfg, err := e2e.NewAWSConfig(ctx)
+	cfg, err := e2e.NewAWSConfig(ctx,
+		config.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxBackoffDelay(
+				retry.AddWithMaxAttempts(
+					retry.NewStandard(),
+					10, // Max 10 attempts
+				),
+				10*time.Second, // Max backoff delay
+			)
+		}),
+	)
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}

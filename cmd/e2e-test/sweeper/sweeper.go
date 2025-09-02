@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
@@ -76,6 +78,15 @@ func (s *SweeperCommand) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		// We use a custom AppId so the requests show that they were
 		// made by this command in the user-agent
 		config.WithAppID("nodeadm-e2e-test-sweeper-cmd"),
+		config.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxBackoffDelay(
+				retry.AddWithMaxAttempts(
+					retry.NewStandard(),
+					10, // Max 10 attempts
+				),
+				10*time.Second, // Max backoff delay
+			)
+		}),
 	)
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)

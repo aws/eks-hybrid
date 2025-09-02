@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
@@ -73,7 +76,17 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	logger := e2e.NewLogger()
-	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
+	aws, err := e2e.NewAWSConfig(ctx,
+		awsconfig.WithRegion(config.ClusterRegion),
+		awsconfig.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxBackoffDelay(
+				retry.AddWithMaxAttempts(
+					retry.NewStandard(),
+					10, // Max 10 attempts
+				),
+				10*time.Second, // Max backoff delay
+			)
+		}))
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}
