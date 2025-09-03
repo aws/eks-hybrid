@@ -587,7 +587,9 @@ Resources:
               SubnetId: !Ref HybridNodeVPCPublicSubnet
             - InstanceType: t4g.small
               SubnetId: !Ref HybridNodeVPCPublicSubnet
-            - InstanceType: a1.medium
+            - InstanceType: t4g.large
+              SubnetId: !Ref HybridNodeVPCPublicSubnet
+            - InstanceType: t4g.nano
               SubnetId: !Ref HybridNodeVPCPublicSubnet
       TargetCapacitySpecification:
         TotalTargetCapacity: 1
