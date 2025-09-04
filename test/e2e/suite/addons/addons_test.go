@@ -205,8 +205,8 @@ var _ = Describe("Hybrid Nodes", func() {
 				}, Label("bottlerocket"))
 			}, Label("node-monitoring-agent"))
 
-			Context("runs kube state metrics tests", Ordered, func() {
-				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
+			Context("runs kube state metrics tests", func() {
+				It("uses all OS", func(ctx context.Context) {
 					kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
 
 					DeferCleanup(func(ctx context.Context) {
@@ -232,38 +232,10 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(kubeStateMetrics.Validate(ctx)).To(
 						Succeed(), "kube state metrics should have been validated successfully",
 					)
-				}, Label("regular-os"))
-
-				It("uses Bottlerocket OS", func(ctx context.Context) {
-					kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
-
-					DeferCleanup(func(ctx context.Context) {
-						Expect(kubeStateMetrics.Delete(ctx)).To(Succeed(), "should cleanup kube state metrics successfully")
-					})
-
-					Expect(kubeStateMetrics.Create(ctx)).To(
-						Succeed(), "kube state metrics should have created successfully",
-					)
-
-					DeferCleanup(func(ctx context.Context) {
-						// only print logs after addon successfully created
-						report := CurrentSpecReport()
-						if report.State.Is(types.SpecStateFailed) {
-							err := kubeStateMetrics.PrintLogs(ctx)
-							if err != nil {
-								// continue cleanup even if logs collection fails
-								GinkgoWriter.Printf("Failed to get kube state metrics logs: %v\n", err)
-							}
-						}
-					})
-
-					Expect(kubeStateMetrics.Validate(ctx)).To(
-						Succeed(), "kube state metrics should have been validated successfully",
-					)
-				}, Label("bottlerocket"))
+				})
 			}, Label("kube-state-metrics"))
 
-			Context("runs metrics server tests", Ordered, func() {
+			Context("runs metrics server tests", func() {
 				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
 					metricsServer := addonEc2Test.NewMetricsServerTest()
 
@@ -290,38 +262,10 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(metricsServer.Validate(ctx)).To(
 						Succeed(), "metrics server should have been validated successfully",
 					)
-				}, Label("regular-os"))
-
-				It("uses Bottlerocket OS", func(ctx context.Context) {
-					metricsServer := addonEc2Test.NewMetricsServerTest()
-
-					DeferCleanup(func(ctx context.Context) {
-						Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
-					})
-
-					Expect(metricsServer.Create(ctx)).To(
-						Succeed(), "metrics server should have created successfully",
-					)
-
-					DeferCleanup(func(ctx context.Context) {
-						// only print logs after addon successfully created
-						report := CurrentSpecReport()
-						if report.State.Is(types.SpecStateFailed) {
-							err := metricsServer.PrintLogs(ctx)
-							if err != nil {
-								// continue cleanup even if logs collection fails
-								GinkgoWriter.Printf("Failed to get metrics server logs: %v\n", err)
-							}
-						}
-					})
-
-					Expect(metricsServer.Validate(ctx)).To(
-						Succeed(), "metrics server should have been validated successfully",
-					)
-				}, Label("bottlerocket"))
+				})
 			}, Label("metrics-server"))
 
-			Context("runs prometheus node exporter tests", Ordered, func() {
+			Context("runs prometheus node exporter tests", func() {
 				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
 					prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
 
@@ -348,35 +292,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Expect(prometheusNodeExporter.Validate(ctx)).To(
 						Succeed(), "prometheus node exporter should have been validated successfully",
 					)
-				}, Label("regular-os"))
-
-				It("uses Bottlerocket OS", func(ctx context.Context) {
-					prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
-
-					DeferCleanup(func(ctx context.Context) {
-						Expect(prometheusNodeExporter.Delete(ctx)).To(Succeed(), "should cleanup prometheus node exporter successfully")
-					})
-
-					Expect(prometheusNodeExporter.Create(ctx)).To(
-						Succeed(), "prometheus node exporter should have created successfully",
-					)
-
-					DeferCleanup(func(ctx context.Context) {
-						// only print logs after addon successfully created
-						report := CurrentSpecReport()
-						if report.State.Is(types.SpecStateFailed) {
-							err := prometheusNodeExporter.PrintLogs(ctx)
-							if err != nil {
-								// continue cleanup even if logs collection fails
-								GinkgoWriter.Printf("Failed to get prometheus node exporter logs: %v\n", err)
-							}
-						}
-					})
-
-					Expect(prometheusNodeExporter.Validate(ctx)).To(
-						Succeed(), "prometheus node exporter should have been validated successfully",
-					)
-				}, Label("bottlerocket"))
+				})
 			}, Label("prometheus-node-exporter"))
 
 			Context("runs nvidia device plugin tests", Ordered, func() {
