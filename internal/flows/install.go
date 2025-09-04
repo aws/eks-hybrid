@@ -3,6 +3,7 @@ package flows
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"go.uber.org/zap"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -42,6 +44,10 @@ func (i *Installer) Run(ctx context.Context) error {
 	// TODO: move Configure() back to install command when upgrade flow is changed
 	i.Logger.Info("Configuring package manager. This might take a while...")
 	if err := i.PackageManager.Configure(ctx); err != nil {
+		return err
+	}
+
+	if err := i.setupRHELJournalCompatibility(ctx); err != nil {
 		return err
 	}
 
@@ -143,4 +149,28 @@ func (i *Installer) installEksArtifacts(ctx context.Context) error {
 		Source:  i.AwsSource,
 		Logger:  i.Logger,
 	})
+}
+
+// temporary fix to create journal symlink for cw addon compatibility on rhel
+func (i *Installer) setupRHELJournalCompatibility(ctx context.Context) error {
+	i.Logger.Info("Setting up RHEL journal compatibility for cw addon support...")
+
+	if system.GetOsName() == system.RhelOsName {
+		symlinkPath := "/var/log/journal"
+		targetPath := "/run/log/journal"
+
+		if _, err := os.Lstat(symlinkPath); err == nil {
+			i.Logger.Info("Journal symlink already exists")
+			return nil
+		}
+
+		if err := os.Symlink(targetPath, symlinkPath); err != nil {
+			i.Logger.Error("Failed to create journal symlink", zap.Error(err))
+			return err
+		}
+
+		i.Logger.Info("Created journal symlink for cw addon compatibility on rhel")
+	}
+
+	return nil
 }
