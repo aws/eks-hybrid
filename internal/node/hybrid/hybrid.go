@@ -27,6 +27,7 @@ const (
 	apiServerEndpointResolution = "api-server-endpoint-resolution-validation"
 	proxyValidation             = "proxy-validation"
 	nodeInactiveValidation      = "node-inactive-validation"
+	hybridRoleValidation        = "hybrid-role-validation"
 	kubeletCurrentCertPath      = "/var/lib/kubelet/pki/kubelet-server-current.pem"
 )
 
@@ -145,6 +146,7 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 		validation.New(apiServerEndpointResolution, kubernetes.ValidateAPIServerEndpointResolution),
 		validation.New(proxyValidation, network.NewProxyValidator().Run),
 		validation.New(nodeInactiveValidation, hnp.ValidateNodeIsInactive),
+		validation.New(hybridRoleValidation, hnp.ValidateKubeletVersionSkew),
 	)
 
 	// Run all validations sequentially
