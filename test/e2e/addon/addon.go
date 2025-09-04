@@ -30,11 +30,19 @@ const (
 func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
 	logger.Info("Create cluster add-on", "ClusterAddon", a.Name)
 
+	var namespaceConfig *types.AddonNamespaceConfigRequest
+	if a.Namespace != "" {
+		namespaceConfig = &types.AddonNamespaceConfigRequest{
+			Namespace: &a.Namespace,
+		}
+	}
+
 	params := &eks.CreateAddonInput{
 		ClusterName:         &a.Cluster,
 		AddonName:           &a.Name,
 		ConfigurationValues: &a.Configuration,
 		AddonVersion:        &a.Version,
+		NamespaceConfig:     namespaceConfig,
 	}
 
 	_, err := client.CreateAddon(ctx, params)
