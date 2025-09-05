@@ -272,38 +272,107 @@ func (s *Stack) instanceProfileName(roleName string) string {
 }
 
 func (s *Stack) readStackOutput(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
-	resp, err := s.CFN.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
-		StackName: aws.String(s.Name),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("describing hybrid nodes cfn stack: %w", err)
-	}
+	// Retry logic to wait for stack outputs to be populated
+	ticker := time.NewTicker(stackRetryDelay)
+	defer ticker.Stop()
+	timeout := time.After(stackCreationTimeout)
 
-	result := &StackOutput{}
-	// extract relevant stack outputs
-	for _, output := range resp.Stacks[0].Outputs {
-		switch *output.OutputKey {
-		case "EC2Role":
-			result.EC2Role = *output.OutputValue
-		case "SSMNodeRoleName":
-			result.SSMNodeRoleName = *output.OutputValue
-		case "SSMNodeRoleARN":
-			result.SSMNodeRoleARN = *output.OutputValue
-		case "IRANodeRoleName":
-			result.IRANodeRoleName = *output.OutputValue
-		case "IRANodeRoleARN":
-			result.IRANodeRoleARN = *output.OutputValue
-		case "IRATrustAnchorARN":
-			result.IRATrustAnchorARN = *output.OutputValue
-		case "IRAProfileARN":
-			result.IRAProfileARN = *output.OutputValue
-		case "ManagedNodeRoleArn":
-			result.ManagedNodeRoleArn = *output.OutputValue
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timeout:
+			return nil, fmt.Errorf("timeout waiting for stack outputs to be populated after %v", stackCreationTimeout)
+		case <-ticker.C:
+			resp, err := s.CFN.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
+				StackName: aws.String(s.Name),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("describing hybrid nodes cfn stack: %w", err)
+			}
+
+			if len(resp.Stacks) == 0 {
+				logger.Info("Stack not found, retrying...", "stackName", s.Name)
+				continue
+			}
+
+			stack := resp.Stacks[0]
+			if len(stack.Outputs) == 0 {
+				logger.Info("Stack outputs are empty, waiting for outputs to be populated...", "stackName", s.Name)
+				continue
+			}
+
+			result := &StackOutput{}
+			// extract relevant stack outputs
+			for _, output := range stack.Outputs {
+				if output.OutputKey == nil || output.OutputValue == nil {
+					continue
+				}
+				switch *output.OutputKey {
+				case "EC2Role":
+					result.EC2Role = *output.OutputValue
+				case "SSMNodeRoleName":
+					result.SSMNodeRoleName = *output.OutputValue
+				case "SSMNodeRoleARN":
+					result.SSMNodeRoleARN = *output.OutputValue
+				case "IRANodeRoleName":
+					result.IRANodeRoleName = *output.OutputValue
+				case "IRANodeRoleARN":
+					result.IRANodeRoleARN = *output.OutputValue
+				case "IRATrustAnchorARN":
+					result.IRATrustAnchorARN = *output.OutputValue
+				case "IRAProfileARN":
+					result.IRAProfileARN = *output.OutputValue
+				case "ManagedNodeRoleArn":
+					result.ManagedNodeRoleArn = *output.OutputValue
+				}
+			}
+
+			// Check if all expected outputs are populated and non-empty
+			var missingOutputs []string
+
+			// Always required outputs
+			if result.EC2Role == "" {
+				missingOutputs = append(missingOutputs, "EC2Role")
+			}
+			if result.SSMNodeRoleName == "" {
+				missingOutputs = append(missingOutputs, "SSMNodeRoleName")
+			}
+			if result.SSMNodeRoleARN == "" {
+				missingOutputs = append(missingOutputs, "SSMNodeRoleARN")
+			}
+			if result.ManagedNodeRoleArn == "" {
+				missingOutputs = append(missingOutputs, "ManagedNodeRoleArn")
+			}
+
+			// IRA-related outputs (when IRA test is not skipped)
+			if !skipIRATest() {
+				if result.IRANodeRoleName == "" {
+					missingOutputs = append(missingOutputs, "IRANodeRoleName")
+				}
+				if result.IRANodeRoleARN == "" {
+					missingOutputs = append(missingOutputs, "IRANodeRoleARN")
+				}
+				if result.IRATrustAnchorARN == "" {
+					missingOutputs = append(missingOutputs, "IRATrustAnchorARN")
+				}
+				if result.IRAProfileARN == "" {
+					missingOutputs = append(missingOutputs, "IRAProfileARN")
+				}
+			}
+
+			// If any outputs are missing, continue waiting
+			if len(missingOutputs) > 0 {
+				logger.Info("Stack outputs are still empty, waiting for outputs to be populated...",
+					"stackName", s.Name, "missingOutputs", missingOutputs)
+				continue
+			}
+
+			// All required outputs are populated and non-empty
+			logger.Info("E2E resources stack deployed successfully", "stackName", s.Name)
+			return result, nil
 		}
 	}
-
-	logger.Info("E2E resources stack deployed successfully", "stackName", s.Name)
-	return result, nil
 }
 
 func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOutput) error {

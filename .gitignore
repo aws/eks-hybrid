@@ -14,3 +14,4 @@ e2e-config
 **/ca.key
 test/e2e/suite/**/*.test
 _output
+.ignore/
