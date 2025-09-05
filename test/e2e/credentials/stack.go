@@ -94,7 +94,7 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 	}
 
 	if !skipIRATest() {
-		logger.Info("Creating access entry", "iamRoleArn", output.IRANodeRoleARN)
+		logger.Info("Creating access entry", "iamRARoleArn", output.IRANodeRoleARN)
 		_, err = s.EKS.CreateAccessEntry(ctx, &eks.CreateAccessEntryInput{
 			ClusterName:  &s.ClusterName,
 			PrincipalArn: &output.IRANodeRoleARN,
@@ -404,7 +404,7 @@ func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOut
 		return fmt.Errorf("deleting SSM access entry: %w", err)
 	}
 	if !skipIRATest() {
-		logger.Info("Deleting access entry", "iamRoleArn", output.IRANodeRoleARN)
+		logger.Info("Deleting access entry", "iamRARoleArn", output.IRANodeRoleARN)
 		if _, err := s.EKS.DeleteAccessEntry(ctx, &eks.DeleteAccessEntryInput{
 			ClusterName:  &s.ClusterName,
 			PrincipalArn: &output.IRANodeRoleARN,
