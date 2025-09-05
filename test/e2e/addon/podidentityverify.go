@@ -23,8 +23,6 @@ import (
 
 const (
 	getAddonTimeout           = 10 * time.Minute
-	podIdentityToken          = "eks-pod-identity-token"
-	policyName                = "pod-identity-association-role-policy"
 	PodIdentityS3BucketPrefix = "podid"
 )
 

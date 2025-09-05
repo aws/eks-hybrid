@@ -21,11 +21,8 @@ import (
 )
 
 const (
-	nodeMonitoringAgentNamespace = "kube-system"
-	nodeMonitoringAgentName      = "eks-node-monitoring-agent"
-	lockupDaemonSetName          = "kernel-soft-lockup"
-	lockupContainerNamespace     = "default"
-
+	nodeMonitoringAgentNamespace   = "kube-system"
+	nodeMonitoringAgentName        = "eks-node-monitoring-agent"
 	nodeMonitoringAgentWaitTimeout = 1 * time.Minute
 )
 

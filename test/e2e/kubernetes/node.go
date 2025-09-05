@@ -22,11 +22,8 @@ import (
 
 const (
 	hybridNodeWaitTimeout    = 10 * time.Minute
-	hybridNodeDelayInterval  = 5 * time.Second
 	hybridNodeUpgradeTimeout = 2 * time.Minute
-	nodeCordonDelayInterval  = 1 * time.Second
 	nodeCordonTimeout        = 30 * time.Second
-	nodeDrainTimeout         = 1 * time.Minute
 )
 
 // WaitForNode wait for the node to join the cluster and fetches the node info which has the nodeName label

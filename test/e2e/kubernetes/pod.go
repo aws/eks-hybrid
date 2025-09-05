@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	nodePodDelayInterval             = 5 * time.Second
 	nodePodWaitTimeout               = 3 * time.Minute
 	MaxCoreDNSRedistributionAttempts = 5
 )

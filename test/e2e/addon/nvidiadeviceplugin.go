@@ -30,7 +30,6 @@ type NvidiaDevicePluginTest struct {
 }
 
 const (
-	nodeWaitTimeout          = 5 * time.Minute
 	nvidiaDriverWaitTimeout  = 20 * time.Minute
 	nvidiaDriverWaitInterval = 1 * time.Minute
 	testPodName              = "gpu-pod"
