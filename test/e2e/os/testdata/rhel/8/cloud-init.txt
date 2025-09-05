@@ -25,6 +25,7 @@ write_files:
 {{- end }}
 
 runcmd:
+  - ln -sf /run/log/journal /var/log/journal 
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source docker"
   - /tmp/nvidia-driver-install.sh
 

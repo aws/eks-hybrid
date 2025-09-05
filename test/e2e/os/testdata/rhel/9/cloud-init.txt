@@ -36,6 +36,7 @@ runcmd:
 {{- if eq .ContainerdSource "none" }}
   - /tmp/install-containerd.sh
 {{- end }}
+  - ln -sf /run/log/journal /var/log/journal  
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source {{ .ContainerdSource }}"
   - /tmp/nvidia-driver-install.sh
 
