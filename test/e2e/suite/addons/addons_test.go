@@ -487,7 +487,8 @@ var _ = Describe("Hybrid Nodes", func() {
 
 			Context("runs external-dns tests", func() {
 				It("uses all OS", func(ctx context.Context) {
-					externalDNSTest := addonEc2Test.NewExternalDNSTest()
+					externalDNSTest, err := addonEc2Test.NewExternalDNSTest(ctx)
+					Expect(err).To(Succeed(), "should have created external-dns test")
 
 					DeferCleanup(func(ctx context.Context) {
 						Expect(externalDNSTest.Delete(ctx)).To(Succeed(), "should cleanup external-dns successfully")

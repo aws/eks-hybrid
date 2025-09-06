@@ -185,12 +185,19 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 }
 
 // NewExternalDNSTest creates a new ExternalDNSTest
-func (a *AddonEc2Test) NewExternalDNSTest() *addon.ExternalDNSTest {
-	return &addon.ExternalDNSTest{
-		Cluster:   a.Cluster.Name,
-		K8S:       a.K8sClient,
-		EKSClient: a.EKSClient,
-		K8SConfig: a.K8sClientConfig,
-		Logger:    a.Logger.WithName("ExternalDNSTest"),
+func (a *AddonEc2Test) NewExternalDNSTest(ctx context.Context) (*addon.ExternalDNSTest, error) {
+	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.IAMClient, a.Cluster.Name)
+	if err != nil {
+		a.Logger.Error(err, "Failed to get pod identity role ARN")
+		return nil, err
 	}
+
+	return &addon.ExternalDNSTest{
+		Cluster:            a.Cluster.Name,
+		K8S:                a.K8sClient,
+		EKSClient:          a.EKSClient,
+		K8SConfig:          a.K8sClientConfig,
+		Logger:             a.Logger.WithName("ExternalDNSTest"),
+		PodIdentityRoleArn: podIdentityRoleArn,
+	}, nil
 }
