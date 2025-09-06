@@ -479,9 +479,9 @@ var _ = Describe("Hybrid Nodes", func() {
 						Succeed(), "S3 mountpoint CSI driver should have been created successfully",
 					)
 
-					// Expect(s3MountpointTest.Validate(ctx)).To(
-					// Succeed(), "S3 mountpoint CSI driver should have been validated successfully",
-					// )
+					Expect(s3MountpointTest.Validate(ctx)).To(
+						Succeed(), "S3 mountpoint CSI driver should have been validated successfully",
+					)
 				})
 			}, Label("s3-mountpoint-csi-driver"))
 

@@ -125,9 +125,11 @@ func (a *AddonEc2Test) NewS3MountpointCSIDriverTest(ctx context.Context) (*addon
 		Cluster:            a.Cluster.Name,
 		K8S:                a.K8sClient,
 		EKSClient:          a.EKSClient,
+		S3Client:           a.S3Client,
 		K8SConfig:          a.K8sClientConfig,
 		Logger:             a.Logger.WithName("S3MountpointCSIDriverTest"),
 		PodIdentityRoleArn: podIdentityRoleArn,
+		Bucket:             a.PodIdentityS3Bucket,
 	}, nil
 }
 
