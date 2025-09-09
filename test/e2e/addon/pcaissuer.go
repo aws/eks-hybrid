@@ -32,7 +32,7 @@ const (
 	awsPcaCertName            = "aws-pca-cert"
 	awsPcaCertSecretName      = "aws-pca-cert-tls"
 	defaultPollInterval       = 15 * time.Second
-	pcaIssuerWaitTimeout      = 10 * time.Minute
+	pcaIssuerWaitTimeout      = 15 * time.Minute
 	awsPcaControllerName      = "aws-privateca-issuer"
 	awsPcaControllerNamespace = "aws-privateca-issuer"
 	awsPcaAddonName           = "aws-privateca-connector-for-kubernetes"
@@ -400,6 +400,10 @@ func (p *PCAIssuerTest) createAwsPcaCertificate(ctx context.Context) error {
 func (p *PCAIssuerTest) validateAwsPcaCertificate(ctx context.Context) error {
 	p.Logger.Info("Validating AWS PCA certificate")
 
+	if err := p.waitForIssuerReady(ctx); err != nil {
+		return fmt.Errorf("AWS PCA Issuer is not ready: %v", err)
+	}
+
 	_, err := ik8s.GetAndWait(
 		ctx,
 		pcaIssuerWaitTimeout,
@@ -408,18 +412,17 @@ func (p *PCAIssuerTest) validateAwsPcaCertificate(ctx context.Context) error {
 		func(cert *certmanagerv1.Certificate) bool {
 			for _, condition := range cert.Status.Conditions {
 				if condition.Type == certmanagerv1.CertificateConditionReady && condition.Status == cmmeta.ConditionTrue {
-					p.Logger.Info("AWS PCA certificate validated successfully")
 					return true
 				}
 			}
-			p.Logger.Info("AWS PCA certificate not valid yet")
 			return false
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("error validating AWS PCA certificate: %v", err)
+		return fmt.Errorf("error validating AWS PCA certificate (timeout after %v): %v", pcaIssuerWaitTimeout, err)
 	}
 
+	p.Logger.Info("AWS PCA certificate validated successfully")
 	return nil
 }
 
@@ -502,4 +505,23 @@ func (p *PCAIssuerTest) cleanupPrivateCA(ctx context.Context) error {
 
 	p.Logger.Info("AWS Private Certificate Authority deleted successfully")
 	return nil
+}
+
+// waitForIssuerReady waits for the AWS PCA Issuer to be ready before attempting certificate operations
+func (p *PCAIssuerTest) waitForIssuerReady(ctx context.Context) error {
+	_, err := ik8s.GetAndWait(
+		ctx,
+		pcaIssuerWaitTimeout,
+		p.K8sPcaClient.AWSPCAIssuers(p.Namespace),
+		awsPcaIssuerName,
+		func(issuer *awspcav1beta1.AWSPCAIssuer) bool {
+			for _, condition := range issuer.Status.Conditions {
+				if condition.Type == "Ready" && condition.Status == "True" {
+					return true
+				}
+			}
+			return false
+		},
+	)
+	return err
 }
