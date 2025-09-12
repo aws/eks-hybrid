@@ -253,7 +253,8 @@ func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, cluste
 		return fmt.Errorf("listing activations: %w", err)
 	}
 	if len(activationIDs) == 0 {
-		return fmt.Errorf("no activation found for node %s", nodeName)
+		// if no activationID found, then cleanup is not needed
+		return nil
 	}
 
 	instanceIDs, err := cleaner.ListManagedInstancesByActivationID(ctx, activationIDs...)

@@ -135,6 +135,7 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	node := peered.NodeCleanup{
 		EC2:          ec2Client,
 		S3:           s3Client,
+		SSM:          ssmClient,
 		K8s:          k8s,
 		LogCollector: logCollector,
 		Logger:       logger,
@@ -150,6 +151,10 @@ func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		},
 		Name: d.instanceName,
 	}); err != nil {
+		return err
+	}
+
+	if err := node.CleanupSSMActivation(ctx, d.instanceName, config.ClusterName); err != nil {
 		return err
 	}
 
