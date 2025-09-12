@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{TEST_SERVICE}}
+  namespace: {{NAMESPACE}}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{TEST_SERVICE}}.{{HOSTED_ZONE_NAME}}
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    name: http
+    targetPort: 80
+  selector:
+    app: {{TEST_SERVICE}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{TEST_SERVICE}}
+  namespace: {{NAMESPACE}}
+spec:
+  selector:
+    matchLabels:
+      app: {{TEST_SERVICE}}
+  template:
+    metadata:
+      labels:
+        app: {{TEST_SERVICE}}
+    spec:
+      containers:
+      - image: nginx
+        name: {{TEST_SERVICE}}
+        ports:
+        - containerPort: 80
+          name: http

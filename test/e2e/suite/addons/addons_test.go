@@ -414,9 +414,9 @@ var _ = Describe("Hybrid Nodes", func() {
 						Succeed(), "external-dns should have been created successfully",
 					)
 
-					// Expect(externalDNSTest.Validate(ctx)).To(
-					// Succeed(), "external-dns should have been validated successfully",
-					// )
+					Expect(externalDNSTest.Validate(ctx)).To(
+						Succeed(), "external-dns should have been validated successfully",
+					)
 				})
 			}, Label("external-dns"))
 		})
