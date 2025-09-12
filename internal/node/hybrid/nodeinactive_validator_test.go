@@ -101,6 +101,7 @@ func TestHybridNodeProvider_ValidateNodeIsInactive(t *testing.T) {
 					"kubelet-cert-validation",
 					"api-server-endpoint-resolution-validation",
 					"proxy-validation",
+					"cluster-access-validation",
 				},
 				observedLogger,
 				hybrid.WithDaemonManager(mockDaemon),
