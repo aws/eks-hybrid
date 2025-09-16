@@ -7,9 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	"github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/go-logr/logr"
@@ -17,7 +15,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
-	e2errors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 )
@@ -72,11 +69,12 @@ func (e *ExternalDNSTest) Create(ctx context.Context) error {
 		Namespace:     externalDNSNamespace,
 		Name:          externalDNS,
 		Configuration: configuration,
-	}
-
-	// Create pod identity association for the addon's service account
-	if err := e.setupPodIdentity(ctx); err != nil {
-		return fmt.Errorf("failed to setup Pod Identity for external-dns: %v", err)
+		PodIdentityAssociations: []PodIdentityAssociation{
+			{
+				RoleArn:        e.PodIdentityRoleArn,
+				ServiceAccount: externalDNSServiceAccount,
+			},
+		},
 	}
 
 	if err := e.addon.CreateAndWaitForActive(ctx, e.EKSClient, e.K8S, e.Logger); err != nil {
@@ -104,7 +102,7 @@ func (e *ExternalDNSTest) Validate(ctx context.Context) error {
 
 	replacer := strings.NewReplacer(
 		"{{TEST_SERVICE}}", externalDNSTestService,
-		"{{NAMESPACE}}", namespace,
+		"{{NAMESPACE}}", defaultNamespace,
 		"{{HOSTED_ZONE_NAME}}", hostedZoneName,
 	)
 	replacedTestServiceYAML := replacer.Replace(testServiceYAML)
@@ -121,7 +119,7 @@ func (e *ExternalDNSTest) Validate(ctx context.Context) error {
 	}
 
 	// Wait for deployment to be ready
-	if err := kubernetes.DeploymentWaitForReplicas(ctx, externalDNSWaitTimeout, e.K8S, namespace, externalDNSTestService); err != nil {
+	if err := kubernetes.DeploymentWaitForReplicas(ctx, externalDNSWaitTimeout, e.K8S, defaultNamespace, externalDNSTestService); err != nil {
 		return fmt.Errorf("service deployment not ready: %w", err)
 	}
 
@@ -151,32 +149,6 @@ func (e *ExternalDNSTest) Validate(ctx context.Context) error {
 
 func (e *ExternalDNSTest) Delete(ctx context.Context) error {
 	return e.addon.Delete(ctx, e.EKSClient, e.Logger)
-}
-
-func (e *ExternalDNSTest) setupPodIdentity(ctx context.Context) error {
-	e.Logger.Info("Setting up Pod Identity for external-dns")
-
-	// Create Pod Identity Association for the addon's service account
-	createAssociationInput := &eks.CreatePodIdentityAssociationInput{
-		ClusterName:    aws.String(e.Cluster),
-		Namespace:      aws.String(externalDNSNamespace),
-		RoleArn:        aws.String(e.PodIdentityRoleArn),
-		ServiceAccount: aws.String(externalDNSServiceAccount),
-	}
-
-	createAssociationOutput, err := e.EKSClient.CreatePodIdentityAssociation(ctx, createAssociationInput)
-
-	if err != nil && e2errors.IsType(err, &ekstypes.ResourceInUseException{}) {
-		e.Logger.Info("Pod Identity Association already exists for service account", "serviceAccount", externalDNSServiceAccount)
-		return nil
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to create Pod Identity Association: %v", err)
-	}
-
-	e.Logger.Info("Created Pod Identity Association", "associationID", *createAssociationOutput.Association.AssociationId)
-	return nil
 }
 
 func (e *ExternalDNSTest) getHostedZoneId(ctx context.Context) (*string, error) {

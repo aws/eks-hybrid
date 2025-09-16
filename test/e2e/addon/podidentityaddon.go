@@ -22,7 +22,6 @@ type PodIdentityAddon struct {
 
 const (
 	podIdentityServiceAccount = "pod-identity-sa"
-	namespace                 = "default"
 	podIdentityAgent          = "eks-pod-identity-agent"
 	bucketObjectKey           = "test"
 	bucketObjectContent       = "RANDOM-WORD"
@@ -46,13 +45,13 @@ func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksCli
 
 	// Provision PodIdentity addon related resources
 	// Create service account in kubernetes
-	if err := kubernetes.NewServiceAccount(ctx, logger, k8sClient, namespace, podIdentityServiceAccount); err != nil {
+	if err := kubernetes.NewServiceAccount(ctx, logger, k8sClient, defaultNamespace, podIdentityServiceAccount); err != nil {
 		return err
 	}
 
 	createPodIdentityAssociationInput := &eks.CreatePodIdentityAssociationInput{
 		ClusterName:    &p.Cluster,
-		Namespace:      aws.String(namespace),
+		Namespace:      aws.String(defaultNamespace),
 		RoleArn:        &p.roleArn,
 		ServiceAccount: aws.String(podIdentityServiceAccount),
 	}

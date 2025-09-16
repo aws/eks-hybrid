@@ -86,6 +86,7 @@ func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 			ec2Client: ec2.NewFromConfig(aws),
 			logger:    logger,
 			ssmClient: ssm.NewFromConfig(aws),
+			region: aws.Region,
 		},
 		iam:            iam.NewFromConfig(aws),
 		s3:             s3.NewFromConfig(aws),

@@ -70,7 +70,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      sanitizedPodName,
-			Namespace: namespace,
+			Namespace: defaultNamespace,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -120,7 +120,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	}
 
 	defer func() {
-		if err := kubernetes.DeletePod(ctx, v.K8S, sanitizedPodName, namespace); err != nil {
+		if err := kubernetes.DeletePod(ctx, v.K8S, sanitizedPodName, defaultNamespace); err != nil {
 			// it's okay not fail this operation as the pod would be eventually deleted when the cluster is deleted
 			v.Logger.Info("Fail to delete aws pod", "podName", sanitizedPodName, "error", err)
 		}
@@ -129,7 +129,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	execCommand := []string{
 		"bash", "-c", fmt.Sprintf("aws s3 cp s3://%s/%s . > /dev/null && cat ./%s", v.PodIdentityS3Bucket, bucketObjectKey, bucketObjectKey),
 	}
-	stdout, stdErr, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, sanitizedPodName, namespace, execCommand...)
+	stdout, stdErr, err := kubernetes.ExecPodWithRetries(ctx, v.K8SConfig, v.K8S, sanitizedPodName, defaultNamespace, execCommand...)
 	if err != nil {
 		return fmt.Errorf("exec aws s3 cp command on pod %s: err: %w, stdout: %s, stderr: %s", sanitizedPodName, err, stdout, stdErr)
 	}

@@ -113,9 +113,8 @@ func (cw CloudWatchAddon) VerifyWebhookFunctionality(
 	}
 
 	podName := "cloudwatch-webhook-test-hybrid"
-	namespace := "default"
 
-	if err := kubernetes.CreateNginxPodInNode(ctx, k8sClient, hybridNodeName, namespace, clusterRegion, logger, podName, labels); err != nil {
+	if err := kubernetes.CreateNginxPodInNode(ctx, k8sClient, hybridNodeName, defaultNamespace, clusterRegion, logger, podName, labels); err != nil {
 		return fmt.Errorf("creating and running CloudWatch test pod on hybrid node: %w", err)
 	}
 

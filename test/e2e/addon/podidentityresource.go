@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
@@ -53,17 +52,22 @@ type StatementEntry struct {
 var ErrPodIdentityBucketNotFound = errors.New("pod identity bucket not found")
 
 // PodIdentityBucket returns the pod identity bucket for the given cluster.
-func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster string) (string, error) {
+func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster string, region string) (string, error) {
 	listBucketsOutput, err := client.ListBuckets(ctx, &s3.ListBucketsInput{
 		Prefix: aws.String(PodIdentityS3BucketPrefix),
 	})
 	if err != nil {
 		return "", fmt.Errorf("listing buckets: %w", err)
 	}
-
 	var foundBuckets []string
 	for _, bucket := range listBucketsOutput.Buckets {
-		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
+		// listBuckestOutput will go through all of the buckets in the aws account
+		// starting with "podid". We are only concerned with cleaning up the buckets
+		// in the relevant region
+		if *bucket.BucketRegion != region{
+			continue
+		} else{
+			getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
 			Bucket: bucket.Name,
 		})
 		if err != nil && (e2eErrors.IsS3BucketNotFound(err) || e2eErrors.IsAwsError(err, "NoSuchTagSet")) {
@@ -88,6 +92,7 @@ func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster string) (
 			if foundClusterTag && foundPodIdentityTag {
 				foundBuckets = append(foundBuckets, *bucket.Name)
 			}
+		}
 		}
 	}
 

@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/acmpca"
 	"github.com/aws/aws-sdk-go-v2/service/acmpca/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	awspcav1beta1 "github.com/cert-manager/aws-privateca-issuer/pkg/api/v1beta1"
 	awspcaclientset "github.com/cert-manager/aws-privateca-issuer/pkg/clientset/v1beta1"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -23,7 +22,6 @@ import (
 	clientgo "k8s.io/client-go/kubernetes"
 
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
-	e2errors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -64,11 +62,12 @@ func (p *PCAIssuerTest) Setup(ctx context.Context) error {
 		Cluster:   p.Cluster,
 		Namespace: awsPcaControllerNamespace,
 		Name:      awsPcaAddonName,
-	}
-
-	// Create Pod Identity Association for the addon's service account
-	if err := p.setupPodIdentityForPCAIssuer(ctx); err != nil {
-		return fmt.Errorf("failed to setup Pod Identity for AWS PCA Issuer: %v", err)
+		PodIdentityAssociations: []PodIdentityAssociation{
+			{
+				RoleArn:        p.PodIdentityRoleArn,
+				ServiceAccount: awsPcaServiceAccountName,
+			},
+		},
 	}
 
 	if err := p.addon.CreateAndWaitForActive(ctx, p.EKSClient, p.K8S, p.Logger); err != nil {
@@ -142,12 +141,7 @@ func (p *PCAIssuerTest) Cleanup(ctx context.Context) error {
 		p.Logger.Error(err, "Failed to delete AWS PCA Issuer")
 	}
 
-	// Clean up Pod Identity Association
-	if err := p.cleanupPodIdentityForPCAIssuer(ctx); err != nil {
-		p.Logger.Error(err, "Failed to clean up Pod Identity for AWS PCA Issuer")
-	}
-
-	// Delete the AWS PCA Issuer addon
+	// Delete the AWS PCA Issuer addon (this will also clean up pod identity associations)
 	if p.addon != nil {
 		if err := p.addon.Delete(ctx, p.EKSClient, p.Logger); err != nil {
 			p.Logger.Error(err, "Failed to delete AWS PCA Issuer addon")
@@ -318,32 +312,6 @@ func (p *PCAIssuerTest) activatePCA(ctx context.Context, arn *string) error {
 	return nil
 }
 
-func (p *PCAIssuerTest) setupPodIdentityForPCAIssuer(ctx context.Context) error {
-	p.Logger.Info("Setting up Pod Identity for AWS PCA Issuer")
-
-	// Create Pod Identity Association for the addon's service account
-	createAssociationInput := &eks.CreatePodIdentityAssociationInput{
-		ClusterName:    aws.String(p.Cluster),
-		Namespace:      aws.String(awsPcaControllerNamespace),
-		RoleArn:        aws.String(p.PodIdentityRoleArn),
-		ServiceAccount: aws.String(awsPcaServiceAccountName),
-	}
-
-	createAssociationOutput, err := p.EKSClient.CreatePodIdentityAssociation(ctx, createAssociationInput)
-
-	if err != nil && e2errors.IsType(err, &ekstypes.ResourceInUseException{}) {
-		p.Logger.Info("Pod Identity Association already exists for service account: %s", awsPcaServiceAccountName)
-		return nil
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to create Pod Identity Association: %v", err)
-	}
-
-	p.Logger.Info("Created Pod Identity Association", "associationID", *createAssociationOutput.Association.AssociationId)
-	return nil
-}
-
 func (p *PCAIssuerTest) createAwsPcaIssuer(ctx context.Context) error {
 	p.Logger.Info("Creating AWS PCA Issuer resource")
 
@@ -423,40 +391,6 @@ func (p *PCAIssuerTest) validateAwsPcaCertificate(ctx context.Context) error {
 	}
 
 	p.Logger.Info("AWS PCA certificate validated successfully")
-	return nil
-}
-
-func (p *PCAIssuerTest) cleanupPodIdentityForPCAIssuer(ctx context.Context) error {
-	p.Logger.Info("Cleaning up Pod Identity for AWS PCA Issuer")
-
-	// List Pod Identity Associations
-	listAssociationsInput := &eks.ListPodIdentityAssociationsInput{
-		ClusterName:    aws.String(p.Cluster),
-		Namespace:      aws.String(awsPcaControllerNamespace),
-		ServiceAccount: aws.String(awsPcaServiceAccountName),
-	}
-
-	listAssociationsOutput, err := p.EKSClient.ListPodIdentityAssociations(ctx, listAssociationsInput)
-	if err != nil {
-		return fmt.Errorf("failed to list Pod Identity Associations: %v", err)
-	}
-
-	// Delete each found association
-	for _, association := range listAssociationsOutput.Associations {
-		if association.AssociationId != nil {
-			p.Logger.Info("Deleting Pod Identity Association", "associationID", *association.AssociationId)
-			deleteAssociationInput := &eks.DeletePodIdentityAssociationInput{
-				ClusterName:   aws.String(p.Cluster),
-				AssociationId: association.AssociationId,
-			}
-
-			_, err := p.EKSClient.DeletePodIdentityAssociation(ctx, deleteAssociationInput)
-			if err != nil {
-				return fmt.Errorf("failed to delete Pod Identity Association: %v", err)
-			}
-		}
-	}
-
 	return nil
 }
 

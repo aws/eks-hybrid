@@ -93,11 +93,11 @@ func (n *NvidiaDevicePluginTest) Validate(ctx context.Context) error {
 		return fmt.Errorf("failed to deploy gpu pod: %w", err)
 	}
 
-	if err := kubernetes.WaitForPodToBeCompleted(ctx, n.K8S, testPodName, namespace); err != nil {
+	if err := kubernetes.WaitForPodToBeCompleted(ctx, n.K8S, testPodName, defaultNamespace); err != nil {
 		return fmt.Errorf("failed to wait for gpu pod to be completed: %w", err)
 	}
 
-	logs, err := kubernetes.FetchLogs(ctx, n.K8S, testPodName, namespace)
+	logs, err := kubernetes.FetchLogs(ctx, n.K8S, testPodName, defaultNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to fetch logs for gpu pod: %w", err)
 	}
