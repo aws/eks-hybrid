@@ -134,6 +134,7 @@ export function createNodeadmTestsCreationCleanupPolicies(
           'ec2:ModifyFleet',
           'ec2:ModifyInstanceAttribute',
           'ec2:ModifySubnetAttribute',
+          'ec2:ModifyTransitGateway',
           'ec2:ModifyVpcAttribute',
           'ec2:RevokeSecurityGroupIngress',
           'ec2:RunInstances',
