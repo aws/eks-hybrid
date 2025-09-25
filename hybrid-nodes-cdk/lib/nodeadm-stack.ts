@@ -60,10 +60,10 @@ export class NodeadmBuildStack extends cdk.Stack {
     this.createECRCacheBuild();
     this.createCleanupBuild();
     this.createIntegrationTestBuild();
-
     this.createE2EPipeline();
     this.createConformancePipeline();
-    this.createAddonPipeline()
+    this.createAddonPipeline();
+    this.createMixedModePipeline();
   }
 
   createSecrets() {
@@ -552,6 +552,67 @@ export class NodeadmBuildStack extends cdk.Stack {
     );
 
     this.addStandardLifecycleRules(addonsPipeline.artifactBucket as s3.Bucket);
+  }
+
+  createMixedModePipeline() {
+    if (this.nodeadmBuildOutput === undefined) {
+      throw new Error('`nodeadmBuildOutput` is not defined');
+    }
+    if (this.nodeadmBuildAction === undefined) {
+      throw new Error('`nodeadmBuildAction` is not defined');
+    }
+    if (this.ecrCacheAction === undefined) {
+      throw new Error('`ecrCacheAction` is not defined');
+    }
+    if (this.cleanupAction === undefined) {
+      throw new Error('`cleanupAction` is not defined');
+    }
+    if (this.githubSourceAction === undefined) {
+      throw new Error('`githubSourceAction` is not defined');
+    }
+    if (this.integrationTestProject === undefined) {
+      throw new Error('`integrationTestProject` is not defined');
+    }
+    if (this.nodeadmVersionVariable === undefined) {
+      throw new Error('`nodeadmVersionVariable` is not defined');
+    }
+
+    const mixedModeActions: Array<codepipeline_actions.CodeBuildAction> = [];
+    for (const kubeVersion of constants.kubernetesVersions) {
+      const cni = 'cilium';
+      let additionalEnvironmentVariables = {
+        E2E_SUITE: {
+          value: 'mixed_mode.test',
+        },
+        E2E_FILTER: {
+          value: '',
+        },
+      };
+      if (constants.betaKubeVersions.includes(kubeVersion)) {
+        additionalEnvironmentVariables = { ...additionalEnvironmentVariables, ...this.betaEnvironmentVariables() };
+      }
+      const e2eTestsAction = createTestAction(
+        kubeVersion,
+        cni,
+        this.nodeadmBuildOutput,
+        this.integrationTestProject,
+        additionalEnvironmentVariables,
+      );
+      mixedModeActions.push(e2eTestsAction);
+    }
+
+    const mixedModePipeline = createNodeadmE2EPipeline(
+      this,
+      'mixed-mode',
+      this.githubSourceAction,
+      this.nodeadmBuildAction,
+      this.cleanupAction,
+      this.ecrCacheAction,
+      mixedModeActions,
+      [this.nodeadmVersionVariable],
+    );
+
+    this.addStandardLifecycleRules(mixedModePipeline.artifactBucket as s3.Bucket);
   }
 
   addStandardLifecycleRules(bucket: s3.Bucket) {
