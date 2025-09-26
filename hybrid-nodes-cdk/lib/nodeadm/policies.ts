@@ -309,6 +309,19 @@ export function createNodeadmTestsCreationCleanupPolicies(
       }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
+        actions: [
+          'eks:CreateNodegroup',
+          'eks:DeleteNodegroup',
+          'eks:DescribeNodegroup',
+          'eks:ListNodegroups',
+        ],
+        resources: [
+          `arn:aws:eks:${stack.region}:${stack.account}:cluster/*`,
+          `arn:aws:eks:${stack.region}:${stack.account}:nodegroup/*`,
+        ],
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
         actions: ['eks:DeleteAddon', 'eks:DescribeAddon'],
         resources: [`arn:aws:eks:${stack.region}:${stack.account}:addon/*`],
       }),
