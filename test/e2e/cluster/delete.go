@@ -40,6 +40,7 @@ func NewDelete(aws aws.Config, logger logr.Logger, endpoint string) Delete {
 			ec2Client: ec2.NewFromConfig(aws),
 			logger:    logger,
 			s3Client:  s3.NewFromConfig(aws),
+			region:    aws.Region,
 		},
 	}
 }

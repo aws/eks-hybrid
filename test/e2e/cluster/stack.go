@@ -65,6 +65,7 @@ type stack struct {
 	ec2Client *ec2.Client
 	s3Client  *s3.Client
 	iamClient *iam.Client
+	region    string
 }
 
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
@@ -400,7 +401,7 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 }
 
 func (s *stack) emptyPodIdentityS3Bucket(ctx context.Context, clusterName string) error {
-	podIdentityBucket, err := addon.PodIdentityBucket(ctx, s.s3Client, clusterName)
+	podIdentityBucket, err := addon.PodIdentityBucket(ctx, s.s3Client, clusterName, s.region)
 	if err != nil {
 		if errors.Is(err, addon.ErrPodIdentityBucketNotFound) {
 			return nil
