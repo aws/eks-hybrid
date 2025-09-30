@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-logr/logr"
 	clientgo "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
@@ -44,8 +45,14 @@ func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksCli
 	}
 
 	// Provision PodIdentity addon related resources
-	// Create service account in kubernetes
-	if err := kubernetes.NewServiceAccount(ctx, logger, k8sClient, defaultNamespace, podIdentityServiceAccount); err != nil {
+	// Create service account in kubernetes with retry for DNS resolution issues
+	logger.Info("Creating service account with retry logic for DNS resolution", "serviceAccount", podIdentityServiceAccount)
+	err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		return true
+	}, func() error {
+		return kubernetes.NewServiceAccount(ctx, logger, k8sClient, defaultNamespace, podIdentityServiceAccount)
+	})
+	if err != nil {
 		return err
 	}
 
@@ -56,7 +63,7 @@ func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksCli
 		ServiceAccount: aws.String(podIdentityServiceAccount),
 	}
 
-	_, err := eksClient.CreatePodIdentityAssociation(ctx, createPodIdentityAssociationInput)
+	_, err = eksClient.CreatePodIdentityAssociation(ctx, createPodIdentityAssociationInput)
 	if err == nil || errors.IsType(err, &types.ResourceInUseException{}) {
 		return nil
 	}
