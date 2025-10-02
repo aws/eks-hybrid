@@ -37,8 +37,8 @@ func NewPodIdentityAddonWithVersion(cluster, roleArn, version string) PodIdentit
 		Addon: Addon{
 			Cluster:       cluster,
 			Name:          podIdentityAgent,
+			Version:       "v1.3.9-eksbuild.1",
 			Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true},\"hybrid-bottlerocket\":{\"create\": true}}}",
-			Version:       version,
 		},
 		roleArn: roleArn,
 	}
