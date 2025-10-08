@@ -206,10 +206,25 @@ func DeleteRoutesForInstance(ctx context.Context, ec2Client *ec2.Client, subnetI
 }
 
 func WaitForEC2InstanceRunning(ctx context.Context, ec2Client *ec2.Client, instanceID string) error {
+	logger := logr.FromContextOrDiscard(ctx)
+
+	logger.Info("Starting to wait for EC2 instance running state", "instanceID", instanceID, "timeout", nodeRunningTimeout)
+	if err := LogEC2InstanceDescribe(ctx, ec2Client, instanceID, logger); err != nil {
+		logger.Error(err, "Failed to log initial instance state", "instanceID", instanceID)
+	}
+
 	waiter := ec2.NewInstanceRunningWaiter(ec2Client, func(isowo *ec2.InstanceRunningWaiterOptions) {
 		isowo.MinDelay = 1 * time.Second
 	})
-	return waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instanceID}}, nodeRunningTimeout)
+
+	err := waiter.Wait(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{instanceID}}, nodeRunningTimeout)
+
+	logger.Info("Finished waiting for EC2 instance", "instanceID", instanceID, "success", err == nil)
+	if finalErr := LogEC2InstanceDescribe(ctx, ec2Client, instanceID, logger); finalErr != nil {
+		logger.Error(finalErr, "Failed to log final instance state", "instanceID", instanceID)
+	}
+
+	return err
 }
 
 func IsEC2InstanceImpaired(ctx context.Context, ec2Client *ec2.Client, instanceID string) (bool, error) {
