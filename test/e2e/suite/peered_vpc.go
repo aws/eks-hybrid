@@ -131,7 +131,6 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	if err != nil {
 		return nil, err
 	}
-
 	test.aws = aws
 	test.EKSClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
 	test.EC2Client = ec2v2.NewFromConfig(aws)
@@ -180,8 +179,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 	test.nodeadmURLs = *urls
-
-	test.PodIdentityS3Bucket, err = addon.PodIdentityBucket(ctx, test.S3Client, test.Cluster.Name)
+	test.PodIdentityS3Bucket, err = addon.PodIdentityBucket(ctx, test.S3Client, test.Cluster.Name, aws.Region)
 	if err != nil {
 		return nil, err
 	}

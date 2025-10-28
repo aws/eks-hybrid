@@ -53,40 +53,46 @@ type StatementEntry struct {
 var ErrPodIdentityBucketNotFound = errors.New("pod identity bucket not found")
 
 // PodIdentityBucket returns the pod identity bucket for the given cluster.
-func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster string) (string, error) {
+func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster, region string) (string, error) {
 	listBucketsOutput, err := client.ListBuckets(ctx, &s3.ListBucketsInput{
 		Prefix: aws.String(PodIdentityS3BucketPrefix),
 	})
 	if err != nil {
 		return "", fmt.Errorf("listing buckets: %w", err)
 	}
-
 	var foundBuckets []string
 	for _, bucket := range listBucketsOutput.Buckets {
-		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
-			Bucket: bucket.Name,
-		})
-		if err != nil && (e2eErrors.IsS3BucketNotFound(err) || e2eErrors.IsAwsError(err, "NoSuchTagSet")) {
-			// We have to pull all buckets and then get the tags
-			// the bucket could get deleted between the list and get tags call
+		// listBuckestOutput will go through all of the buckets in the aws account
+		// starting with "podid". We are only concerned with cleaning up the buckets
+		// in the relevant region
+		if *bucket.BucketRegion != region {
 			continue
-		}
-		if err != nil {
-			return "", fmt.Errorf("getting bucket tagging: %w", err)
-		}
-
-		var foundClusterTag, foundPodIdentityTag bool
-		for _, tag := range getBucketTaggingOutput.TagSet {
-			if *tag.Key == constants.TestClusterTagKey && *tag.Value == cluster {
-				foundClusterTag = true
+		} else {
+			getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
+				Bucket: bucket.Name,
+			})
+			if err != nil && (e2eErrors.IsS3BucketNotFound(err) || e2eErrors.IsAwsError(err, "NoSuchTagSet")) {
+				// We have to pull all buckets and then get the tags
+				// the bucket could get deleted between the list and get tags call
+				continue
+			}
+			if err != nil {
+				return "", fmt.Errorf("getting bucket tagging: %w", err)
 			}
 
-			if *tag.Key == PodIdentityS3BucketPrefix && *tag.Value == "true" {
-				foundPodIdentityTag = true
-			}
+			var foundClusterTag, foundPodIdentityTag bool
+			for _, tag := range getBucketTaggingOutput.TagSet {
+				if *tag.Key == constants.TestClusterTagKey && *tag.Value == cluster {
+					foundClusterTag = true
+				}
 
-			if foundClusterTag && foundPodIdentityTag {
-				foundBuckets = append(foundBuckets, *bucket.Name)
+				if *tag.Key == PodIdentityS3BucketPrefix && *tag.Value == "true" {
+					foundPodIdentityTag = true
+				}
+
+				if foundClusterTag && foundPodIdentityTag {
+					foundBuckets = append(foundBuckets, *bucket.Name)
+				}
 			}
 		}
 	}
