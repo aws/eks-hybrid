@@ -11,7 +11,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -89,7 +91,7 @@ func (n *NodeMonitoringAgentTest) Validate(ctx context.Context) error {
 	for _, node := range nodes.Items {
 		nodeLogger := n.Logger.WithValues("node", node.Name)
 
-		if err := validateNodeConditions(node, nodeLogger); err != nil {
+		if err := n.waitForNodeConditions(ctx, node.Name, nodeLogger); err != nil {
 			return err
 		}
 
@@ -101,23 +103,29 @@ func (n *NodeMonitoringAgentTest) Validate(ctx context.Context) error {
 	return nil
 }
 
-func validateNodeConditions(node v1.Node, nodeLogger logr.Logger) error {
-	foundMonitoringConditions := false
-	for _, condition := range node.Status.Conditions {
-		if isMonitoringAgentCondition(condition) {
-			foundMonitoringConditions = true
-			nodeLogger.Info("Found monitoring agent condition",
-				"type", condition.Type,
-				"status", condition.Status,
-				"message", condition.Message)
-			break
+func (n *NodeMonitoringAgentTest) waitForNodeConditions(ctx context.Context, nodeName string, nodeLogger logr.Logger) error {
+	nodeLogger.Info("Waiting for monitoring agent conditions to appear")
+
+	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, nodeMonitoringAgentWaitTimeout, true, func(ctx context.Context) (bool, error) {
+		node, err := n.K8S.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
 		}
-	}
 
-	if !foundMonitoringConditions {
-		return fmt.Errorf("no monitoring agent conditions found")
+		for _, condition := range node.Status.Conditions {
+			if isMonitoringAgentCondition(condition) {
+				nodeLogger.Info("Found monitoring agent condition",
+					"type", condition.Type,
+					"status", condition.Status,
+					"message", condition.Message)
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("no monitoring agent conditions found for node %s after timeout: %w", nodeName, err)
 	}
-
 	return nil
 }
 
