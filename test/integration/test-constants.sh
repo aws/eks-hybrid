@@ -4,7 +4,7 @@
 # This file centralizes version definitions used across integration tests
 
 # Supported Kubernetes versions for install/uninstall tests
-declare SUPPORTED_VERSIONS=(1.28 1.29 1.30 1.31 1.32 1.33 1.34)
+declare SUPPORTED_VERSIONS=(1.29 1.30 1.31 1.32 1.33 1.34)
 
 # Default versions for upgrade tests and single-version tests
 declare DEFAULT_INITIAL_VERSION=1.33
