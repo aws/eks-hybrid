@@ -24,7 +24,7 @@ require (
 	github.com/aws/smithy-go v1.23.0
 	github.com/cert-manager/aws-privateca-issuer v1.7.0
 	github.com/cert-manager/cert-manager v1.18.2
-	github.com/containerd/containerd v1.7.28
+	github.com/containerd/containerd v1.7.29
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/go-ini/ini v1.67.0
 	github.com/go-logr/zapr v1.3.0
