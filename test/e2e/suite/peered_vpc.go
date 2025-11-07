@@ -449,9 +449,7 @@ type OSProvider struct {
 
 func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSProvider {
 	osList := []e2e.NodeadmOS{
-		osystem.NewUbuntu2004AMD(),
-		osystem.NewUbuntu2004ARM(),
-		osystem.NewUbuntu2004DockerSource(),
+		// Ubuntu 20.04 removed - kernel 5.4 doesn't support Cilium v1.18.3 (requires 5.10+)
 		osystem.NewUbuntu2204AMD(),
 		osystem.NewUbuntu2204ARM(),
 		osystem.NewUbuntu2204DockerSource(),
@@ -461,8 +459,7 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 		osystem.NewUbuntu2404NoDockerSource(),
 		osystem.NewAmazonLinux2023AMD(),
 		osystem.NewAmazonLinux2023ARM(),
-		osystem.NewRedHat8AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
-		osystem.NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		// RHEL 8 removed - kernel 4.18 doesn't support Cilium v1.18.3 (requires 5.10+)
 		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9NoDockerSource(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
