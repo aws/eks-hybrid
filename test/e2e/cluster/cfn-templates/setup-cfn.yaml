@@ -634,6 +634,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AWSPrivateCAConnectorForKubernetesPolicy
         - arn:aws:iam::aws:policy/AmazonFSxFullAccess
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
         - PolicyName: pod-identity-association-role-policy
           PolicyDocument:
@@ -668,6 +669,24 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:*
+                Resource:
+                  - '*'
+        - PolicyName: AllowCloudWatchLogsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource:
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
                 Resource:
                   - '*'
       Tags:

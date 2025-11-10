@@ -290,44 +290,45 @@ var _ = Describe("Mixed Mode Testing", func() {
 		})
 
 		Context("CloudWatch Observability Mixed Mode", func() {
-			It("should support CloudWatch Observability webhook functionality in mixed mode", func(ctx context.Context) {
+			It("should support CloudWatch Observability in mixed mode", func(ctx context.Context) {
 				testCaseLabels["test-case"] = "cloudwatch-mixed-mode"
 
 				test.Logger.Info("Starting mixed mode test with CloudWatch Observability addon")
 
-				// Create CloudWatch addon instance
-				cloudwatchAddon := addon.NewCloudWatchAddon(test.Cluster.Name)
+				podIdentityRoleArn, err := addon.PodIdentityRole(ctx, test.IAMClient, test.Cluster.Name)
+				Expect(err).NotTo(HaveOccurred(), "should get pod identity role ARN")
 
-				// Validate addon creation
+				test.Logger.Info("Retrieved pod identity role with CloudWatch Logs permissions", "roleArn", podIdentityRoleArn)
+
+				cloudwatchAddon := addon.NewCloudWatchAddon(test.Cluster.Name, podIdentityRoleArn)
+
 				Expect(cloudwatchAddon).NotTo(BeNil(), "CloudWatch addon should be created")
+				Expect(cloudwatchAddon.PodIdentityRoleArn).To(Equal(podIdentityRoleArn), "IRSA role should be configured")
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(cloudwatchAddon.Delete(ctx, test.EKSClient, test.Logger)).To(Succeed(), "should cleanup CloudWatch addon successfully")
 				})
 
-				DeferCleanup(func(ctx context.Context) {
-					report := CurrentSpecReport()
-					if report.State.Is(types.SpecStateFailed) {
-						err := cloudwatchAddon.Cleanup(ctx, test.K8sClient.Interface, testNamespace, testCaseLabels, test.Logger)
-						if err != nil {
-							GinkgoWriter.Printf("Failed to cleanup CloudWatch test resources: %v\n", err)
-						}
-					}
-				})
-
-				// Test CloudWatch webhook functionality in mixed mode
-				err := cloudwatchAddon.VerifyWebhookFunctionality(
+				err = cloudwatchAddon.SetupCwAddon(
 					ctx,
 					test.EKSClient,
 					test.K8sClient.Interface,
-					test.Cluster.Region,
-					hybridNodeSelector,
-					testCaseLabels,
+					test.CloudWatchLogsClient,
 					test.Logger,
 				)
-				Expect(err).NotTo(HaveOccurred(), "CloudWatch webhook functionality in mixed mode")
+				Expect(err).NotTo(HaveOccurred(), "should setup CloudWatch addon successfully")
 
-				test.Logger.Info("CloudWatch Observability mixed mode test successful - cross-VPC webhook communication confirmed")
+				test.Logger.Info("CloudWatch addon installed successfully")
+
+				err = cloudwatchAddon.VerifyCwAddon(
+					ctx,
+					test.K8sClient.Dynamic,
+					test.CloudWatchLogsClient,
+					test.Logger,
+				)
+				Expect(err).NotTo(HaveOccurred(), "should verify CloudWatch addon successfully")
+
+				test.Logger.Info("CloudWatch Observability mixed mode test successful")
 			})
 		})
 
