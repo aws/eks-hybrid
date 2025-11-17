@@ -21,6 +21,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/network"
+	nodevalidator "github.com/aws/eks-hybrid/internal/nodevalidator"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
@@ -128,6 +129,9 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	cluster, _ := eks.ReadCluster(ctx, awsConfig, nodeConfig)
 	runner.Register(validation.New("network-interface", network.NewNetworkInterfaceValidator(network.WithCluster(cluster)).Run))
+	runner.Register(validation.New("node-readiness", func(ctx context.Context, informer validation.Informer, obj *api.NodeConfig) error {
+		return nodevalidator.ExecuteActiveNodeValidator(ctx, log)
+	}))
 
 	if err := runner.Sequentially(ctx, nodeConfig); err != nil {
 		fmt.Println("")
