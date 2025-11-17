@@ -8,10 +8,11 @@ package bridge
 import (
 	unsafe "unsafe"
 
-	v1alpha1 "github.com/aws/eks-hybrid/api/v1alpha1"
-	api "github.com/aws/eks-hybrid/internal/api"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+
+	v1alpha1 "github.com/aws/eks-hybrid/api/v1alpha1"
+	api "github.com/aws/eks-hybrid/internal/api"
 )
 
 func init() {
