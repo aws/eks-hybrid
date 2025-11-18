@@ -28,10 +28,10 @@ nodeadm install $CURRENT_VERSION --credential-provider iam-ra
 mock::aws_signing_helper
 
 # should fail when --node-ip set to ip not in remote node networks
-if nodeadm init --skip run,k8s-authentication-validation --config-source file://config-ip-out-of-range.yaml; then
+if nodeadm init --skip run,k8s-authentication-validation,cluster-access-validation --config-source file://config-ip-out-of-range.yaml; then
     echo "nodeadm init should have failed with ip out of range but succeeded unexpectedly"
     exit 1
 fi
 
 # should succeed when --node-ip set to ip in remote node networks
-nodeadm init --skip run,k8s-authentication-validation --config-source file://config-ip-in-range.yaml
+nodeadm init --skip run,k8s-authentication-validation,cluster-access-validation --config-source file://config-ip-in-range.yaml
