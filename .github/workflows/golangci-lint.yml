@@ -26,6 +26,6 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.4.0
-          # Disable package caching to avoid a double cache with setup-go.
-          skip-pkg-cache: true
+          # Disable caching to avoid a double cache with setup-go.
+          skip-cache: true
           args: --timeout 10m
