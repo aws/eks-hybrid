@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/eks-hybrid/cmd/nodeadm/config"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/debug"
+	"github.com/aws/eks-hybrid/cmd/nodeadm/download"
 	initcmd "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/uninstall"
@@ -32,6 +33,7 @@ func main() {
 
 	cmds := []cli.Command{
 		config.NewConfigCommand(),
+		download.NewCommand(),
 		initcmd.NewInitCommand(),
 		install.NewCommand(),
 		uninstall.NewCommand(),

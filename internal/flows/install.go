@@ -29,6 +29,7 @@ type Installer struct {
 	SsmRegion          string
 	Tracker            *tracker.Tracker
 	Logger             *zap.Logger
+	PrivateMode        bool // Skip OS packages when using private mode
 }
 
 func (i *Installer) Run(ctx context.Context) error {
@@ -38,6 +39,24 @@ func (i *Installer) Run(ctx context.Context) error {
 		return err
 	}
 
+	if i.PrivateMode {
+		i.Logger.Info("Private mode: Skipping OS package installation")
+		i.Logger.Info("Installing credential processes and EKS artifacts from manifest...")
+
+		// In private mode, install credential processes and EKS artifacts (but skip OS packages)
+		if err := i.installCredentialProcess(ctx); err != nil {
+			return err
+		}
+
+		if err := i.installEksArtifacts(ctx); err != nil {
+			return err
+		}
+
+		i.Logger.Info("Private mode install completed")
+		return i.Tracker.Save()
+	}
+
+	// Normal installation flow
 	// temporary fix to re-configure package manager during upgrade which currently does full uninstall and re-install
 	// TODO: move Configure() back to install command when upgrade flow is changed
 	i.Logger.Info("Configuring package manager. This might take a while...")

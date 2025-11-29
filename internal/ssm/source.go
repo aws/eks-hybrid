@@ -17,6 +17,9 @@ import (
 // down the agent from the proper region configured in the nodeConfig during init command
 const DefaultSsmInstallerRegion = "us-west-2"
 
+// The following public key expires on 2026-07-15 (July 15, 2026). Systems Manager will
+// publish a new key before the old one expires, we should migrate to that key at that time.
+// See https://docs.aws.amazon.com/systems-manager/latest/userguide/verify-agent-signature.html#verify-agent-signature-current
 const ssmPublicGPGKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----
 Version: GnuPG v2.0.22 (GNU/Linux)
 
