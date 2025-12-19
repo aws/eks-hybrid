@@ -449,23 +449,21 @@ var _ = Describe("Hybrid Nodes", func() {
 					_, err := addonEc2Test.NewFsxCSIDriverTest(ctx)
 					Expect(err).To(Succeed(), "should have created FSx CSI driver test")
 
-					// Comment out the below code when the add-on is available publicly on aws console
+					fsxCSITest, err := addonEc2Test.NewFsxCSIDriverTest(ctx)
 
-					// fsxCSITest, err := addonEc2Test.NewFsxCSIDriverTest(ctx)
+					Expect(err).To(Succeed(), "should have created FSx CSI driver test")
 
-					// Expect(err).To(Succeed(), "should have created FSx CSI driver test")
+					DeferCleanup(func(ctx context.Context) {
+						Expect(fsxCSITest.Delete(ctx)).To(Succeed(), "should cleanup FSx CSI driver successfully")
+					})
 
-					// DeferCleanup(func(ctx context.Context) {
-					// Expect(fsxCSITest.Delete(ctx)).To(Succeed(), "should cleanup FSx CSI driver successfully")
-					// })
+					Expect(fsxCSITest.Create(ctx)).To(
+						Succeed(), "FSx CSI driver should have been created successfully",
+					)
 
-					// Expect(fsxCSITest.Create(ctx)).To(
-					// Succeed(), "FSx CSI driver should have been created successfully",
-					// )
-
-					// Expect(fsxCSITest.Validate(ctx)).To(
-					// Succeed(), "FSx CSI driver should have been validated successfully",
-					// )
+					Expect(fsxCSITest.Validate(ctx)).To(
+						Succeed(), "FSx CSI driver should have been validated successfully",
+					)
 				})
 			}, Label("fsx-csi-driver"))
 		})
