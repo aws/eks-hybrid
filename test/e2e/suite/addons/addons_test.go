@@ -403,25 +403,20 @@ var _ = Describe("Hybrid Nodes", func() {
 
 			Context("runs Secrets Store CSI driver tests", func() {
 				It("uses all OS", func(ctx context.Context) {
-					_, err := addonEc2Test.NewSecretsStoreCSIDriverTest(ctx)
+					secretsStoreTest, err := addonEc2Test.NewSecretsStoreCSIDriverTest(ctx)
 					Expect(err).To(Succeed(), "should have created secrets store CSI driver test")
 
-					// Comment out the below code when the add-on is available publicly on aws console
+					DeferCleanup(func(ctx context.Context) {
+						Expect(secretsStoreTest.Delete(ctx)).To(Succeed(), "should cleanup Secrets Store CSI driver successfully")
+					})
 
-					// secretsStoreTest, err := addonEc2Test.NewSecretsStoreCSIDriverTest(ctx)
-					// Expect(err).To(Succeed(), "should have created secrets store CSI driver test")
+					Expect(secretsStoreTest.Create(ctx)).To(
+						Succeed(), "Secrets Store CSI driver should have been created successfully",
+					)
 
-					// DeferCleanup(func(ctx context.Context) {
-					// Expect(secretsStoreTest.Delete(ctx)).To(Succeed(), "should cleanup Secrets Store CSI driver successfully")
-					// })
-
-					// Expect(secretsStoreTest.Create(ctx)).To(
-					// Succeed(), "Secrets Store CSI driver should have been created successfully",
-					// )
-
-					// Expect(secretsStoreTest.Validate(ctx)).To(
-					//	Succeed(), "Secrets Store CSI driver should have been validated successfully",
-					// )
+					Expect(secretsStoreTest.Validate(ctx)).To(
+						Succeed(), "Secrets Store CSI driver should have been validated successfully",
+					)
 				})
 			}, Label("secrets-store-csi-driver"))
 
@@ -446,26 +441,20 @@ var _ = Describe("Hybrid Nodes", func() {
 
 			Context("runs FSx CSI driver tests", func() {
 				It("uses all OS", func(ctx context.Context) {
-					_, err := addonEc2Test.NewFsxCSIDriverTest(ctx)
+					fsxCSITest, err := addonEc2Test.NewFsxCSIDriverTest(ctx)
 					Expect(err).To(Succeed(), "should have created FSx CSI driver test")
 
-					// Comment out the below code when the add-on is available publicly on aws console
+					DeferCleanup(func(ctx context.Context) {
+						Expect(fsxCSITest.Delete(ctx)).To(Succeed(), "should cleanup FSx CSI driver successfully")
+					})
 
-					// fsxCSITest, err := addonEc2Test.NewFsxCSIDriverTest(ctx)
+					Expect(fsxCSITest.Create(ctx)).To(
+						Succeed(), "FSx CSI driver should have been created successfully",
+					)
 
-					// Expect(err).To(Succeed(), "should have created FSx CSI driver test")
-
-					// DeferCleanup(func(ctx context.Context) {
-					// Expect(fsxCSITest.Delete(ctx)).To(Succeed(), "should cleanup FSx CSI driver successfully")
-					// })
-
-					// Expect(fsxCSITest.Create(ctx)).To(
-					// Succeed(), "FSx CSI driver should have been created successfully",
-					// )
-
-					// Expect(fsxCSITest.Validate(ctx)).To(
-					// Succeed(), "FSx CSI driver should have been validated successfully",
-					// )
+					Expect(fsxCSITest.Validate(ctx)).To(
+						Succeed(), "FSx CSI driver should have been validated successfully",
+					)
 				})
 			}, Label("fsx-csi-driver"))
 		})
