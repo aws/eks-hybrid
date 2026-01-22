@@ -231,7 +231,8 @@ Resources:
   HybridNodeVPCPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Select [0, !GetAZs '']
+      # Use second AZ (eu-west-3b) instead of first (eu-west-3a) to avoid capacity issues.
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref HybridNodePublicSubnetCidr
       MapPublicIpOnLaunch: true
       Tags:
