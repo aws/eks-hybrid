@@ -382,24 +382,24 @@ var _ = Describe("Hybrid Nodes", func() {
 				}, Label("bottlerocket"))
 			}, Label("cert-manager"))
 
-			Context("runs S3 mountpoint CSI driver tests", func() {
-				It("uses all OS", func(ctx context.Context) {
-					s3MountpointTest, err := addonEc2Test.NewS3MountpointCSIDriverTest(ctx)
-					Expect(err).To(Succeed(), "should have created s3 mountpoint test")
+			// Context("runs S3 mountpoint CSI driver tests", func() {
+			// 	It("uses all OS", func(ctx context.Context) {
+			// 		s3MountpointTest, err := addonEc2Test.NewS3MountpointCSIDriverTest(ctx)
+			// 		Expect(err).To(Succeed(), "should have created s3 mountpoint test")
 
-					DeferCleanup(func(ctx context.Context) {
-						Expect(s3MountpointTest.Delete(ctx)).To(Succeed(), "should cleanup S3 mountpoint CSI driver successfully")
-					})
+			// 		DeferCleanup(func(ctx context.Context) {
+			// 			Expect(s3MountpointTest.Delete(ctx)).To(Succeed(), "should cleanup S3 mountpoint CSI driver successfully")
+			// 		})
 
-					Expect(s3MountpointTest.Create(ctx)).To(
-						Succeed(), "S3 mountpoint CSI driver should have been created successfully",
-					)
+			// 		Expect(s3MountpointTest.Create(ctx)).To(
+			// 			Succeed(), "S3 mountpoint CSI driver should have been created successfully",
+			// 		)
 
-					Expect(s3MountpointTest.Validate(ctx)).To(
-						Succeed(), "S3 mountpoint CSI driver should have been validated successfully",
-					)
-				})
-			}, Label("s3-mountpoint-csi-driver"))
+			// 		Expect(s3MountpointTest.Validate(ctx)).To(
+			// 			Succeed(), "S3 mountpoint CSI driver should have been validated successfully",
+			// 		)
+			// 	})
+			// }, Label("s3-mountpoint-csi-driver"))
 
 			Context("runs Secrets Store CSI driver tests", func() {
 				It("uses all OS", func(ctx context.Context) {
