@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -22,9 +23,10 @@ import (
 )
 
 const (
-	secretsStoreCSIDriver             = "secrets-provider-aws-secrets-store-csi-driver"
-	secretsStoreCSIDriverNamespace    = "kube-system"
-	secretsStoreCSIDriverProvider     = "secrets-provider-aws-secrets-store-csi-driver-provider-aws"
+	secretsStoreCSIDriver             = "aws-secrets-store-csi-driver-provider"
+	secretsStoreCSIDriverNamespace    = "aws-secrets-manager"
+	secretsStoreCSIDriverMainDriver   = "secrets-store-csi-driver"
+	secretsStoreCSIDriverProvider     = "secrets-store-csi-driver"
 	secretsStoreTestPod               = "secrets-store-app"
 	secretsStoreTestPodServiceAccount = "nginx-pod-identity-deployment-sa"
 )
@@ -114,6 +116,12 @@ func (s *SecretsStoreCSIDriverTest) Validate(ctx context.Context) error {
 		return fmt.Errorf("failed to deploy Secrets Store CSI static provisioning yaml: %w", err)
 	}
 
+	// Verify ServiceAccount was created
+	_, err = s.K8S.CoreV1().ServiceAccounts(defaultNamespace).Get(ctx, secretsStoreTestPodServiceAccount, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("ServiceAccount %s not found in namespace %s: %w", secretsStoreTestPodServiceAccount, defaultNamespace, err)
+	}
+
 	podListOptions := metav1.ListOptions{
 		FieldSelector: "metadata.name=" + secretsStoreTestPod,
 	}
@@ -155,16 +163,33 @@ func (s *SecretsStoreCSIDriverTest) Delete(ctx context.Context) error {
 }
 
 func (s *SecretsStoreCSIDriverTest) findTestSecret(ctx context.Context) error {
-	s.Logger.Info("Finding test secret by cluster tag")
+	s.Logger.Info("Finding test secret by cluster tag", "cluster", s.Cluster, "tagKey", constants.TestClusterTagKey)
 
-	// List all secrets
-	listSecretsOutput, err := s.SecretsManagerClient.ListSecrets(ctx, &secretsmanager.ListSecretsInput{})
-	if err != nil {
-		return fmt.Errorf("failed to list secrets: %w", err)
+	// List all secrets with pagination support
+	var allSecrets []smtypes.SecretListEntry
+	listSecretsInput := &secretsmanager.ListSecretsInput{}
+	pageCount := 0
+
+	for {
+		pageCount++
+
+		listSecretsOutput, err := s.SecretsManagerClient.ListSecrets(ctx, listSecretsInput)
+		if err != nil {
+			return fmt.Errorf("failed to list secrets: %w", err)
+		}
+
+		allSecrets = append(allSecrets, listSecretsOutput.SecretList...)
+
+		if listSecretsOutput.NextToken == nil {
+			break
+		}
+		listSecretsInput.NextToken = listSecretsOutput.NextToken
 	}
 
+	s.Logger.Info("Listed all secrets from AWS with pagination", "totalPages", pageCount, "totalSecrets", len(allSecrets))
+
 	// Find secret with the cluster tag
-	for _, secret := range listSecretsOutput.SecretList {
+	for _, secret := range allSecrets {
 		describeSecretOutput, err := s.SecretsManagerClient.DescribeSecret(ctx, &secretsmanager.DescribeSecretInput{
 			SecretId: secret.Name,
 		})

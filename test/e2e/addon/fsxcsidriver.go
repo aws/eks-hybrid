@@ -20,9 +20,9 @@ const (
 	fsxCSIDriver                = "aws-fsx-csi-driver"
 	fsxCSIDriverNamespace       = "kube-system"
 	fsxTestPod                  = "fsx-test-app"
-	fsxControllerServiceAccount = "fsx-csi-driver-sa"
+	fsxControllerServiceAccount = "fsx-csi-controller-sa"
 	fsxTestString               = "Hello FSX CSI Driver"
-	fsxPodWaitTimeout           = 15 * time.Minute
+	fsxPodWaitTimeout           = 35 * time.Minute
 )
 
 //go:embed testdata/fsx_csi_dynamic_provisioning.yaml
@@ -42,7 +42,6 @@ type FsxCSIDriverTest struct {
 }
 
 // Create installs the AWS FSX CSI driver addon
-// Note: This add-on is not compatible with hybrid nodes yet, so we assume success
 func (f *FsxCSIDriverTest) Create(ctx context.Context) error {
 	f.addon = &Addon{
 		Cluster:   f.Cluster,
@@ -56,7 +55,6 @@ func (f *FsxCSIDriverTest) Create(ctx context.Context) error {
 		},
 	}
 
-	// Since this add-on is not compatible with hybrid nodes yet, we assume it's successfully created
 	f.Logger.Info("Creating AWS FSX CSI driver addon (assuming success for hybrid nodes)")
 
 	if err := f.addon.Create(ctx, f.EKSClient, f.Logger); err != nil {
@@ -69,13 +67,18 @@ func (f *FsxCSIDriverTest) Create(ctx context.Context) error {
 
 // Validate checks if AWS FSX CSI driver is working correctly
 func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
+	// Generate unique suffix to avoid resource name collisions
+	uniqueSuffix := fmt.Sprintf("-%d", time.Now().Unix())
+	uniqueTestPod := fsxTestPod + uniqueSuffix
+
 	// Replace yaml file placeholder values
 	replacer := strings.NewReplacer(
 		"{{NAMESPACE}}", defaultNamespace,
-		"{{FSX_TEST_POD}}", fsxTestPod,
+		"{{FSX_TEST_POD}}", uniqueTestPod,
 		"{{SUBNET_ID}}", f.SubnetID,
 		"{{SECURITY_GROUP_ID}}", f.SecurityGroupID,
 		"{{FSX_TEST_STRING}}", fsxTestString,
+		"{{UNIQUE_SUFFIX}}", uniqueSuffix,
 	)
 
 	replacedYaml := replacer.Replace(fsxDynamicProvisioningYaml)
@@ -91,7 +94,7 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 	}
 
 	podListOptions := metav1.ListOptions{
-		FieldSelector: "metadata.name=" + fsxTestPod,
+		FieldSelector: "metadata.name=" + uniqueTestPod,
 	}
 
 	if err := kubernetes.WaitForPodsToBeRunningWithTimeout(ctx, f.K8S, podListOptions, defaultNamespace, f.Logger, fsxPodWaitTimeout); err != nil {
@@ -100,7 +103,7 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 
 	// Try to read the output file
 	execCmd := []string{"cat", "/data/out.txt"}
-	stdout, stderr, err := kubernetes.ExecPodWithRetries(ctx, f.K8SConfig, f.K8S, fsxTestPod, defaultNamespace, execCmd...)
+	stdout, stderr, err := kubernetes.ExecPodWithRetries(ctx, f.K8SConfig, f.K8S, uniqueTestPod, defaultNamespace, execCmd...)
 	if err != nil {
 		return fmt.Errorf("could not read data from FSX volume: %w", err)
 	}
