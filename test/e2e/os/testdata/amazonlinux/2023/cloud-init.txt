@@ -25,6 +25,13 @@ write_files:
 
 runcmd:
   - systemctl enable rsyslog --now
+  # Install Lustre client for FSx CSI driver support
+  - |
+    dnf install -y lustre-client
+    echo -e "lnet\nlustre" > /etc/modules-load.d/lustre.conf
+    depmod -a
+    modprobe lnet
+    modprobe lustre
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}"
   - /tmp/nvidia-driver-install.sh
 
