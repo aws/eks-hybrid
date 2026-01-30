@@ -22,6 +22,16 @@ write_files:
 {{- end }}
 
 runcmd:
+  # Install Lustre client for FSx CSI driver support
+  - |
+    wget -O - https://fsx-lustre-client-repo-public-keys.s3.amazonaws.com/fsx-ubuntu-public-key.asc | gpg --dearmor | tee /usr/share/keyrings/fsx-ubuntu-public-key.gpg >/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/fsx-ubuntu-public-key.gpg] https://fsx-lustre-client-repo.s3.amazonaws.com/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/fsxlustreclientrepo.list
+    apt-get update
+    apt-get install -y lustre-client-modules-$(uname -r) || apt-get install -y lustre-client-modules-aws
+    echo -e "lnet\nlustre" > /etc/modules-load.d/lustre.conf
+    depmod -a
+    modprobe lnet
+    modprobe lustre
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "{{ .NodeadmAdditionalArgs }}"
   - /tmp/nvidia-driver-install.sh
 
