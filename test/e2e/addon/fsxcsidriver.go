@@ -101,6 +101,8 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 		return fmt.Errorf("failed to wait for test pod to be running: %w", err)
 	}
 
+	f.Logger.Info("FSx test pod is running successfully", "podName", uniqueTestPod)
+
 	// Try to read the output file
 	execCmd := []string{"cat", "/data/out.txt"}
 	stdout, stderr, err := kubernetes.ExecPodWithRetries(ctx, f.K8SConfig, f.K8S, uniqueTestPod, defaultNamespace, execCmd...)
@@ -112,14 +114,18 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 		return fmt.Errorf("stderr is not empty: %s", stderr)
 	}
 
-	if stdout != fsxTestString {
-		return fmt.Errorf("expected string value %s, got %s", fsxTestString, stdout)
+	if strings.TrimSpace(stdout) != fsxTestString {
+		return fmt.Errorf("expected string value %s, got %s", fsxTestString, strings.TrimSpace(stdout))
 	}
+
+	f.Logger.Info("FSx CSI Driver validation successful")
 
 	// Clean up - delete dynamic provisioning yaml
 	if err := kubernetes.DeleteManifestsWithRetries(ctx, f.K8S, objs); err != nil {
 		return fmt.Errorf("failed to delete FSX CSI dynamic provisioning yaml: %w", err)
 	}
+
+	f.Logger.Info("FSx test resources cleaned up successfully")
 
 	return nil
 }
