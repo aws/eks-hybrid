@@ -25,6 +25,21 @@ write_files:
 
 runcmd:
   - systemctl enable rsyslog --now
+  # Install Lustre client for FSx CSI driver support (Amazon Linux 2023 specific)
+  - |
+    cat << 'EOF' > /etc/yum.repos.d/aws-fsx.repo
+    [aws-fsx]
+    name=AWS FSx Lustre Client
+    baseurl=https://fsx-lustre-client-repo.s3.amazonaws.com/el/9/x86_64/
+    enabled=1
+    gpgcheck=0
+    priority=10
+    EOF
+    dnf install -y kernel-devel-$(uname -r) kernel-headers-$(uname -r) || true
+    dnf install -y kmod-lustre-client lustre-client
+    depmod -a
+    modprobe lnet || true
+    modprobe lustre || true
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}"
   - /tmp/nvidia-driver-install.sh
 

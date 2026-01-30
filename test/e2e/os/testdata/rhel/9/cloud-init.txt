@@ -36,7 +36,20 @@ runcmd:
 {{- if eq .ContainerdSource "none" }}
   - /tmp/install-containerd.sh
 {{- end }}
-  - ln -sf /run/log/journal /var/log/journal  
+  - ln -sf /run/log/journal /var/log/journal
+  # Install Lustre client for FSx CSI driver support (RHEL 9 specific)
+  - |
+    cat << 'EOF' > /etc/yum.repos.d/aws-fsx.repo
+    [aws-fsx]
+    name=AWS FSx Lustre Client
+    baseurl=https://fsx-lustre-client-repo.s3.amazonaws.com/el/9/x86_64/
+    enabled=1
+    gpgcheck=0
+    EOF
+    dnf install -y kmod-lustre-client lustre-client
+    depmod -a
+    modprobe lnet || true
+    modprobe lustre || true
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source {{ .ContainerdSource }}"
   - /tmp/nvidia-driver-install.sh
 
