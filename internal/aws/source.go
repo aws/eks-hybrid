@@ -188,6 +188,36 @@ func GetRegionConfigFromManifest(ctx context.Context, region, manifestPath strin
 	return &regionCfg, nil
 }
 
+// GetRegionAndPartitionConfig returns RegionData and PartitionConfig for a region
+func GetRegionAndPartitionConfig(ctx context.Context, region string) (*RegionData, PartitionConfig, error) {
+	manifest, err := getReleaseManifest(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	regionCfg, ok := manifest.RegionConfig[region]
+	if !ok {
+		return nil, nil, fmt.Errorf("region %s not found in manifest", region)
+	}
+
+	return &regionCfg, manifest.PartitionConfig, nil
+}
+
+// GetRegionAndPartitionConfigFromFile returns RegionData and PartitionConfig from a file
+func GetRegionAndPartitionConfigFromFile(ctx context.Context, region, manifestPath string) (*RegionData, PartitionConfig, error) {
+	manifest, err := getReleaseManifestFromFile(manifestPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	regionCfg, ok := manifest.RegionConfig[region]
+	if !ok {
+		return nil, nil, fmt.Errorf("region %s not found in manifest", region)
+	}
+
+	return &regionCfg, manifest.PartitionConfig, nil
+}
+
 // GetKubelet satisfies kubelet.Source.
 func (as Source) GetKubelet(ctx context.Context) (artifact.Source, error) {
 	return as.getEksSource(ctx, "kubelet")

@@ -15,8 +15,6 @@ import (
 	"github.com/aws/eks-hybrid/internal/system"
 )
 
-const hybridServicesDomain = "amazonaws.com"
-
 // Returns the base64 encoded authorization token string for ECR of the format "AWS:XXXXX"
 func GetAuthorizationToken(awsConfig *aws.Config) (string, error) {
 	ecrClient := ecr.NewFromConfig(*awsConfig)
@@ -41,8 +39,22 @@ func GetEKSRegistry(region string, regionConfig *awsinternal.RegionData) (ECRReg
 	return getEksRegistryWithServiceDomainAndRegionConfig(region, servicesDomain, regionConfig)
 }
 
-func GetEKSHybridRegistry(region string, regionConfig *awsinternal.RegionData) (ECRRegistry, error) {
-	return getEksRegistryWithServiceDomainAndRegionConfig(region, hybridServicesDomain, regionConfig)
+func GetEKSHybridRegistry(region string, regionConfig *awsinternal.RegionData, partitionConfig awsinternal.PartitionConfig) (ECRRegistry, error) {
+	var servicesDomain string
+	if regionConfig != nil && regionConfig.Partition != "" {
+		if partitionConfig != nil {
+			if suffix, ok := partitionConfig[regionConfig.Partition]; ok {
+				servicesDomain = suffix
+			}
+		}
+		if servicesDomain == "" {
+			servicesDomain = awsinternal.GetPartitionDNSSuffix(regionConfig.Partition)
+		}
+	} else {
+		partition := awsinternal.GetPartitionFromRegionFallback(region)
+		servicesDomain = awsinternal.GetPartitionDNSSuffix(partition)
+	}
+	return getEksRegistryWithServiceDomainAndRegionConfig(region, servicesDomain, regionConfig)
 }
 
 func getEksRegistryWithServiceDomainAndRegionConfig(region, servicesDomain string, regionConfig *awsinternal.RegionData) (ECRRegistry, error) {

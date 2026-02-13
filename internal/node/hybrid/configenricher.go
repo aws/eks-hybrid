@@ -24,7 +24,7 @@ func (hnp *HybridNodeProvider) Enrich(ctx context.Context, opts ...configenriche
 		opt(config)
 	}
 
-	eksRegistry, err := ecr.GetEKSHybridRegistry(hnp.nodeConfig.Spec.Cluster.Region, config.RegionConfig)
+	eksRegistry, err := ecr.GetEKSHybridRegistry(hnp.nodeConfig.Spec.Cluster.Region, config.RegionConfig, config.PartitionConfig)
 	if err != nil {
 		return err
 	}
