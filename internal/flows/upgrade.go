@@ -59,7 +59,8 @@ func (u *Upgrader) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := u.NodeProvider.Enrich(ctx, configenricher.WithRegionConfig(&u.AwsSource.RegionInfo)); err != nil {
+	// Pass region config from AwsSource (partition config will be nil/empty during upgrade)
+	if err := u.NodeProvider.Enrich(ctx, configenricher.WithRegionAndPartitionConfig(&u.AwsSource.RegionInfo, nil)); err != nil {
 		return err
 	}
 	if err := initDaemons(ctx, u.NodeProvider, u.SkipPhases, u.Logger); err != nil {

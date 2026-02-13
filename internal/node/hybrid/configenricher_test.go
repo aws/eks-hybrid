@@ -431,7 +431,7 @@ func Test_hybridNodeProvider_Enrich(t *testing.T) {
 			)
 			g.Expect(err).To(Succeed())
 
-			err = p.Enrich(ctx, configenricher.WithRegionConfig(&internalaws.RegionData{}))
+			err = p.Enrich(ctx, configenricher.WithRegionAndPartitionConfig(&internalaws.RegionData{}, nil))
 			if tc.wantErr != "" {
 				g.Expect(err).To(MatchError(ContainSubstring(tc.wantErr)))
 			} else {

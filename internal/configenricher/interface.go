@@ -8,16 +8,18 @@ import (
 
 // ConfigEnricherConfig holds the configuration options
 type ConfigEnricherConfig struct {
-	RegionConfig *aws.RegionData
+	RegionConfig    *aws.RegionData
+	PartitionConfig aws.PartitionConfig
 }
 
 // ConfigEnricherOption is a function that modifies ConfigEnricherConfig
 type ConfigEnricherOption func(*ConfigEnricherConfig)
 
-// WithRegionConfig creates a ConfigEnricherOption that sets the region config
-func WithRegionConfig(regionConfig *aws.RegionData) ConfigEnricherOption {
+// WithRegionAndPartitionConfig creates a ConfigEnricherOption that sets region and partition config
+func WithRegionAndPartitionConfig(regionConfig *aws.RegionData, partitionConfig aws.PartitionConfig) ConfigEnricherOption {
 	return func(config *ConfigEnricherConfig) {
 		config.RegionConfig = regionConfig
+		config.PartitionConfig = partitionConfig
 	}
 }
 
