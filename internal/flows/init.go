@@ -40,22 +40,29 @@ func (i *Initer) Run(ctx context.Context) error {
 	var regionConfig *aws.RegionData
 	var err error
 
-	// Get region config from manifest for ECR registry lookup
+	// Get region config for ECR registry lookup
 	region := i.NodeProvider.GetNodeConfig().Spec.Cluster.Region
 	if i.PrivateMode {
 		regionConfig, err = aws.GetRegionConfigFromManifest(ctx, region, i.ManifestOverride)
 		if err != nil {
-			i.Logger.Warn("Failed to get region config from local manifest", zap.Error(err))
+			i.Logger.Warn("Failed to get region config from local file", zap.Error(err))
 		}
 	} else {
 		regionConfig, err = aws.GetRegionConfig(ctx, region)
 		if err != nil {
-			i.Logger.Warn("Failed to get region config from manifest", zap.Error(err))
+			i.Logger.Warn("Failed to get region config", zap.Error(err))
 		}
 	}
 
-	if err := i.NodeProvider.Enrich(ctx, configenricher.WithRegionConfig(regionConfig)); err != nil {
-		return err
+	// Enrich with region config if available
+	if regionConfig != nil {
+		if err := i.NodeProvider.Enrich(ctx, configenricher.WithRegionConfig(regionConfig)); err != nil {
+			return err
+		}
+	} else {
+		if err := i.NodeProvider.Enrich(ctx); err != nil {
+			return err
+		}
 	}
 
 	if err := i.NodeProvider.Validate(ctx); err != nil {

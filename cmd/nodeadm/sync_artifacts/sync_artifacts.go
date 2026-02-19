@@ -22,7 +22,6 @@ import (
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/logger"
-	"github.com/aws/eks-hybrid/internal/ssm"
 )
 
 const syncArtifactsHelpText = `Examples:
@@ -211,8 +210,7 @@ func (d *Downloader) collectArtifacts() ([]ArtifactInfo, error) {
 	}
 
 	// SSM artifacts
-	ssmInstaller := ssm.NewSSMInstaller(d.Logger, d.Region)
-	installerURL, err := d.getSSMInstallerURL(ssmInstaller)
+	installerURL, err := d.getSSMInstallerURL()
 	if err == nil {
 		// Add the main SSM installer
 		artifacts = append(artifacts, ArtifactInfo{
@@ -303,16 +301,17 @@ func (d *Downloader) streamToS3(ctx context.Context, svc *s3.Client, url, s3Key 
 	return errors.Wrap(err, "uploading to S3 using manager")
 }
 
-func (d *Downloader) getSSMInstallerURL(ssmInstaller ssm.Source) (string, error) {
-	// We need to use reflection or a type assertion to get the URL builder
-	// For now, let's construct the URL directly using the same logic as SSM source
+func (d *Downloader) getSSMInstallerURL() (string, error) {
+	// Construct the URL directly using the same logic as SSM source
 	variant, err := d.detectPlatformVariant()
 	if err != nil {
 		return "", err
 	}
 
+	dnsSuffix := d.AwsSource.RegionInfo.DnsSuffix
+
 	platform := fmt.Sprintf("%v_%v", variant, d.Arch)
-	return fmt.Sprintf("https://amazon-ssm-%v.s3.%v.amazonaws.com/latest/%v/ssm-setup-cli", d.Region, d.Region, platform), nil
+	return fmt.Sprintf("https://amazon-ssm-%v.s3.%v.%s/latest/%v/ssm-setup-cli", d.Region, d.Region, dnsSuffix, platform), nil
 }
 
 func (d *Downloader) detectPlatformVariant() (string, error) {
@@ -326,9 +325,11 @@ func (d *Downloader) detectPlatformVariant() (string, error) {
 }
 
 func (d *Downloader) generateCustomManifest(artifacts []ArtifactInfo) error {
-	// Create base S3 URL
-	baseS3URL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s/%d",
-		d.S3Bucket, d.Region, strings.TrimSuffix(d.S3Prefix, "/"), d.SyncTimestamp)
+	dnsSuffix := d.AwsSource.RegionInfo.DnsSuffix
+
+	// Create base S3 URL with partition-aware DNS suffix
+	baseS3URL := fmt.Sprintf("https://%s.s3.%s.%s/%s/%d",
+		d.S3Bucket, d.Region, dnsSuffix, strings.TrimSuffix(d.S3Prefix, "/"), d.SyncTimestamp)
 
 	// Build artifact list with custom S3 URIs
 	var eksArtifacts []aws.Artifact

@@ -90,8 +90,10 @@ type NodeSpec struct {
 }
 
 type Cluster struct {
-	Name   string
-	Region string
+	Name       string
+	Region     string
+	DNSSuffix  string
+	EcrAccount string
 }
 
 // CredsOS is the Node OS.

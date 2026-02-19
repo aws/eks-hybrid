@@ -21,6 +21,8 @@ type VerifyNode struct {
 	K8s          clientgo.Interface
 	Logger       logr.Logger
 	Region       string
+	DNSSuffix    string
+	EcrAccount   string
 
 	NodeName string
 	NodeIP   string
@@ -65,7 +67,7 @@ func (v VerifyNode) Run(ctx context.Context) error {
 
 	v.Logger.Info("Creating a test pod on the hybrid node...")
 	podName := GetNginxPodName(nodeName)
-	if err = CreateNginxPodInNode(ctx, v.K8s, nodeName, testPodNamespace, v.Region, v.Logger); err != nil {
+	if err = CreateNginxPodInNode(ctx, v.K8s, nodeName, testPodNamespace, v.Region, v.Logger, v.DNSSuffix, v.EcrAccount); err != nil {
 		return err
 	}
 	v.Logger.Info(fmt.Sprintf("Pod %s created and running on node %s", podName, nodeName))

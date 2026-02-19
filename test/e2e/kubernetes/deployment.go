@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 // CreateDeployment creates a deployment with the specified configuration
@@ -26,6 +25,7 @@ func CreateDeployment(
 	targetPort int32,
 	replicas int32,
 	logger logr.Logger,
+	dnsSuffix, ecrAccount string,
 	additionalLabels ...map[string]string,
 ) (*appsv1.Deployment, error) {
 	actualTargetPort := int32(80) // nginx deployments use port 80
@@ -65,7 +65,7 @@ func CreateDeployment(
 					Containers: []corev1.Container{
 						{
 							Name:    name,
-							Image:   fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/nginx/nginx:latest", constants.EcrAccountId, region),
+							Image:   fmt.Sprintf("%s.dkr.ecr.%s.%s/ecr-public/nginx/nginx:latest", ecrAccount, region, dnsSuffix),
 							Command: containerCommand,
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: actualTargetPort, Protocol: corev1.ProtocolTCP},

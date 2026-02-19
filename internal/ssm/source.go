@@ -10,6 +10,7 @@ import (
 
 	"go.uber.org/zap"
 
+	awsinternal "github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
@@ -78,6 +79,14 @@ func WithPublicKey(key string) SSMInstallerOption {
 	}
 }
 
+// WithDnsSuffix allows setting the DNS suffix from manifest data
+// This takes precedence over region-based partition detection
+func WithDnsSuffix(dnsSuffix string) SSMInstallerOption {
+	return func(s *ssmInstallerSource) {
+		s.dnsSuffix = dnsSuffix
+	}
+}
+
 // SSMInstaller provides a Source that retrieves the SSM installer from the official
 // release endpoint.
 func NewSSMInstaller(logger *zap.Logger, region string, opts ...SSMInstallerOption) Source {
@@ -99,6 +108,7 @@ func NewSSMInstaller(logger *zap.Logger, region string, opts ...SSMInstallerOpti
 
 type ssmInstallerSource struct {
 	region      string
+	dnsSuffix   string // DNS suffix from manifest (optional, falls back to region-based detection)
 	logger      *zap.Logger
 	buildSSMURL func() (string, error)
 	publicKey   string
@@ -135,15 +145,23 @@ func (s ssmInstallerSource) PublicKey() string {
 	return s.publicKey
 }
 
-// Rename existing buildSSMURL to defaultBuildSSMURL
+// defaultBuildSSMURL builds the SSM installer URL with partition-aware DNS suffix
 func (s ssmInstallerSource) defaultBuildSSMURL() (string, error) {
 	variant, err := detectPlatformVariant()
 	if err != nil {
 		return "", err
 	}
 
+	dnsSuffix := s.dnsSuffix
+	if dnsSuffix == "" {
+		// Fallback to region-based partition detection only if manifest DNS suffix not provided
+		// This is needed for unit tests and edge cases where manifest is not available
+		partition := awsinternal.GetPartitionFromRegionFallback(s.region)
+		dnsSuffix = awsinternal.GetPartitionDNSSuffix(partition)
+	}
+
 	platform := fmt.Sprintf("%v_%v", variant, runtime.GOARCH)
-	return fmt.Sprintf("https://amazon-ssm-%v.s3.%v.amazonaws.com/latest/%v/ssm-setup-cli", s.region, s.region, platform), nil
+	return fmt.Sprintf("https://amazon-ssm-%v.s3.%v.%s/latest/%v/ssm-setup-cli", s.region, s.region, dnsSuffix, platform), nil
 }
 
 // detectPlatformVariant returns a portion of the SSM installers URL that is dependent on the

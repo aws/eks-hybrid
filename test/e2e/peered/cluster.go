@@ -19,6 +19,8 @@ type HybridCluster struct {
 	SubnetID          string
 	SecurityGroupID   string
 	SubnetIds         []string
+	DNSSuffix         string
+	EcrAccount        string
 }
 
 // GetHybridCluster returns the hybrid cluster details.

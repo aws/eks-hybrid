@@ -183,14 +183,14 @@ var _ = Describe("Mixed Mode Testing", func() {
 				// Find cloud node and create nginx pod
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
 
-				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "nginx-cloud", testCaseLabels)
+				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, test.Cluster.DNSSuffix, test.Cluster.EcrAccount, "nginx-cloud", testCaseLabels)
 				Expect(err).NotTo(HaveOccurred(), "should create nginx pod 'nginx-cloud' on cloud node %s", cloudNodeName)
 				test.Logger.Info("Cloud pod created and ready", "name", "nginx-cloud")
 
 				// Find hybrid node and create client nginx pod
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
 
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-hybrid", testCaseLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, test.Cluster.DNSSuffix, test.Cluster.EcrAccount, "test-client-hybrid", testCaseLabels)
 				Expect(err).NotTo(HaveOccurred(), "should create client pod 'test-client-hybrid' on hybrid node %s", hybridNodeName)
 				test.Logger.Info("Client pod created and ready", "name", "test-client-hybrid")
 
@@ -207,14 +207,14 @@ var _ = Describe("Mixed Mode Testing", func() {
 				// Find hybrid node and create nginx pod
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
 
-				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "nginx-hybrid-reverse", testCaseLabels)
+				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, test.Cluster.DNSSuffix, test.Cluster.EcrAccount, "nginx-hybrid-reverse", testCaseLabels)
 				Expect(err).NotTo(HaveOccurred(), "should create nginx pod 'nginx-hybrid-reverse' on hybrid node %s", hybridNodeName)
 				test.Logger.Info("Hybrid pod created and ready", "name", "nginx-hybrid-reverse")
 
 				// Find cloud node and create client nginx pod
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
 
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-cloud", testCaseLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, test.Cluster.DNSSuffix, test.Cluster.EcrAccount, "test-client-cloud", testCaseLabels)
 				Expect(err).NotTo(HaveOccurred(), "should create client pod 'test-client-cloud' on cloud node %s", cloudNodeName)
 				test.Logger.Info("Cloud client pod created and ready", "name", "test-client-cloud")
 
@@ -230,7 +230,7 @@ var _ = Describe("Mixed Mode Testing", func() {
 				testCaseLabels["test-case"] = "service-hybrid-to-cloud"
 
 				// Create deployment
-				_, err := kubernetes.CreateDeployment(ctx, test.K8sClient.Interface, "nginx-service-cloud", testNamespace, test.Cluster.Region, cloudNodeSelector, httpPort, 1, test.Logger, testCaseLabels)
+				_, err := kubernetes.CreateDeployment(ctx, test.K8sClient.Interface, "nginx-service-cloud", testNamespace, test.Cluster.Region, cloudNodeSelector, httpPort, 1, test.Logger, test.Cluster.DNSSuffix, test.Cluster.EcrAccount, testCaseLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating deployment")
 
 				// Create service (port 80 to target port 80)
@@ -240,7 +240,7 @@ var _ = Describe("Mixed Mode Testing", func() {
 				// Find hybrid node and create client nginx pod
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
 
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-hybrid-service", testCaseLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, test.Cluster.DNSSuffix, test.Cluster.EcrAccount, "test-client-hybrid-service", testCaseLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating client pod")
 				test.Logger.Info("Client pod created and ready", "name", "test-client-hybrid-service")
 
@@ -263,7 +263,7 @@ var _ = Describe("Mixed Mode Testing", func() {
 
 				test.Logger.Info("Testing bidirectional service discovery (cloud → hybrid service)")
 
-				_, err := kubernetes.CreateDeployment(ctx, test.K8sClient.Interface, "nginx-service-hybrid", testNamespace, test.Cluster.Region, hybridNodeSelector, httpPort, 1, test.Logger, testCaseLabels)
+				_, err := kubernetes.CreateDeployment(ctx, test.K8sClient.Interface, "nginx-service-hybrid", testNamespace, test.Cluster.Region, hybridNodeSelector, httpPort, 1, test.Logger, test.Cluster.DNSSuffix, test.Cluster.EcrAccount, testCaseLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating deployment")
 
 				service, err := kubernetes.CreateService(ctx, test.K8sClient.Interface, "nginx-service-hybrid", testNamespace, map[string]string{"app": "nginx-service-hybrid"}, httpPort, httpPort, test.Logger, testCaseLabels)
@@ -272,7 +272,7 @@ var _ = Describe("Mixed Mode Testing", func() {
 				// Find cloud node and create client nginx pod
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
 
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-cloud-bidirectional", testCaseLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, test.Cluster.DNSSuffix, test.Cluster.EcrAccount, "test-client-cloud-bidirectional", testCaseLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating client pod")
 				test.Logger.Info("Client pod created and ready", "name", "test-client-cloud-bidirectional")
 

@@ -49,6 +49,8 @@ type RegionConfig map[string]RegionData
 // RegionData represents data for a specific region
 type RegionData struct {
 	EcrAccountID  string          `json:"ecr_account_id"`
+	Partition     string          `json:"partition"`
+	DnsSuffix     string          `json:"dns_suffix"`
 	CredProviders map[string]bool `json:"cred_providers"`
 }
 

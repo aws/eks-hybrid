@@ -45,6 +45,8 @@ type SecretsStoreCSIDriverTest struct {
 	Logger               logr.Logger
 	PodIdentityRoleArn   string
 	Region               string
+	EcrAccount           string
+	DNSSuffix            string
 
 	secretName  string
 	secretValue string
@@ -100,8 +102,9 @@ func (s *SecretsStoreCSIDriverTest) Validate(ctx context.Context) error {
 		"{{SECRETS_STORE_TEST_POD}}", secretsStoreTestPod,
 		"{{SECRET_NAME}}", s.secretName,
 		"{{SERVICE_ACCOUNT_NAME}}", secretsStoreTestPodServiceAccount,
-		"{{ECR_ACCOUNT_ID}}", constants.EcrAccountId,
+		"{{ECR_ACCOUNT_ID}}", s.EcrAccount,
 		"{{REGION}}", s.Region,
+		"{{DNS_SUFFIX}}", s.DNSSuffix,
 	)
 
 	replacedYaml := replacer.Replace(secretsStoreStaticProvisioningYaml)

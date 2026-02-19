@@ -75,6 +75,11 @@ Parameters:
     Type: String
     Description: The Service Principal for the EKS Pod Identity Association Role
 
+  EC2ServicePrincipal:
+    Type: String
+    Description: The Service Principal for EC2 instances (ec2.amazonaws.com or ec2.amazonaws.com.cn)
+    Default: ec2.amazonaws.com
+
 Resources:
   ClusterRole:
     Type: AWS::IAM::Role
@@ -492,7 +497,7 @@ Resources:
             Action: sts:AssumeRole
           - Effect: Allow
             Principal:
-              Service: ec2.amazonaws.com
+              Service: !Ref EC2ServicePrincipal
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore

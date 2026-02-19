@@ -10,7 +10,8 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 GIT_VERSION?=0.0.0
-MANIFEST_HOST?=hybrid-assets.eks.amazonaws.com
+DNS_SUFFIX?=amazonaws.com
+MANIFEST_HOST?=hybrid-assets.eks.$(DNS_SUFFIX)
 HYBRID_MANIFEST_URL=https://$(MANIFEST_HOST)/manifest.yaml
 
 E2E_SUITES?=./test/e2e/suite/nodeadm ./test/e2e/suite/conformance ./test/e2e/suite/addons ./test/e2e/suite/mixed_mode

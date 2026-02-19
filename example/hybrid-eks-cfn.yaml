@@ -69,7 +69,7 @@ Resources:
               Service: eks.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonEKSClusterPolicy'
       RoleName: !Ref ClusterRoleName
 
   EKSClusterSG:

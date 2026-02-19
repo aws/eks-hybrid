@@ -11,10 +11,9 @@ type ConfigEnricherConfig struct {
 	RegionConfig *aws.RegionData
 }
 
-// ConfigEnricherOption is a function that modifies ConfigEnricherConfig
 type ConfigEnricherOption func(*ConfigEnricherConfig)
 
-// WithRegionConfig creates a ConfigEnricherOption that sets the region config
+// WithRegionConfig creates a ConfigEnricherOption that sets region config
 func WithRegionConfig(regionConfig *aws.RegionData) ConfigEnricherOption {
 	return func(config *ConfigEnricherConfig) {
 		config.RegionConfig = regionConfig

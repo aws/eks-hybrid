@@ -59,6 +59,7 @@ func (u *Upgrader) Run(ctx context.Context) error {
 		return err
 	}
 
+	// Pass region config from AwsSource (partition config will be nil/empty during upgrade)
 	if err := u.NodeProvider.Enrich(ctx, configenricher.WithRegionConfig(&u.AwsSource.RegionInfo)); err != nil {
 		return err
 	}
@@ -105,7 +106,11 @@ func (u *Upgrader) upgradeCredentialProvider(ctx context.Context) error {
 		}
 	case creds.SsmCredentialProvider:
 		nodeConfig := u.NodeProvider.GetNodeConfig()
-		ssmInstaller := ssm.NewSSMInstaller(u.Logger, nodeConfig.Spec.Cluster.Region)
+		ssmInstaller := ssm.NewSSMInstaller(
+			u.Logger,
+			nodeConfig.Spec.Cluster.Region,
+			ssm.WithDnsSuffix(u.AwsSource.RegionInfo.DnsSuffix),
+		)
 
 		u.Logger.Info("Upgrading SSM agent installer...")
 		if err := ssm.Upgrade(ctx, ssm.InstallOptions{

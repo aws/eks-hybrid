@@ -21,6 +21,7 @@ import (
 	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
 
+	awsinternal "github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cfn"
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
@@ -226,6 +227,14 @@ func (s *stack) prepareStackParameters(ctx context.Context, test TestResources, 
 	params = append(params, cfnTypes.Parameter{
 		ParameterKey:   aws.String("HybridNodeVPCPublicSubnetAvailabilityZone"),
 		ParameterValue: aws.String(jumpboxAllowedAvailabilityZones[randIndex]),
+	})
+
+	// Add EC2 service principal parameter (partition-aware)
+	partition := awsinternal.GetPartitionFromRegionFallback(test.ClusterRegion)
+	ec2SP := awsinternal.GetEC2ServicePrincipal(partition)
+	params = append(params, cfnTypes.Parameter{
+		ParameterKey:   aws.String("EC2ServicePrincipal"),
+		ParameterValue: aws.String(ec2SP),
 	})
 
 	return params, nil
