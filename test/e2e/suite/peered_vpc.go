@@ -18,6 +18,7 @@ import (
 	ec2v2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/fsx"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	s3v2 "github.com/aws/aws-sdk-go-v2/service/s3"
@@ -74,6 +75,7 @@ type PeeredVPCTest struct {
 	IAMClient            *iam.Client
 	Route53Client        *route53.Client
 	SecretsManagerClient *secretsmanager.Client
+	FSXClient            *fsx.Client
 
 	Logger        logr.Logger
 	loggerControl e2e.PausableLogger
@@ -144,6 +146,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	test.IAMClient = iam.NewFromConfig(aws)
 	test.Route53Client = route53.NewFromConfig(aws)
 	test.SecretsManagerClient = secretsmanager.NewFromConfig(aws)
+	test.FSXClient = fsx.NewFromConfig(aws)
 
 	ca, err := credentials.ParseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
 	if err != nil {

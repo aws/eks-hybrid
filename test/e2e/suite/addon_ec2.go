@@ -238,6 +238,7 @@ func (a *AddonEc2Test) NewFsxCSIDriverTest(ctx context.Context) (*addon.FsxCSIDr
 		Cluster:            a.Cluster.Name,
 		K8S:                a.K8sClient,
 		EKSClient:          a.EKSClient,
+		FSXClient:          a.FSXClient,
 		K8SConfig:          a.K8sClientConfig,
 		Logger:             a.Logger.WithName("FsxCSIDriverTest"),
 		PodIdentityRoleArn: podIdentityRoleArn,

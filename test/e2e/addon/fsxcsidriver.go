@@ -7,11 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/fsx"
+	fsxtypes "github.com/aws/aws-sdk-go-v2/service/fsx/types"
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/rest"
 
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 )
@@ -28,17 +33,19 @@ const (
 //go:embed testdata/fsx_csi_dynamic_provisioning.yaml
 var fsxDynamicProvisioningYaml string
 
-// AWSFSXCSIDriverTest tests the AWS FSX CSI driver addon
+// FsxCSIDriverTest tests the AWS FSX CSI driver addon
 type FsxCSIDriverTest struct {
 	Cluster            string
 	addon              *Addon
 	K8S                peeredtypes.K8s
 	EKSClient          *eks.Client
+	FSXClient          *fsx.Client
 	K8SConfig          *rest.Config
 	Logger             logr.Logger
 	PodIdentityRoleArn string
 	SubnetID           string
 	SecurityGroupID    string
+	manifests          []unstructured.Unstructured
 }
 
 // Create installs the AWS FSX CSI driver addon
@@ -67,11 +74,10 @@ func (f *FsxCSIDriverTest) Create(ctx context.Context) error {
 
 // Validate checks if AWS FSX CSI driver is working correctly
 func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
-	// Generate unique suffix to avoid resource name collisions
 	uniqueSuffix := fmt.Sprintf("-%d", time.Now().Unix())
 	uniqueTestPod := fsxTestPod + uniqueSuffix
+	pvcName := "fsx-claim" + uniqueSuffix
 
-	// Replace yaml file placeholder values
 	replacer := strings.NewReplacer(
 		"{{NAMESPACE}}", defaultNamespace,
 		"{{FSX_TEST_POD}}", uniqueTestPod,
@@ -86,6 +92,8 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to read FSX CSI dynamic provisioning yaml file: %w", err)
 	}
+
+	f.manifests = objs
 
 	f.Logger.Info("Applying FSX CSI dynamic provisioning yaml")
 
@@ -103,8 +111,11 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 
 	f.Logger.Info("FSx test pod is running successfully", "podName", uniqueTestPod)
 
-	// Try to read the output file
-	execCmd := []string{"cat", "/data/out.txt"}
+	if err := f.tagFileSystem(ctx, pvcName); err != nil {
+		f.Logger.Error(err, "Failed to tag FSx file system")
+	}
+
+	execCmd := []string{"head", "-1", "/data/out.txt"}
 	stdout, stderr, err := kubernetes.ExecPodWithRetries(ctx, f.K8SConfig, f.K8S, uniqueTestPod, defaultNamespace, execCmd...)
 	if err != nil {
 		return fmt.Errorf("could not read data from FSX volume: %w", err)
@@ -115,21 +126,59 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 	}
 
 	if strings.TrimSpace(stdout) != fsxTestString {
-		return fmt.Errorf("expected string value %s, got %s", fsxTestString, strings.TrimSpace(stdout))
+		return fmt.Errorf("expected %q, got %q", fsxTestString, strings.TrimSpace(stdout))
 	}
 
 	f.Logger.Info("FSx CSI Driver validation successful")
 
-	// Clean up - delete dynamic provisioning yaml
-	if err := kubernetes.DeleteManifestsWithRetries(ctx, f.K8S, objs); err != nil {
-		return fmt.Errorf("failed to delete FSX CSI dynamic provisioning yaml: %w", err)
+	return nil
+}
+
+func (f *FsxCSIDriverTest) tagFileSystem(ctx context.Context, pvcName string) error {
+	fileSystemID, err := kubernetes.CSIVolumeHandleFromPVC(ctx, f.K8S, defaultNamespace, pvcName)
+	if err != nil {
+		return fmt.Errorf("getting FSx file system ID from PVC: %w", err)
 	}
 
-	f.Logger.Info("FSx test resources cleaned up successfully")
+	output, err := f.FSXClient.DescribeFileSystems(ctx, &fsx.DescribeFileSystemsInput{
+		FileSystemIds: []string{fileSystemID},
+	})
+	if err != nil {
+		return fmt.Errorf("describing FSx file system %s: %w", fileSystemID, err)
+	}
+	if len(output.FileSystems) == 0 {
+		return fmt.Errorf("FSx file system %s not found", fileSystemID)
+	}
 
+	resourceARN := output.FileSystems[0].ResourceARN
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	f.Logger.Info("Tagging FSx file system", "fileSystemId", fileSystemID)
+	_, err = f.FSXClient.TagResource(ctx, &fsx.TagResourceInput{
+		ResourceARN: resourceARN,
+		Tags: []fsxtypes.Tag{
+			{Key: aws.String("Name"), Value: aws.String(f.Cluster + "-fsx-lustre")},
+			{Key: aws.String(constants.TestClusterTagKey), Value: aws.String(f.Cluster)},
+			{Key: aws.String(constants.CreationTimeTagKey), Value: aws.String(now)},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("tagging FSx file system %s: %w", fileSystemID, err)
+	}
+
+	f.Logger.Info("Tagged FSx file system successfully", "fileSystemId", fileSystemID)
 	return nil
 }
 
 func (f *FsxCSIDriverTest) Delete(ctx context.Context) error {
+	// Delete manifests first while the CSI controller is still running
+	// so it can process the PVC deletion and delete the FSx filesystem
+	if f.manifests != nil {
+		f.Logger.Info("Deleting FSx test manifests")
+		if err := kubernetes.DeleteManifestsWithRetries(ctx, f.K8S, f.manifests); err != nil {
+			f.Logger.Error(err, "Failed to delete FSx test manifests")
+		}
+	}
+
 	return f.addon.Delete(ctx, f.EKSClient, f.Logger)
 }
