@@ -58,7 +58,7 @@ nodeadm init --config-source file://nodeConfig.yaml
 ```
 
 #### nodeadm upgrade
-The `nodeadm upgrade` command shuts down the existing older Kubernetes components running on the hybrid node, uninstalls the existing older Kubernetes components, installs the new target Kubernetes components, and starts the new target Kubernetes components. It is strongly recommend to upgrade one node at a time to minimize impact to applications running on the hybrid nodes. The duration of this process depends on your network bandwidth and latency.
+The `nodeadm upgrade` command shuts down the existing older Kubernetes components running on the hybrid node, uninstalls the existing older Kubernetes components, installs the new target Kubernetes components, and starts the new target Kubernetes components. It is strongly recommended to upgrade one node at a time to minimize impact to applications running on the hybrid nodes. The duration of this process depends on your network bandwidth and latency.
 
 See [Upgrade hybrid nodes](https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-upgrade.html) in the EKS User Guide for detailed information and guidance on hybrid nodes upgrades.
 

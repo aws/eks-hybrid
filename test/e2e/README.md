@@ -31,7 +31,7 @@ The `run-e2e` subcommand provides a streamlined way to run E2E tests with config
    ./_bin/e2e-test run-e2e -f="al23-amd64 && simpleflow && ssm" --skip-cleanup=true --artifacts-dir=e2e-artifacts --logs-bucket=<s3 logs bucket> 
    ```
 
-3. Passing --skip-cleanup allows for quickly reruning additional test cases without having to wait for new cluster creation/teardown.
+3. Passing --skip-cleanup allows for quickly rerunning additional test cases without having to wait for new cluster creation/teardown.
 
 4. After running `run-e2e` to create your test infrastructure, you could use the following when rerunning:
    ```bash
