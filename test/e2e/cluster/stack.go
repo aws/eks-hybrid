@@ -263,6 +263,11 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 		return fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
 	}
 
+	// If stack exists, preserve the existing AZ parameter to avoid subnet replacement
+	if resp != nil && resp.Stacks != nil && len(resp.Stacks) > 0 {
+		params = preserveExistingAZParameter(resp.Stacks[0].Parameters, params)
+	}
+
 	if resp == nil || resp.Stacks == nil {
 		s.logger.Info("Creating hybrid nodes setup stack", "stackName", stackName)
 		_, err = s.cfn.CreateStack(ctx, &cloudformation.CreateStackInput{
@@ -479,6 +484,32 @@ func replaceCreationTimeParameter(existingParams, newParams []cfnTypes.Parameter
 	for i, newParam := range newParams {
 		if *newParam.ParameterKey == creationTimeParameterKey {
 			newParams[i].ParameterValue = aws.String(existingCreationTime)
+			break
+		}
+	}
+	return newParams
+}
+
+func preserveExistingAZParameter(existingParams, newParams []cfnTypes.Parameter) []cfnTypes.Parameter {
+	// Preserve the existing AZ to avoid subnet replacement which requires resource replacement
+	// and fails with disable-rollback enabled
+	const azParameterKey = "HybridNodeVPCPublicSubnetAvailabilityZone"
+
+	var existingAZ string
+	for _, param := range existingParams {
+		if *param.ParameterKey == azParameterKey {
+			existingAZ = *param.ParameterValue
+			break
+		}
+	}
+
+	if existingAZ == "" {
+		return newParams
+	}
+
+	for i, newParam := range newParams {
+		if *newParam.ParameterKey == azParameterKey {
+			newParams[i].ParameterValue = aws.String(existingAZ)
 			break
 		}
 	}
