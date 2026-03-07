@@ -22,6 +22,7 @@ type TestConfig struct {
 	ArtifactsFolder string `yaml:"artifactsFolder"`
 	DNSSuffix       string `yaml:"dnsSuffix"`
 	EcrAccount      string `yaml:"ecrAccount"`
+	ManifestURL     string `yaml:"manifestUrl"`
 }
 
 // ReadConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.

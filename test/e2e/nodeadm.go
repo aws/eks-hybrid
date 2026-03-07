@@ -50,6 +50,8 @@ type UserDataInput struct {
 	HostName            string
 	ClusterName         string
 	ClusterCert         []byte
+	// ManifestURL is an optional URL to a custom manifest file for testing
+	ManifestURL string
 }
 
 type NodeadmURLs struct {

@@ -85,6 +85,7 @@ type PeeredVPCTest struct {
 	Cluster         *peered.HybridCluster
 	StackOut        *credentials.StackOutput
 	nodeadmURLs     e2e.NodeadmURLs
+	manifestURL     string
 	RolesAnywhereCA *credentials.Certificate
 
 	OverrideNodeK8sVersion string
@@ -115,6 +116,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		logsBucket:             suite.TestConfig.LogsBucket,
 		ArtifactsPath:          suite.TestConfig.ArtifactsFolder,
 		OverrideNodeK8sVersion: suite.TestConfig.NodeK8sVersion,
+		manifestURL:            suite.TestConfig.ManifestURL,
 		publicKey:              suite.PublicKey,
 		setRootPassword:        suite.TestConfig.SetRootPassword,
 		SkipCleanup:            suite.SkipCleanup,
@@ -216,6 +218,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 			Logger:              logger,
 			Cluster:             t.Cluster,
 			NodeadmURLs:         t.nodeadmURLs,
+			ManifestURL:         t.manifestURL,
 			PublicKey:           t.publicKey,
 			SetRootPassword:     t.setRootPassword,
 			RemoteCommandRunner: remoteCommandRunner,

@@ -34,9 +34,9 @@ func GetLatestSource(ctx context.Context, eksVersion, region string) (Source, er
 }
 
 // GetLatestSourceFromManifest gets the source for latest version of aws provided artifacts
-// from a local manifest file
-func GetLatestSourceFromManifest(ctx context.Context, eksVersion, region, manifestPath string) (Source, error) {
-	manifest, err := getReleaseManifestFromFile(manifestPath)
+// from a manifest URI (supports file:// and https:// protocols)
+func GetLatestSourceFromManifest(ctx context.Context, eksVersion, region, manifestURI string) (Source, error) {
+	manifest, err := getReleaseManifestFromURI(ctx, manifestURI)
 	if err != nil {
 		return Source{}, err
 	}
@@ -174,8 +174,8 @@ func GetRegionConfig(ctx context.Context, region string) (*RegionData, error) {
 	return &regionCfg, nil
 }
 
-func GetRegionConfigFromManifest(ctx context.Context, region, manifestPath string) (*RegionData, error) {
-	manifest, err := getReleaseManifestFromFile(manifestPath)
+func GetRegionConfigFromManifest(ctx context.Context, region, manifestURI string) (*RegionData, error) {
+	manifest, err := getReleaseManifestFromURI(ctx, manifestURI)
 	if err != nil {
 		return nil, err
 	}

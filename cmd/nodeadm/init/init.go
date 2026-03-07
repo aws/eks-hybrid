@@ -63,7 +63,7 @@ func NewInitCommand() cli.Command {
 	init.cmd.String(&init.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	init.cmd.StringSlice(&init.daemons, "d", "daemon", "Specify one or more of `containerd` and `kubelet`. This is intended for testing and should not be used in a production environment.")
 	init.cmd.StringSlice(&init.skipPhases, "s", "skip", fmt.Sprintf("Phases of the bootstrap to skip. Allowed values: [%s].", strings.Join(Phases(), ", ")))
-	init.cmd.String(&init.manifestOverride, "m", "manifest-override", "Path to a local manifest file containing custom artifact URLs for private init.")
+	init.cmd.String(&init.manifestOverride, "m", "manifest-override", "URI to a manifest file containing custom artifact URLs. Supports file:// for local files and https:// for remote files.")
 	init.cmd.Bool(&init.privateMode, "", "private-mode", "Enable private init mode (requires --manifest-override for region config).")
 	init.cmd.Description = "Initialize this instance as a node in an EKS cluster"
 	init.cmd.AdditionalHelpAppend = initHelpText
