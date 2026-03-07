@@ -92,7 +92,7 @@ Resources:
               Service: !Ref EKSClusterRoleSP
         Version: '2012-10-17'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonEKSClusterPolicy'
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
@@ -500,7 +500,7 @@ Resources:
               Service: !Ref EC2ServicePrincipal
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
@@ -643,9 +643,9 @@ Resources:
               - sts:AssumeRole
               - sts:TagSession
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSPrivateCAConnectorForKubernetesPolicy
-        - arn:aws:iam::aws:policy/AmazonFSxFullAccess
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AWSPrivateCAConnectorForKubernetesPolicy'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonFSxFullAccess'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy'
       Policies:
         - PolicyName: pod-identity-association-role-policy
           PolicyDocument:
@@ -655,8 +655,8 @@ Resources:
                 Action:
                   - s3:*
                 Resource:
-                  - !Sub arn:aws:s3:::${PodIdentityS3Bucket}
-                  - !Sub arn:aws:s3:::${PodIdentityS3Bucket}/*
+                  - !Sub 'arn:${AWS::Partition}:s3:::${PodIdentityS3Bucket}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${PodIdentityS3Bucket}/*'
         - PolicyName: AllowExternalDNSUpdates
           PolicyDocument:
             Version: '2012-10-17'
@@ -667,7 +667,7 @@ Resources:
                   - route53:ListResourceRecordSets
                   - route53:ListTagsForResources
                 Resource:
-                  - arn:aws:route53:::hostedzone/*
+                  - !Sub 'arn:${AWS::Partition}:route53:::hostedzone/*'
               - Effect: Allow
                 Action:
                   - route53:ListHostedZones
