@@ -70,12 +70,16 @@ function gather_licenses() {
   # go-licenses are all the dependencies found from the module(s) that were passed in via patterns
   go list -deps=true -json ./... | jq -s '.'  > "${outputdir}/attribution/go-deps.json"
 
-  go-licenses save --force $patterns --save_path="${outputdir}/LICENSES"
+  # Ignore standard library packages including internal packages
+  # NOTE: Must ignore go/* packages (go/ast, go/doc, etc.) but NOT third-party packages like go.uber.org!
+  IGNORE_PACKAGES="--ignore archive --ignore bufio --ignore bytes --ignore cmp --ignore compress --ignore container --ignore context --ignore crypto --ignore database --ignore debug --ignore embed --ignore encoding --ignore errors --ignore expvar --ignore flag --ignore fmt --ignore go/ast --ignore go/build --ignore go/constant --ignore go/doc --ignore go/format --ignore go/importer --ignore go/internal/scannerhooks --ignore go/parser --ignore go/printer --ignore go/scanner --ignore go/token --ignore go/types --ignore hash --ignore html --ignore image --ignore index --ignore internal --ignore io --ignore iter --ignore log --ignore maps --ignore math --ignore mime --ignore net --ignore os --ignore path --ignore plugin --ignore reflect --ignore regexp --ignore runtime --ignore slices --ignore sort --ignore strconv --ignore strings --ignore sync --ignore syscall --ignore testing --ignore text --ignore time --ignore unicode --ignore unique --ignore unsafe --ignore vendor --ignore weak"
+
+  go-licenses save --force $IGNORE_PACKAGES $patterns --save_path="${outputdir}/LICENSES"
 
   # go-licenses can be a bit noisy with its output and lot of it can be confusing
   # the following messags are safe to ignore since we do not need the license url for our process
   NOISY_MESSAGES="cannot determine URL for|Error discovering URL|unsupported package host"
-  go-licenses csv $patterns > "${outputdir}/attribution/go-license.csv" 2>  >(grep -vE "$NOISY_MESSAGES" >&2)
+  go-licenses csv $IGNORE_PACKAGES $patterns > "${outputdir}/attribution/go-license.csv" 2>  >(grep -vE "$NOISY_MESSAGES" >&2)
 
   if cat "${outputdir}/attribution/go-license.csv" | grep -q "^vendor\/golang.org\/x"; then
       echo " go-licenses created a file with a std golang package (golang.org/x/*)"
