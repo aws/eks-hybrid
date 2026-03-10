@@ -14,9 +14,11 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	e2eerrors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 )
@@ -28,6 +30,8 @@ const (
 	fsxControllerServiceAccount = "fsx-csi-controller-sa"
 	fsxTestString               = "Hello FSX CSI Driver"
 	fsxPodWaitTimeout           = 35 * time.Minute
+	fsxDeletionTimeout          = 15 * time.Minute
+	fsxDeletionPollInterval     = 30 * time.Second
 )
 
 //go:embed testdata/fsx_csi_dynamic_provisioning.yaml
@@ -46,6 +50,7 @@ type FsxCSIDriverTest struct {
 	SubnetID           string
 	SecurityGroupID    string
 	manifests          []unstructured.Unstructured
+	fileSystemID       string
 }
 
 // Create installs the AWS FSX CSI driver addon
@@ -140,6 +145,8 @@ func (f *FsxCSIDriverTest) tagFileSystem(ctx context.Context, pvcName string) er
 		return fmt.Errorf("getting FSx file system ID from PVC: %w", err)
 	}
 
+	f.fileSystemID = fileSystemID
+
 	output, err := f.FSXClient.DescribeFileSystems(ctx, &fsx.DescribeFileSystemsInput{
 		FileSystemIds: []string{fileSystemID},
 	})
@@ -180,5 +187,35 @@ func (f *FsxCSIDriverTest) Delete(ctx context.Context) error {
 		}
 	}
 
+	// Wait for the FSx filesystem to be fully deleted.
+	if f.fileSystemID != "" {
+		f.Logger.Info("Waiting for FSx file system to be deleted", "fileSystemId", f.fileSystemID)
+		if err := f.waitForFileSystemDeletion(ctx); err != nil {
+			f.Logger.Error(err, "Failed waiting for FSx file system deletion, will rely on sweeper", "fileSystemId", f.fileSystemID)
+		}
+	}
+
 	return f.addon.Delete(ctx, f.EKSClient, f.Logger)
+}
+
+func (f *FsxCSIDriverTest) waitForFileSystemDeletion(ctx context.Context) error {
+	return wait.PollUntilContextTimeout(ctx, fsxDeletionPollInterval, fsxDeletionTimeout, true, func(ctx context.Context) (bool, error) {
+		output, err := f.FSXClient.DescribeFileSystems(ctx, &fsx.DescribeFileSystemsInput{
+			FileSystemIds: []string{f.fileSystemID},
+		})
+		if e2eerrors.IsType(err, &fsxtypes.FileSystemNotFound{}) {
+			f.Logger.Info("FSx file system deleted", "fileSystemId", f.fileSystemID)
+			return true, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("describing FSx file system %s: %w", f.fileSystemID, err)
+		}
+		if len(output.FileSystems) == 0 {
+			f.Logger.Info("FSx file system deleted", "fileSystemId", f.fileSystemID)
+			return true, nil
+		}
+
+		f.Logger.Info("Waiting for FSx file system deletion", "fileSystemId", f.fileSystemID, "status", output.FileSystems[0].Lifecycle)
+		return false, nil
+	})
 }
