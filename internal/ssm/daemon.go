@@ -28,8 +28,8 @@ const (
 	eksHybridPath          = "/eks-hybrid"
 	symlinkedAWSConfigPath = eksHybridPath + "/.aws"
 
-	snapAgentBinaryPath = "/snap/amazon-ssm-agent/current/amazon-ssm-agent"
-	snapSsmDaemonName   = "snap.amazon-ssm-agent.amazon-ssm-agent"
+	snapAgentBinaryPath  = "/snap/amazon-ssm-agent/current/amazon-ssm-agent"
+	snapSsmDaemonName    = "snap.amazon-ssm-agent.amazon-ssm-agent"
 	defaultSsmDaemonName = "amazon-ssm-agent"
 )
 
