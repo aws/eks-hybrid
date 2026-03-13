@@ -66,7 +66,7 @@ func NewUpgradeCommand() cli.Command {
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
 	fc.String(&cmd.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", fmt.Sprintf("Phases of the upgrade to skip. Allowed values: [%s].", strings.Join(upgradePhases(), ", ")))
-	fc.String(&cmd.manifestOverride, "m", "manifest-override", "Path to a local manifest file containing custom artifact URLs for private upgrade.")
+	fc.String(&cmd.manifestOverride, "m", "manifest-override", "URI to a manifest file containing custom artifact URLs. Supports file:// for local files and https:// for remote files.")
 	fc.Bool(&cmd.privateMode, "", "private-mode", "Enable private upgrade mode (skips OS packages, requires --manifest-override).")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum upgrade command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
@@ -158,14 +158,14 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	var awsSource aws.Source
-	if c.privateMode {
-		log.Info("Using manifest override for private upgrade", zap.String("manifest", c.manifestOverride))
-
+	// Use manifest override if provided, otherwise use default AWS source
+	if c.manifestOverride != "" {
+		log.Info("Using manifest override", zap.String("manifest", c.manifestOverride))
 		awsSource, err = aws.GetLatestSourceFromManifest(ctx, c.kubernetesVersion, region, c.manifestOverride)
 		if err != nil {
 			return err
 		}
-		log.Info("Using Kubernetes version from local manifest", zap.String("version", awsSource.Eks.Version))
+		log.Info("Using Kubernetes version from manifest", zap.String("version", awsSource.Eks.Version))
 	} else {
 		log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 		// Create a Source for all AWS managed artifacts.

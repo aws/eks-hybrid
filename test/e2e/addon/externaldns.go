@@ -7,16 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	"github.com/aws/aws-sdk-go-v2/service/route53/types"
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
-	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 )
 
 //go:embed testdata/nginx-external-dns.yaml
@@ -34,15 +30,10 @@ const (
 
 // ExternalDNSTest tests the external-dns addon
 type ExternalDNSTest struct {
-	Cluster            string
+	AddonTestConfig
 	addon              *Addon
-	K8S                peeredtypes.K8s
-	EKSClient          *eks.Client
 	Route53Client      *route53.Client
-	K8SConfig          *rest.Config
-	Logger             logr.Logger
 	PodIdentityRoleArn string
-	Region             string
 
 	hostedZoneId   *string
 	hostedZoneName *string
@@ -105,8 +96,9 @@ func (e *ExternalDNSTest) Validate(ctx context.Context) error {
 		"{{TEST_SERVICE}}", externalDNSTestService,
 		"{{NAMESPACE}}", defaultNamespace,
 		"{{HOSTED_ZONE_NAME}}", hostedZoneName,
-		"{{ECR_ACCOUNT_ID}}", constants.EcrAccountId,
+		"{{ECR_ACCOUNT_ID}}", e.EcrAccount,
 		"{{REGION}}", e.Region,
+		"{{DNS_SUFFIX}}", e.DNSSuffix,
 	)
 	replacedTestServiceYAML := replacer.Replace(testServiceYAML)
 

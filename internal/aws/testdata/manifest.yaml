@@ -13,20 +13,47 @@ iam_roles_anywhere_releases:
   version: M.m.p
 region_config:
   us-east-1:
+    partition: "aws"
+    dns_suffix: "amazonaws.com"
     cred_providers:
       iam-ra: true
       ssm: true
-    ecr_account_id: "123456789012"
+    ecr_account_id: "602401143452"
   us-west-2:
+    partition: "aws"
+    dns_suffix: "amazonaws.com"
     cred_providers:
       iam-ra: true
       ssm: true
-    ecr_account_id: "123456789012"
+    ecr_account_id: "602401143452"
   eu-west-1:
+    partition: "aws"
+    dns_suffix: "amazonaws.com"
     cred_providers:
       iam-ra: true
       ssm: true
-    ecr_account_id: "123456789012"
+    ecr_account_id: "602401143452"
+  us-gov-west-1:
+    partition: "aws-us-gov"
+    dns_suffix: "amazonaws.com"
+    cred_providers:
+      iam-ra: true
+      ssm: true
+    ecr_account_id: "013241004608"
+  cn-north-1:
+    partition: "aws-cn"
+    dns_suffix: "amazonaws.com.cn"
+    cred_providers:
+      iam-ra: true
+      ssm: true
+    ecr_account_id: "918309763551"
+  eusc-de-east-1:
+    partition: "aws-eusc"
+    dns_suffix: "amazonaws.eu"
+    cred_providers:
+      iam-ra: true
+      ssm: true
+    ecr_account_id: "602401143452"
 ssm_releases: null
 supported_eks_releases:
 - latest_patch_version: "2"

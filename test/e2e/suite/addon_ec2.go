@@ -29,6 +29,11 @@ type AddonEc2Test struct {
 	*PeeredVPCTest
 }
 
+// addonTestConfig returns a common configuration for addon tests by delegating to PeeredVPCTest.
+func (a *AddonEc2Test) addonTestConfig() addon.AddonTestConfig {
+	return a.PeeredVPCTest.addonTestConfig()
+}
+
 // NewNodeMonitoringAgentTest creates a new NodeMonitoringAgentTest
 func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTest {
 	commandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, a.Logger)
@@ -48,16 +53,11 @@ func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTe
 // NewVerifyPodIdentityAddon creates a new VerifyPodIdentityAddon
 func (a *AddonEc2Test) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
-		Cluster:             a.Cluster.Name,
+		AddonTestConfig:     a.addonTestConfig(),
 		NodeName:            nodeName,
 		PodIdentityS3Bucket: a.PodIdentityS3Bucket,
-		K8S:                 a.K8sClient,
-		EKSClient:           a.EKSClient,
 		IAMClient:           a.IAMClient,
 		S3Client:            a.S3Client,
-		Logger:              a.Logger,
-		K8SConfig:           a.K8sClientConfig,
-		Region:              a.Cluster.Region,
 	}
 }
 
@@ -141,15 +141,13 @@ func (a *AddonEc2Test) NewSecretsStoreCSIDriverTest(ctx context.Context) (*addon
 		return nil, err
 	}
 
+	config := a.addonTestConfig()
+	config.Logger = config.Logger.WithName("SecretsStoreCSIDriverTest")
+
 	return &addon.SecretsStoreCSIDriverTest{
-		Cluster:              a.Cluster.Name,
-		K8S:                  a.K8sClient,
-		EKSClient:            a.EKSClient,
+		AddonTestConfig:      config,
 		SecretsManagerClient: a.SecretsManagerClient,
-		K8SConfig:            a.K8sClientConfig,
-		Logger:               a.Logger.WithName("SecretsStoreCSIDriverTest"),
 		PodIdentityRoleArn:   podIdentityRoleArn,
-		Region:               a.Cluster.Region,
 	}, nil
 }
 
@@ -214,15 +212,13 @@ func (a *AddonEc2Test) NewExternalDNSTest(ctx context.Context) (*addon.ExternalD
 		return nil, err
 	}
 
+	config := a.addonTestConfig()
+	config.Logger = config.Logger.WithName("ExternalDNSTest")
+
 	return &addon.ExternalDNSTest{
-		Cluster:            a.Cluster.Name,
-		K8S:                a.K8sClient,
-		EKSClient:          a.EKSClient,
+		AddonTestConfig:    config,
 		Route53Client:      a.Route53Client,
-		K8SConfig:          a.K8sClientConfig,
-		Logger:             a.Logger.WithName("ExternalDNSTest"),
 		PodIdentityRoleArn: podIdentityRoleArn,
-		Region:             a.Cluster.Region,
 	}, nil
 }
 
@@ -238,6 +234,7 @@ func (a *AddonEc2Test) NewFsxCSIDriverTest(ctx context.Context) (*addon.FsxCSIDr
 		Cluster:            a.Cluster.Name,
 		K8S:                a.K8sClient,
 		EKSClient:          a.EKSClient,
+		FSXClient:          a.FSXClient,
 		K8SConfig:          a.K8sClientConfig,
 		Logger:             a.Logger.WithName("FsxCSIDriverTest"),
 		PodIdentityRoleArn: podIdentityRoleArn,

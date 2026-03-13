@@ -50,6 +50,8 @@ type UserDataInput struct {
 	HostName            string
 	ClusterName         string
 	ClusterCert         []byte
+	// ManifestURL is an optional URL to a custom manifest file for testing
+	ManifestURL string
 }
 
 type NodeadmURLs struct {
@@ -90,8 +92,10 @@ type NodeSpec struct {
 }
 
 type Cluster struct {
-	Name   string
-	Region string
+	Name       string
+	Region     string
+	DNSSuffix  string
+	EcrAccount string
 }
 
 // CredsOS is the Node OS.

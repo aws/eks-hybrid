@@ -26,8 +26,11 @@ const installHelpText = `Examples:
   # Install Kubernetes version 1.31 with AWS IAM Roles Anywhere as the credential provider and Docker as the containerd source
   nodeadm install 1.31 --credential-provider iam-ra --containerd-source docker
 
-  # Install from a private installation using a custom manifest (for air-gapped environments)
-  nodeadm install 1.31 --credential-provider ssm --manifest-override ./manifest-1.31.13-arm64-linux-1765487946.yaml --private-mode
+  # Install from a private installation using a local custom manifest (for air-gapped environments)
+  nodeadm install 1.31 --credential-provider ssm --manifest-override file://./manifest-1.31.13-arm64-linux-1765487946.yaml --private-mode
+
+  # Install from a private installation using a remote custom manifest
+  nodeadm install 1.31 --credential-provider ssm --manifest-override https://my-bucket.s3.us-west-2.amazonaws.com/manifests/manifest.yaml --private-mode
 
 Documentation:
   https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_install`
@@ -46,7 +49,7 @@ func NewCommand() cli.Command {
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values: [ssm, iam-ra].")
 	fc.String(&cmd.containerdSource, "s", "containerd-source", "Source for containerd artifact. Allowed values: [none, distro, docker].")
 	fc.String(&cmd.region, "r", "region", "AWS region for downloading regional artifacts.")
-	fc.String(&cmd.manifestOverride, "m", "manifest-override", "Path to a local manifest file containing custom artifact URLs for private installation.")
+	fc.String(&cmd.manifestOverride, "m", "manifest-override", "URI to a manifest file containing custom artifact URLs. Supports file:// for local files and https:// for remote files.")
 	fc.Bool(&cmd.privateMode, "", "private-mode", "Enable private installation mode (skips OS packages, requires --manifest-override).")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum install command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
@@ -108,14 +111,14 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	var awsSource aws.Source
 	var packageManager *packagemanager.DistroPackageManager
 
-	if c.privateMode {
-		log.Info("Using manifest override for private installation", zap.String("manifest", c.manifestOverride))
-
+	// Use manifest override if provided, otherwise use default AWS source
+	if c.manifestOverride != "" {
+		log.Info("Using manifest override", zap.String("manifest", c.manifestOverride))
 		awsSource, err = aws.GetLatestSourceFromManifest(ctx, c.kubernetesVersion, c.region, c.manifestOverride)
 		if err != nil {
 			return err
 		}
-		log.Info("Using Kubernetes version from local manifest", zap.String("version", awsSource.Eks.Version))
+		log.Info("Using Kubernetes version from manifest", zap.String("version", awsSource.Eks.Version))
 	} else {
 		log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 		// Create a Source for all AWS managed artifacts.
@@ -124,7 +127,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			return err
 		}
 		log.Info("Using Kubernetes version", zap.String("version", awsSource.Eks.Version))
+	}
 
+	// Create package manager unless in private mode
+	if !c.privateMode {
 		log.Info("Creating package manager...")
 		packageManager, err = packagemanager.New(containerdSource, log)
 		if err != nil {

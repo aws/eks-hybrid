@@ -18,6 +18,7 @@ import (
 	ec2v2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/fsx"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	s3v2 "github.com/aws/aws-sdk-go-v2/service/s3"
@@ -74,6 +75,7 @@ type PeeredVPCTest struct {
 	IAMClient            *iam.Client
 	Route53Client        *route53.Client
 	SecretsManagerClient *secretsmanager.Client
+	FSXClient            *fsx.Client
 
 	Logger        logr.Logger
 	loggerControl e2e.PausableLogger
@@ -83,6 +85,7 @@ type PeeredVPCTest struct {
 	Cluster         *peered.HybridCluster
 	StackOut        *credentials.StackOutput
 	nodeadmURLs     e2e.NodeadmURLs
+	manifestURL     string
 	RolesAnywhereCA *credentials.Certificate
 
 	OverrideNodeK8sVersion string
@@ -93,6 +96,9 @@ type PeeredVPCTest struct {
 	publicKey string
 
 	PodIdentityS3Bucket string
+
+	DNSSuffix  string
+	EcrAccount string
 
 	// failureMessageLogged tracks if a terminal error due to a failed gomega
 	// expectation has already been registered and logged . It avoids logging
@@ -110,10 +116,13 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		logsBucket:             suite.TestConfig.LogsBucket,
 		ArtifactsPath:          suite.TestConfig.ArtifactsFolder,
 		OverrideNodeK8sVersion: suite.TestConfig.NodeK8sVersion,
+		manifestURL:            suite.TestConfig.ManifestURL,
 		publicKey:              suite.PublicKey,
 		setRootPassword:        suite.TestConfig.SetRootPassword,
 		SkipCleanup:            suite.SkipCleanup,
 		JumpboxInstanceId:      suite.JumpboxInstanceId,
+		DNSSuffix:              suite.TestConfig.DNSSuffix,
+		EcrAccount:             suite.TestConfig.EcrAccount,
 	}
 
 	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion),
@@ -144,6 +153,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	test.IAMClient = iam.NewFromConfig(aws)
 	test.Route53Client = route53.NewFromConfig(aws)
 	test.SecretsManagerClient = secretsmanager.NewFromConfig(aws)
+	test.FSXClient = fsx.NewFromConfig(aws)
 
 	ca, err := credentials.ParseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
 	if err != nil {
@@ -208,6 +218,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 			Logger:              logger,
 			Cluster:             t.Cluster,
 			NodeadmURLs:         t.nodeadmURLs,
+			ManifestURL:         t.manifestURL,
 			PublicKey:           t.publicKey,
 			SetRootPassword:     t.setRootPassword,
 			RemoteCommandRunner: remoteCommandRunner,
@@ -269,18 +280,28 @@ func (t *PeeredVPCTest) InstanceName(testName, osName, providerName string) stri
 	)
 }
 
+// addonTestConfig returns a common configuration for addon tests.
+// This centralizes the common fields that most addon tests need.
+func (t *PeeredVPCTest) addonTestConfig() addon.AddonTestConfig {
+	return addon.AddonTestConfig{
+		Cluster:    t.Cluster.Name,
+		K8S:        t.K8sClient,
+		EKSClient:  t.EKSClient,
+		K8SConfig:  t.K8sClientConfig,
+		Logger:     t.Logger,
+		Region:     t.Cluster.Region,
+		EcrAccount: t.EcrAccount,
+		DNSSuffix:  t.DNSSuffix,
+	}
+}
+
 func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
-		Cluster:             t.Cluster.Name,
+		AddonTestConfig:     t.addonTestConfig(),
 		NodeName:            nodeName,
 		PodIdentityS3Bucket: t.PodIdentityS3Bucket,
-		K8S:                 t.K8sClient,
-		EKSClient:           t.EKSClient,
 		IAMClient:           t.IAMClient,
 		S3Client:            t.S3Client,
-		Logger:              t.Logger,
-		K8SConfig:           t.K8sClientConfig,
-		Region:              t.Cluster.Region,
 	}
 }
 
@@ -314,6 +335,8 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		Provider:        provider,
 		Region:          t.Cluster.Region,
 		ComputeType:     computeType,
+		DNSSuffix:       t.DNSSuffix,
+		EcrAccount:      t.EcrAccount,
 	}
 
 	for _, opt := range opts {

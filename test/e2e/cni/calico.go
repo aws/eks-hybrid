@@ -9,7 +9,6 @@ import (
 
 	"k8s.io/client-go/dynamic"
 
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -28,15 +27,19 @@ type Calico struct {
 	// Hybrid Nodes.
 	//
 	// Check the calico-template file for the node pod cidr mask. The default is 24.
-	podCIDR string
-	region  string
+	podCIDR    string
+	region     string
+	dnsSuffix  string
+	ecrAccount string
 }
 
-func NewCalico(k8s dynamic.Interface, podCIDR, region string) Calico {
+func NewCalico(k8s dynamic.Interface, podCIDR, region, dnsSuffix, ecrAccount string) Calico {
 	return Calico{
-		K8s:     k8s,
-		podCIDR: podCIDR,
-		region:  region,
+		K8s:        k8s,
+		podCIDR:    podCIDR,
+		region:     region,
+		dnsSuffix:  dnsSuffix,
+		ecrAccount: ecrAccount,
 	}
 }
 
@@ -48,7 +51,7 @@ func (c Calico) Deploy(ctx context.Context) error {
 	}
 	values := map[string]string{
 		"PodCIDR":           c.podCIDR,
-		"ContainerRegistry": constants.EcrAccountId + ".dkr.ecr." + c.region + ".amazonaws.com/quay.io",
+		"ContainerRegistry": c.ecrAccount + ".dkr.ecr." + c.region + "." + c.dnsSuffix + "/quay.io",
 	}
 	installation := &bytes.Buffer{}
 	err = tmpl.Execute(installation, values)

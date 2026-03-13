@@ -8,16 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clientgo "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -27,16 +22,11 @@ const (
 )
 
 type VerifyPodIdentityAddon struct {
-	Cluster             string
+	AddonTestConfig
 	NodeName            string
 	PodIdentityS3Bucket string
-	K8S                 clientgo.Interface
-	EKSClient           *eks.Client
 	IAMClient           *iam.Client
 	S3Client            *s3.Client
-	Logger              logr.Logger
-	K8SConfig           *rest.Config
-	Region              string
 }
 
 func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
@@ -76,7 +66,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 			Containers: []corev1.Container{
 				{
 					Name:  sanitizeContainerName(podName),
-					Image: fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/aws-cli/aws-cli:latest", constants.EcrAccountId, v.Region),
+					Image: fmt.Sprintf("%s.dkr.ecr.%s.%s/ecr-public/aws-cli/aws-cli:latest", v.EcrAccount, v.Region, v.DNSSuffix),
 					Env: []corev1.EnvVar{
 						// default value for AWS_MAX_ATTEMPTS is 3. We are seeing the s3 cp command
 						// fail due to rate limits form additional tests so increasing the number of retries

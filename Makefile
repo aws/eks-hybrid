@@ -1,8 +1,9 @@
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.27.1
 
-GOLANG_VERSION?="1.25"
+GOLANG_VERSION?="1.26"
 GO ?= $(shell source ./scripts/common.sh && get_go_path $(GOLANG_VERSION))/go
+CONTAINER_RUNTIME ?= docker
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -128,8 +129,8 @@ generate-attribution:
 .PHONY: generate-attribution-in-docker
 generate-attribution-in-docker:
 	mkdir -p _output/.go/mod/cache
-	chmod -R 777 _output
-	docker run --rm --pull=always -e GOPROXY=$(GOPROXY) -e GOMODCACHE=/mod-cache -v  $$(pwd)/_output/.go/mod/cache:/mod-cache -v $$(pwd):/eks-hybrid public.ecr.aws/eks-distro-build-tooling/builder-base:standard-latest.al23 make -C /eks-hybrid generate-attribution
+	chmod -R 777 _output || true
+	$(CONTAINER_RUNTIME) run --rm --pull=always -e GOPROXY=$(GOPROXY) -e GOMODCACHE=/mod-cache -v  $$(pwd)/_output/.go/mod/cache:/mod-cache -v $$(pwd):/eks-hybrid public.ecr.aws/eks-distro-build-tooling/builder-base:standard-latest.al23 make -C /eks-hybrid generate-attribution
 	rm -rf _output
 
 ##@ Build Dependencies
@@ -153,7 +154,7 @@ GOFUMPT ?= $(LOCALBIN)/gofumpt
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.1
 CONTROLLER_TOOLS_VERSION ?= v0.16.3
-CODE_GENERATOR_VERSION ?= v0.30.6
+CODE_GENERATOR_VERSION ?= v0.33.4
 CRD_REF_DOCS_VERSION ?= v0.1.0
 GINKGO_VERSION ?= $(word 2,$(shell $(GO) list -m all | grep github.com/onsi/ginkgo/v2 | tail -1))
 GOFUMPT_VERSION ?= v0.8.0

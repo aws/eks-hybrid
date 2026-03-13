@@ -160,11 +160,11 @@ func (e *E2EReport) saveTestLogFiles(spec ginkgoTypes.SpecReport, instanceName, 
 	logFilePath := filepath.Join(logsDir, testGinkgoOutputLog)
 	sb := strings.Builder{}
 
-	sb.WriteString(fmt.Sprintf("Test: [%s]\n", specName))
-	sb.WriteString(fmt.Sprintf("State: %s\n", spec.State.String()))
-	sb.WriteString(fmt.Sprintf("Duration: %.3f seconds\n", spec.RunTime.Seconds()))
-	sb.WriteString(fmt.Sprintf("Start Time: %s\n", spec.StartTime.Format(time.RFC3339)))
-	sb.WriteString(fmt.Sprintf("End Time: %s\n\n", spec.EndTime.Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "Test: [%s]\n", specName)
+	fmt.Fprintf(&sb, "State: %s\n", spec.State.String())
+	fmt.Fprintf(&sb, "Duration: %.3f seconds\n", spec.RunTime.Seconds())
+	fmt.Fprintf(&sb, "Start Time: %s\n", spec.StartTime.Format(time.RFC3339))
+	fmt.Fprintf(&sb, "End Time: %s\n\n", spec.EndTime.Format(time.RFC3339))
 
 	if spec.CapturedStdOutErr != "" {
 		sb.WriteString("Captured StdOut/StdErr Output >>\n")
@@ -199,15 +199,15 @@ func specFailureMessage(spec ginkgoTypes.SpecReport) string {
 	}
 	sb := strings.Builder{}
 	sb.WriteString("Failure Details >>\n")
-	sb.WriteString(fmt.Sprintf("[FAILED] %s\n", spec.LeafNodeText))
-	sb.WriteString(fmt.Sprintf("\tExpected %s\n", strings.ReplaceAll(spec.Failure.Message, "\n", "\n\t\t")))
+	fmt.Fprintf(&sb, "[FAILED] %s\n", spec.LeafNodeText)
+	fmt.Fprintf(&sb, "\tExpected %s\n", strings.ReplaceAll(spec.Failure.Message, "\n", "\n\t\t"))
 	if spec.Failure.Location.FileName != "" {
 		timestamp := spec.Failure.TimelineLocation.Time.Format(time.DateTime)
-		sb.WriteString(fmt.Sprintf("\tIn [%s] at: %s:%d @ %s\n",
+		fmt.Fprintf(&sb, "\tIn [%s] at: %s:%d @ %s\n",
 			spec.LeafNodeType.String(),
 			spec.Failure.Location.FileName,
 			spec.Failure.Location.LineNumber,
-			timestamp))
+			timestamp)
 	}
 	sb.WriteString("\n")
 	return sb.String()

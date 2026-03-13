@@ -43,6 +43,8 @@ type TestResources struct {
 	KubernetesVersion string        `yaml:"kubernetesVersion"`
 	Cni               string        `yaml:"cni"`
 	EKS               EKSConfig     `yaml:"eks"`
+	DNSSuffix         string        `yaml:"dnsSuffix"`  // AWS partition DNS suffix (e.g., amazonaws.com, amazonaws.com.cn)
+	EcrAccount        string        `yaml:"ecrAccount"` // ECR account ID for pulling test images
 }
 type EKSConfig struct {
 	Endpoint      string `yaml:"endpoint"`
@@ -181,7 +183,7 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		}
 		c.logger.Info("Cilium installed successfully.")
 	case calicoCni:
-		calico := cni.NewCalico(dynamicK8s, test.HybridNetwork.PodCidr, test.ClusterRegion)
+		calico := cni.NewCalico(dynamicK8s, test.HybridNetwork.PodCidr, test.ClusterRegion, test.DNSSuffix, test.EcrAccount)
 		c.logger.Info("Installing calico on cluster...", "cluster", test.ClusterName)
 		if err = calico.Deploy(ctx); err != nil {
 			return fmt.Errorf("installing calico for %s EKS cluster: %w", test.KubernetesVersion, err)
@@ -237,6 +239,14 @@ func SetTestResourcesDefaults(testResources TestResources) TestResources {
 
 	if testResources.EKS.PodIdentitySP == "" {
 		testResources.EKS.PodIdentitySP = defaultPodIdentitySP
+	}
+
+	if testResources.DNSSuffix == "" {
+		testResources.DNSSuffix = "amazonaws.com"
+	}
+
+	if testResources.EcrAccount == "" {
+		testResources.EcrAccount = constants.EcrAccountId
 	}
 	if testResources.ClusterNetwork == (NetworkConfig{}) {
 		testResources.ClusterNetwork = NetworkConfig{

@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/fsx"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go-v2/service/rolesanywhere"
@@ -34,6 +35,7 @@ type SweeperInput struct {
 type Sweeper struct {
 	cfn            *cloudformation.Client
 	ec2Client      *ec2.Client
+	fsxClient      *fsx.Client
 	eks            *eks.Client
 	iam            *iam.Client
 	logger         logr.Logger
@@ -56,6 +58,7 @@ func NewSweeper(aws aws.Config, logger logr.Logger, endpoint string) Sweeper {
 	return Sweeper{
 		cfn:            cloudformation.NewFromConfig(aws),
 		ec2Client:      ec2.NewFromConfig(aws),
+		fsxClient:      fsx.NewFromConfig(aws),
 		eks:            e2e.NewEKSClient(aws, endpoint),
 		iam:            iam.NewFromConfig(aws),
 		logger:         logger,
@@ -95,6 +98,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 	// - infra cfn stack (creates vpcs/eks cluster)
 	// - remaining leaking items which should only exist in the case where the cfn deletion is incomplete
 	cleanups := []Cleanup{
+		{
+			Cleanup:        c.cleanupFSxFileSystems,
+			FailureMessage: "cleaning up FSx file systems",
+		},
 		{
 			Cleanup:        c.cleanupEC2Instances,
 			FailureMessage: "cleaning up EC2 instances",
@@ -748,4 +755,23 @@ func (c *Sweeper) cleanupCloudWatchLogGroups(ctx context.Context, filterInput Fi
 
 func skipIRATest() bool {
 	return os.Getenv("SKIP_IRA_TEST") == "true"
+}
+
+func (c *Sweeper) cleanupFSxFileSystems(ctx context.Context, filterInput FilterInput) error {
+	fsxCleaner := NewFSxCleaner(c.fsxClient, c.ec2Client, c.logger)
+	fileSystemIDs, err := fsxCleaner.ListTaggedFileSystems(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing FSx file systems: %w", err)
+	}
+
+	c.logger.Info("Deleting FSx file systems", "fileSystemIDs", fileSystemIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	if err := fsxCleaner.DeleteFileSystems(ctx, fileSystemIDs); err != nil {
+		return fmt.Errorf("deleting FSx file systems: %w", err)
+	}
+
+	return nil
 }

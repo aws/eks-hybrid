@@ -21,6 +21,7 @@ import (
 	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
 
+	awsinternal "github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cfn"
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
@@ -228,6 +229,14 @@ func (s *stack) prepareStackParameters(ctx context.Context, test TestResources, 
 		ParameterValue: aws.String(jumpboxAllowedAvailabilityZones[randIndex]),
 	})
 
+	// Add EC2 service principal parameter (partition-aware)
+	partition := awsinternal.GetPartitionFromRegionFallback(test.ClusterRegion)
+	ec2SP := awsinternal.GetEC2ServicePrincipal(partition)
+	params = append(params, cfnTypes.Parameter{
+		ParameterKey:   aws.String("EC2ServicePrincipal"),
+		ParameterValue: aws.String(ec2SP),
+	})
+
 	return params, nil
 }
 
@@ -252,6 +261,11 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 	})
 	if err != nil && !e2eErrors.IsCFNStackNotFound(err) {
 		return fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
+	}
+
+	// If stack exists, preserve the existing AZ parameter to avoid subnet replacement
+	if resp != nil && resp.Stacks != nil && len(resp.Stacks) > 0 {
+		params = preserveExistingAZParameter(resp.Stacks[0].Parameters, params)
 	}
 
 	if resp == nil || resp.Stacks == nil {
@@ -470,6 +484,32 @@ func replaceCreationTimeParameter(existingParams, newParams []cfnTypes.Parameter
 	for i, newParam := range newParams {
 		if *newParam.ParameterKey == creationTimeParameterKey {
 			newParams[i].ParameterValue = aws.String(existingCreationTime)
+			break
+		}
+	}
+	return newParams
+}
+
+func preserveExistingAZParameter(existingParams, newParams []cfnTypes.Parameter) []cfnTypes.Parameter {
+	// Preserve the existing AZ to avoid subnet replacement which requires resource replacement
+	// and fails with disable-rollback enabled
+	const azParameterKey = "HybridNodeVPCPublicSubnetAvailabilityZone"
+
+	var existingAZ string
+	for _, param := range existingParams {
+		if *param.ParameterKey == azParameterKey {
+			existingAZ = *param.ParameterValue
+			break
+		}
+	}
+
+	if existingAZ == "" {
+		return newParams
+	}
+
+	for i, newParam := range newParams {
+		if *newParam.ParameterKey == azParameterKey {
+			newParams[i].ParameterValue = aws.String(existingAZ)
 			break
 		}
 	}

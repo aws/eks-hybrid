@@ -24,18 +24,18 @@ type E2ECleanup struct {
 
 func (e *E2ECleanup) Run(ctx context.Context) []Phase {
 	phases := []Phase{}
-	// We want to run both to ensure any dangling resources are cleaned up
-	// The sweeper cleanup is configured for this specific cluster name
-	err := e.clusterStackCleanup(ctx)
-	phases = phaseCompleted(phases, phaseNameCleanupStack, "running cleanup cluster via stack deletion", err)
-	if err != nil {
-		e.Logger.Error(err, "Failed to run cleanup cluster via stack deletion")
-	}
-
-	err = e.clusterSweeperCleanup(ctx)
+	// Run sweeper first to delete FSx filesystems and other resources that
+	// block VPC/subnet deletion in the CloudFormation stack
+	err := e.clusterSweeperCleanup(ctx)
 	phases = phaseCompleted(phases, phaseNameCleanupSweeper, "running cleanup cluster via sweeper", err)
 	if err != nil {
 		e.Logger.Error(err, "Failed to run cleanup cluster via sweeper")
+	}
+
+	err = e.clusterStackCleanup(ctx)
+	phases = phaseCompleted(phases, phaseNameCleanupStack, "running cleanup cluster via stack deletion", err)
+	if err != nil {
+		e.Logger.Error(err, "Failed to run cleanup cluster via stack deletion")
 	}
 
 	return phases

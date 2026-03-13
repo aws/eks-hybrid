@@ -43,6 +43,8 @@ type testNode struct {
 	Region             string
 	PeeredNetwork      *peered.Network
 	SerialOutputWriter io.Writer
+	DNSSuffix          string
+	EcrAccount         string
 
 	flakyCode      *FlakyCode
 	peeredInstance *peered.PeeredInstance
@@ -136,6 +138,8 @@ func (n *testNode) NewVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode
 		K8s:          n.K8sClient,
 		Logger:       n.Logger,
 		Region:       n.Region,
+		DNSSuffix:    n.DNSSuffix,
+		EcrAccount:   n.EcrAccount,
 		NodeName:     nodeName,
 		NodeIP:       nodeIP,
 	}

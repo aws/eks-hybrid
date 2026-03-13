@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 type TestConfig struct {
@@ -18,6 +20,9 @@ type TestConfig struct {
 	Endpoint        string `yaml:"endpoint"`
 	// ArtifactsFolder is the local path where the test will store the artifacts.
 	ArtifactsFolder string `yaml:"artifactsFolder"`
+	DNSSuffix       string `yaml:"dnsSuffix"`
+	EcrAccount      string `yaml:"ecrAccount"`
+	ManifestURL     string `yaml:"manifestUrl"`
 }
 
 // ReadConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.
@@ -34,6 +39,14 @@ func ReadConfig(configPath string) (*TestConfig, error) {
 
 	if config.ArtifactsFolder == "" {
 		config.ArtifactsFolder = "/tmp"
+	}
+
+	if config.DNSSuffix == "" {
+		config.DNSSuffix = "amazonaws.com"
+	}
+
+	if config.EcrAccount == "" {
+		config.EcrAccount = constants.EcrAccountId
 	}
 
 	return config, nil

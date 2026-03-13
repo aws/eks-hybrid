@@ -105,7 +105,11 @@ func (u *Upgrader) upgradeCredentialProvider(ctx context.Context) error {
 		}
 	case creds.SsmCredentialProvider:
 		nodeConfig := u.NodeProvider.GetNodeConfig()
-		ssmInstaller := ssm.NewSSMInstaller(u.Logger, nodeConfig.Spec.Cluster.Region)
+		ssmInstaller := ssm.NewSSMInstaller(
+			u.Logger,
+			nodeConfig.Spec.Cluster.Region,
+			ssm.WithDnsSuffix(u.AwsSource.RegionInfo.DnsSuffix),
+		)
 
 		u.Logger.Info("Upgrading SSM agent installer...")
 		if err := ssm.Upgrade(ctx, ssm.InstallOptions{

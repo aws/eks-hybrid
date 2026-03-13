@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgo "k8s.io/client-go/kubernetes"
 
+	awsinternal "github.com/aws/eks-hybrid/internal/aws"
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
@@ -240,11 +241,17 @@ func (p *PCAIssuerTest) activatePCA(ctx context.Context, arn *string) error {
 	}
 
 	// Issue certificate for the CA
+	partition, err := awsinternal.ParsePartitionFromARN(*arn)
+	if err != nil {
+		return fmt.Errorf("parse partition from CA ARN: %v", err)
+	}
+	templateArn := fmt.Sprintf("arn:%s:acm-pca:::template/RootCACertificate/V1", partition)
+
 	certInput := &acmpca.IssueCertificateInput{
 		CertificateAuthorityArn: arn,
 		Csr:                     []byte(*csrOutput.Csr),
 		SigningAlgorithm:        types.SigningAlgorithmSha256withrsa,
-		TemplateArn:             aws.String("arn:aws:acm-pca:::template/RootCACertificate/V1"),
+		TemplateArn:             aws.String(templateArn),
 		Validity: &types.Validity{
 			Type:  types.ValidityPeriodTypeDays,
 			Value: aws.Int64(3650), // 10 years

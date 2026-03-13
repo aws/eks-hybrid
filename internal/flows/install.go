@@ -108,7 +108,11 @@ func (i *Installer) installCredentialProcess(ctx context.Context) error {
 			return err
 		}
 	case creds.SsmCredentialProvider:
-		ssmInstaller := ssm.NewSSMInstaller(i.Logger, i.SsmRegion)
+		ssmInstaller := ssm.NewSSMInstaller(
+			i.Logger,
+			i.SsmRegion,
+			ssm.WithDnsSuffix(i.AwsSource.RegionInfo.DnsSuffix),
+		)
 
 		i.Logger.Info("Installing SSM agent installer...")
 		if err := ssm.Install(ctx, ssm.InstallOptions{

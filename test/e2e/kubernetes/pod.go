@@ -19,7 +19,6 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 const (
@@ -31,7 +30,7 @@ func GetNginxPodName(name string) string {
 	return "nginx-" + name
 }
 
-func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeName, namespace, region string, logger logr.Logger, options ...interface{}) error {
+func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeName, namespace, region string, logger logr.Logger, dnsSuffix, ecrAccount string, options ...interface{}) error {
 	var podName string
 	var labels map[string]string
 
@@ -62,7 +61,7 @@ func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeNam
 			Containers: []corev1.Container{
 				{
 					Name:  "nginx",
-					Image: fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/nginx/nginx:latest", constants.EcrAccountId, region),
+					Image: fmt.Sprintf("%s.dkr.ecr.%s.%s/ecr-public/nginx/nginx:latest", ecrAccount, region, dnsSuffix),
 					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 80,

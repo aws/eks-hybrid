@@ -66,6 +66,7 @@ type NodeCreate struct {
 	SetRootPassword bool
 	NodeadmURLs     e2e.NodeadmURLs
 	PublicKey       string
+	ManifestURL     string
 }
 
 // PeeredInstance represents a Hybrid node running as an EC2 instance in a peered VPC
@@ -121,6 +122,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		Region:            c.Cluster.Region,
 		Files:             files,
 		PublicKey:         c.PublicKey,
+		ManifestURL:       c.ManifestURL,
 
 		KubernetesAPIServer: c.K8sClientConfig.Host,
 		HostName:            nodeSpec.Name,

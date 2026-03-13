@@ -29,7 +29,7 @@ spec:
         app: {{TEST_SERVICE}}
     spec:
       containers:
-      - image: "{{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.amazonaws.com/ecr-public/nginx/nginx:latest"
+      - image: "{{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}/ecr-public/nginx/nginx:latest"
         name: {{TEST_SERVICE}}
         ports:
         - containerPort: 80

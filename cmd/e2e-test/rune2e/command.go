@@ -130,7 +130,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("loading test resources configuration: %w", err)
 	}
 
-	testConfig, err := c.loadTestConfig(testResources, logger)
+	testConfig, err := c.loadTestConfig(&testResources, logger)
 	if err != nil {
 		return fmt.Errorf("loading test configuration: %w", err)
 	}
@@ -233,7 +233,7 @@ func (c *command) loadSetupConfig(logger logr.Logger) (cluster.TestResources, er
 
 // loadTestConfig loads the TestConfig configuration from a file.
 // It validates that no individual test config flags are set when using a config file.
-func (c *command) loadTestConfig(testResources cluster.TestResources, logger logr.Logger) (e2e.TestConfig, error) {
+func (c *command) loadTestConfig(testResources *cluster.TestResources, logger logr.Logger) (e2e.TestConfig, error) {
 	testConfig := e2e.TestConfig{
 		ClusterName:   testResources.ClusterName,
 		ClusterRegion: testResources.ClusterRegion,
@@ -263,6 +263,21 @@ func (c *command) loadTestConfig(testResources cluster.TestResources, logger log
 		}
 
 		logger.Info("Loaded test configuration from file", "path", c.testConfigFile)
+
+		// Validate consistency between setup-config and test-config if both are provided
+		if c.setupConfigFile != "" {
+			// Both configs provided - they must agree on cluster name and region
+			if testConfig.ClusterName != testResources.ClusterName {
+				return testConfig, fmt.Errorf("cluster name mismatch: setup-config has %q but test-config has %q. Both files must specify the same cluster name", testResources.ClusterName, testConfig.ClusterName)
+			}
+			if testConfig.ClusterRegion != testResources.ClusterRegion {
+				return testConfig, fmt.Errorf("cluster region mismatch: setup-config has %q but test-config has %q. Both files must specify the same cluster region", testResources.ClusterRegion, testConfig.ClusterRegion)
+			}
+		} else {
+			// Only test-config provided - update testResources to use its cluster name
+			// This ensures the cluster is created with the name tests expect
+			testResources.ClusterName = testConfig.ClusterName
+		}
 	}
 
 	return testConfig, nil

@@ -166,9 +166,11 @@ func TestManifestUnmarshaling(t *testing.T) {
 
 		// Test specific ECR account IDs for known regions
 		expectedEcrAccounts := map[string]string{
-			"us-east-1": "123456789012",
-			"us-west-2": "123456789012",
-			"eu-west-1": "123456789012",
+			"us-east-1":     "602401143452",
+			"us-west-2":     "602401143452",
+			"eu-west-1":     "602401143452",
+			"us-gov-west-1": "013241004608",
+			"cn-north-1":    "918309763551",
 		}
 
 		for region, expectedAccountID := range expectedEcrAccounts {
