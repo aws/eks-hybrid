@@ -422,6 +422,35 @@ for reservations in $(aws ec2 describe-instances --filters $TEST_CLUSTER_TAG_KEY
     done
 done
 
+# Delete FSx file systems before VPC cleanup since they create ENIs in subnets
+FSX_IDS_TO_DELETE=()
+for filesystem in $(aws fsx describe-file-systems --query "FileSystems[*].{FileSystemId:FileSystemId,Tags:Tags}" --output json | jq -c '.[]'); do
+    cluster_name="$(get_cluster_name_from_tags "$filesystem")"
+    if ! should_cleanup_cluster "$cluster_name"; then
+        continue
+    fi
+    id=$(echo $filesystem | jq -r ".FileSystemId")
+    echo "Deleting FSx file system: $id"
+    aws fsx delete-file-system --file-system-id $id
+    FSX_IDS_TO_DELETE+=( $id )
+done
+
+for id in "${FSX_IDS_TO_DELETE[@]}"; do
+    echo "Waiting for FSx file system to be deleted: $id"
+    local_timeout=900 # 15 minutes
+    local_elapsed=0
+    while [ $local_elapsed -lt $local_timeout ]; do
+        status=$(command aws fsx describe-file-systems --file-system-ids $id --query "FileSystems[0].Lifecycle" --output text 2>/dev/null)
+        if [ $? -ne 0 ] || [ -z "$status" ] || [ "$status" == "None" ]; then
+            echo "FSx file system deleted: $id"
+            break
+        fi
+        echo "Still waiting for FSx file system $id (status: $status, ${local_elapsed}s/${local_timeout}s)..."
+        sleep 15
+        local_elapsed=$((local_elapsed + 15))
+    done
+done
+
 # list-roles does not allow filtering by tags so we have to pull them all
 # then request their tags seperately
 # We have the role =* checks to try and limit which roles we bother checking tags for

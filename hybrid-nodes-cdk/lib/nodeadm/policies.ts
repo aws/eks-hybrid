@@ -475,6 +475,15 @@ export function createNodeadmTestsCreationCleanupPolicies(
         ],
         resources: ['*'],
       }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'fsx:DescribeFileSystems',
+          'fsx:DeleteFileSystem',
+          'fsx:TagResource',
+        ],
+        resources: ['*'],
+      }),
     ],
   });
 
