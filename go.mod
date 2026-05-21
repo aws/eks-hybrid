@@ -26,7 +26,7 @@ require (
 	github.com/aws/smithy-go v1.24.1
 	github.com/cert-manager/aws-privateca-issuer v1.7.0
 	github.com/cert-manager/cert-manager v1.18.5
-	github.com/containerd/containerd v1.7.29
+	github.com/containerd/containerd v1.7.32
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/go-ini/ini v1.67.0
 	github.com/go-logr/zapr v1.3.0
@@ -71,7 +71,7 @@ require (
 	github.com/lmittmann/tint v1.0.4 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
-	github.com/moby/spdystream v0.5.0 // indirect
+	github.com/moby/spdystream v0.5.1 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
