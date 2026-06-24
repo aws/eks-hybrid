@@ -142,7 +142,7 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 	f.Logger.Info("FSx test pod is running successfully", "podName", uniqueTestPod)
 
 	if err := f.tagFileSystem(ctx, pvcName); err != nil {
-		f.Logger.Error(err, "Failed to tag FSx file system")
+		return fmt.Errorf("failed to tag FSx file system: %w", err)
 	}
 
 	execCmd := []string{"head", "-1", "/data/out.txt"}
