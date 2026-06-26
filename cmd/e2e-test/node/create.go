@@ -54,7 +54,7 @@ func NewCreateCommand() cli.Command {
 	createCmd.AddPositionalValue(&cmd.instanceName, "INSTANCE_NAME", 1, true, "Name of the instance to create.")
 	createCmd.String(&cmd.configFile, "f", "config-file", "Path tests config file.")
 	createCmd.String(&cmd.credsProvider, "c", "creds-provider", "Credentials provider to use (iam-ra, ssm).")
-	createCmd.String(&cmd.os, "o", "os", "OS to use (al23, ubuntu2004, ubuntu2204, ubuntu2404, rhel8, rhel9, bottlerocket).")
+	createCmd.String(&cmd.os, "o", "os", "OS to use (al23, ubuntu2004, ubuntu2204, ubuntu2404, rhel8, rhel9, rhel10, bottlerocket).")
 	createCmd.String(&cmd.arch, "a", "arch", "Architecture to use (amd64, arm64).")
 	createCmd.String(&cmd.instanceSize, "s", "instance-size", "Instance size to use (Large, XLarge).")
 	createCmd.String(&cmd.instanceType, "t", "instance-type", "Instance type to use (t3.large, g4dn.xlarge, etc). If provided, instance size would be ignored.")
@@ -296,6 +296,14 @@ var oses = map[string]map[string]func() e2e.NodeadmOS{
 		},
 		"arm64": func() e2e.NodeadmOS {
 			return osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD"))
+		},
+	},
+	"rhel10": {
+		"amd64": func() e2e.NodeadmOS {
+			return osystem.NewRedHat10AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD"))
+		},
+		"arm64": func() e2e.NodeadmOS {
+			return osystem.NewRedHat10ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD"))
 		},
 	},
 	"bottlerocket": {

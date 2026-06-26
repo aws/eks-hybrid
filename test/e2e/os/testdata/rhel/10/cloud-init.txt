@@ -1,0 +1,47 @@
+#cloud-config
+users:
+  - name: root
+    lock_passwd: false
+    ssh_authorized_keys:
+      - {{ .PublicKey }}
+{{- if .RootPasswordHash }}
+    hashed_passwd: {{ .RootPasswordHash }}
+{{- end }}
+rh_subscription:
+  username: {{ .RhelUsername }}
+  password: {{ .RhelPassword }}
+{{- if eq .ContainerdSource "none" }}
+yum_repos:
+  docker-ce-stable:
+    name: docker-ce-stable
+    baseurl: https://download.docker.com/linux/rhel/$releasever/$basearch/stable
+    gpgcheck: true
+    gpgkey: https://download.docker.com/linux/rhel/gpg
+{{- end }}
+package_update: true
+write_files:
+  - content: |
+{{ .NodeadmConfigYaml | indent 6 }}
+    path: nodeadm-config.yaml
+{{ range $file := .Files }}
+  - content: |
+{{ $file.Content | indent 6 }}
+    path: {{ $file.Path }}
+{{if $file.Permissions}}
+    permissions: '{{ $file.Permissions }}'
+{{- end }}
+{{- end }}
+
+runcmd:
+{{- if eq .ContainerdSource "none" }}
+  - /tmp/install-containerd.sh
+{{- end }}
+  - ln -sf /run/log/journal /var/log/journal
+  # NOTE: FSx for Lustre addon is NOT supported on RHEL 10
+  # The Lustre client packages for el/10 are not available from AWS
+  # FSx CSI driver will not function until AWS publishes el/10 packages
+  # Tracking: https://fsx-lustre-client-repo.s3.amazonaws.com/el/10/
+  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}" "--containerd-source {{ .ContainerdSource }}"
+  - /tmp/nvidia-driver-install.sh
+
+final_message: "The system is prepped, after $UPTIME seconds"
