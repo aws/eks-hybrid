@@ -179,7 +179,11 @@ func validateSSMProxyConfig(osName string) error {
 	var ssmServicePath string
 	switch osName {
 	case system.UbuntuOsName:
-		ssmServicePath = "/etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service.d/http-proxy.conf"
+		if isSnapSSMInstall() {
+			ssmServicePath = "/etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service.d/http-proxy.conf"
+		} else {
+			ssmServicePath = "/etc/systemd/system/amazon-ssm-agent.service.d/http-proxy.conf"
+		}
 	case system.RhelOsName, system.AmazonOsName:
 		ssmServicePath = "/etc/systemd/system/amazon-ssm-agent.service.d/http-proxy.conf"
 	default:
@@ -187,6 +191,13 @@ func validateSSMProxyConfig(osName string) error {
 	}
 
 	return validateSystemdServiceProxyConfig("SSM", ssmServicePath)
+}
+
+const snapSSMAgentBinaryPath = "/snap/amazon-ssm-agent/current/amazon-ssm-agent"
+
+func isSnapSSMInstall() bool {
+	_, err := os.Stat(snapSSMAgentBinaryPath)
+	return !os.IsNotExist(err)
 }
 
 // validateAptProxyConfig validates the apt proxy configuration
