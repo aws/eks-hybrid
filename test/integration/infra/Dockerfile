@@ -28,7 +28,7 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "aws
     ./aws/install && \
     rm -rf aws awscliv2.zip
 
-RUN pip install --user 'moto[server]'
+RUN pip install --user 'moto[server]==5.1.22'
 
 
 # I know how this looks, but it lets us use moto with our mocked IMDS and for now the simplicity is worth the hack
