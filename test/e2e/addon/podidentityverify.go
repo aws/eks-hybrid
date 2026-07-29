@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/aws/eks-hybrid/test/e2e/images"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -66,7 +67,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 			Containers: []corev1.Container{
 				{
 					Name:  sanitizeContainerName(podName),
-					Image: fmt.Sprintf("%s.dkr.ecr.%s.%s/ecr-public/aws-cli/aws-cli:latest", v.EcrAccount, v.Region, v.DNSSuffix),
+					Image: images.AwsCli(v.Region, v.DNSSuffix, v.EcrAccount),
 					Env: []corev1.EnvVar{
 						// default value for AWS_MAX_ATTEMPTS is 3. We are seeing the s3 cp command
 						// fail due to rate limits form additional tests so increasing the number of retries

@@ -16,6 +16,7 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
+	"github.com/aws/eks-hybrid/test/e2e/images"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -95,9 +96,8 @@ func (s *SecretsStoreCSIDriverTest) Validate(ctx context.Context) error {
 		"{{SECRETS_STORE_TEST_POD}}", secretsStoreTestPod,
 		"{{SECRET_NAME}}", s.secretName,
 		"{{SERVICE_ACCOUNT_NAME}}", secretsStoreTestPodServiceAccount,
-		"{{ECR_ACCOUNT_ID}}", s.EcrAccount,
 		"{{REGION}}", s.Region,
-		"{{DNS_SUFFIX}}", s.DNSSuffix,
+		"{{NGINX_IMAGE}}", images.Nginx(s.Region, s.DNSSuffix, s.EcrAccount),
 	)
 
 	replacedYaml := replacer.Replace(secretsStoreStaticProvisioningYaml)
