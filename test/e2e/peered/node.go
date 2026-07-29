@@ -142,9 +142,12 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		return PeeredInstance{}, fmt.Errorf("expected to successfully retrieve ami id: %w", err)
 	}
 
-	instanceType := spec.InstanceType
-	if instanceType == "" {
-		instanceType = spec.OS.InstanceType(c.Cluster.Region, spec.InstanceSize, spec.ComputeType)
+	// An explicit instance type overrides the candidate list. Otherwise the OS provides an
+	// ordered list of candidates and the first available one is used, so tests can run in
+	// regions that do not offer the preferred instance type.
+	instanceTypes := spec.OS.InstanceTypes(c.Cluster.Region, spec.InstanceSize, spec.ComputeType)
+	if spec.InstanceType != "" {
+		instanceTypes = []string{spec.InstanceType}
 	}
 
 	// Use the spec-level instance profile if explicitly provided.
@@ -157,10 +160,11 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 	}
 
 	ec2Input := ec2.InstanceConfig{
-		ClusterName:        c.Cluster.Name,
-		InstanceName:       spec.InstanceName,
-		AmiID:              amiId,
-		InstanceType:       instanceType,
+		ClusterName:   c.Cluster.Name,
+		InstanceName:  spec.InstanceName,
+		AmiID:         amiId,
+		InstanceTypes: instanceTypes,
+
 		VolumeSize:         ec2VolumeSize,
 		SubnetID:           c.Cluster.SubnetID,
 		SecurityGroupID:    c.Cluster.SecurityGroupID,

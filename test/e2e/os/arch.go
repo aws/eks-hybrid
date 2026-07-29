@@ -29,25 +29,29 @@ const (
 	arm64 architecture = "arm64"
 )
 
-var instanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
+// instanceSizeToTypes maps an architecture and instance size to an ordered list of
+// candidate EC2 instance types. The first entry is the preferred type; the rest are
+// fallbacks used when the preferred type is not available in the target region/AZ
+var instanceSizeToTypes = map[architecture]map[e2e.InstanceSize][]string{
 	amd64: {
-		e2e.XLarge: "t3.xlarge",
-		e2e.Large:  "t3.large",
+		e2e.XLarge: {"t3.xlarge", "t3a.xlarge", "m6i.xlarge", "m6a.xlarge", "m5.xlarge"},
+		e2e.Large:  {"t3.large", "t3a.large", "m6i.large", "m6a.large", "m5.large"},
 	},
 	arm64: {
-		e2e.XLarge: "t4g.xlarge",
-		e2e.Large:  "t4g.large",
+		e2e.XLarge: {"t4g.xlarge", "m7g.xlarge", "m6g.xlarge"},
+		e2e.Large:  {"t4g.large", "m7g.large", "m6g.large"},
 	},
 }
 
-var gpuInstanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
+// gpuInstanceSizeToTypes intentionally lists a single type per architecture and size.
+var gpuInstanceSizeToTypes = map[architecture]map[e2e.InstanceSize][]string{
 	amd64: {
-		e2e.XLarge: "g4dn.2xlarge",
-		e2e.Large:  "g4dn.xlarge",
+		e2e.XLarge: {"g4dn.2xlarge"},
+		e2e.Large:  {"g4dn.xlarge"},
 	},
 	arm64: {
-		e2e.XLarge: "g5g.2xlarge",
-		e2e.Large:  "g5g.xlarge",
+		e2e.XLarge: {"g5g.2xlarge"},
+		e2e.Large:  {"g5g.xlarge"},
 	},
 }
 
@@ -124,21 +128,25 @@ func getAmiIDFromSSM(ctx context.Context, client *ssm.Client, amiName string) (s
 	return *output.Parameter.Value, nil
 }
 
+// getInstanceTypesFromRegionAndArch returns the ordered list of candidate instance types
+// for the given architecture, size and compute type. The caller is expected to try them in
+// order, falling back to the next candidate when a type is unavailable in the target region.
+//
 // an unknown size and arch combination is a coding error, so we panic
-func getInstanceTypeFromRegionAndArch(_ string, arch architecture, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
-	var instanceType string
+func getInstanceTypesFromRegionAndArch(_ string, arch architecture, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) []string {
+	var instanceTypes []string
 	var ok bool
 
 	if computeType == e2e.GPUInstance {
-		instanceType, ok = gpuInstanceSizeToType[arch][instanceSize]
+		instanceTypes, ok = gpuInstanceSizeToTypes[arch][instanceSize]
 	} else {
-		instanceType, ok = instanceSizeToType[arch][instanceSize]
+		instanceTypes, ok = instanceSizeToTypes[arch][instanceSize]
 	}
 
-	if !ok {
+	if !ok || len(instanceTypes) == 0 {
 		panic(fmt.Errorf("unknown instance size %d for architecture %s", instanceSize, arch))
 	}
-	return instanceType
+	return instanceTypes
 }
 
 func generateNodeadmConfigYaml(nodeadmConfig *api.NodeConfig) (string, error) {
