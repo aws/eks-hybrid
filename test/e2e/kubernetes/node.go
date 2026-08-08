@@ -24,6 +24,8 @@ const (
 	hybridNodeWaitTimeout    = 10 * time.Minute
 	hybridNodeUpgradeTimeout = 2 * time.Minute
 	nodeCordonTimeout        = 30 * time.Second
+
+	HybridNodeLabelSelector = "eks.amazonaws.com/compute-type=hybrid"
 )
 
 // WaitForNode wait for the node to join the cluster and fetches the node info which has the nodeName label
@@ -334,7 +336,7 @@ func PatchNode(ctx context.Context, k8s kubernetes.Interface, nodeName string, p
 // LabelHybridNodesForTopology adds topology.kubernetes.io/zone=onprem label to hybrid nodes
 func LabelHybridNodesForTopology(ctx context.Context, k8s kubernetes.Interface, logger logr.Logger) error {
 	// Find all hybrid nodes
-	nodes, err := ListNodesWithLabels(ctx, k8s, "eks.amazonaws.com/compute-type=hybrid")
+	nodes, err := ListNodesWithLabels(ctx, k8s, HybridNodeLabelSelector)
 	if err != nil {
 		return fmt.Errorf("failed to list hybrid nodes: %w", err)
 	}
