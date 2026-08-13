@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,10 +24,12 @@ const nodeRunningTimeout = 5 * time.Minute
 
 // instanceConfig holds the configuration for the EC2 instance.
 type InstanceConfig struct {
-	ClusterName        string
-	InstanceName       string
-	AmiID              string
-	InstanceType       string
+	ClusterName  string
+	InstanceName string
+	AmiID        string
+	// InstanceTypes is an ordered list of instance types. They are attempted in
+	// order and the first one that launches is used.
+	InstanceTypes      []string
 	InstanceProfileARN string
 	VolumeSize         int32
 	UserData           []byte
@@ -39,6 +42,19 @@ type Instance struct {
 	ID   string
 	Name string
 	IP   string
+}
+
+// skipInstanceTypeErrorsRetryer wraps a retryer to make instance type related
+// errors non retryable.
+type skipInstanceTypeErrorsRetryer struct {
+	aws.Retryer
+}
+
+func (r *skipInstanceTypeErrorsRetryer) IsErrorRetryable(err error) bool {
+	if e2eErrors.IsInvalidInstanceTypeParameter(err) {
+		return false
+	}
+	return r.Retryer.IsErrorRetryable(err)
 }
 
 func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmClient *ssm.Client) (Instance, error) {
@@ -83,11 +99,43 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 	}
 	userDataEncoded := base64.StdEncoding.EncodeToString(userDataBuffer.Bytes())
 
+	if len(e.InstanceTypes) == 0 {
+		return Instance{}, fmt.Errorf("no instance types provided for instance %s", e.InstanceName)
+	}
+
+	// Launch the first instance type that works. Skip to the next type only when the
+	// launch failed because of the type itself. Anything else, like a permission or subnet problem,
+	// would fail the same way for every type, so return it right away.
+	logger := logr.FromContextOrDiscard(ctx)
+
+	var attemptErrs []error
+	for _, instanceType := range e.InstanceTypes {
+		instance, err := e.runInstance(ctx, ec2Client, instanceType, userDataEncoded)
+		if err == nil {
+			logger.Info("Created EC2 instance", "instanceID", instance.ID, "instanceType", instanceType)
+			return instance, nil
+		}
+
+		if !e2eErrors.IsInstanceTypeUnavailable(err) {
+			return Instance{}, fmt.Errorf("could not create hybrid EC2 instance with instance type %s: %w", instanceType, err)
+		}
+
+		logger.Info("Instance type unavailable, trying next candidate", "instanceType", instanceType, "error", err.Error())
+		attemptErrs = append(attemptErrs, fmt.Errorf("%s: %w", instanceType, err))
+	}
+
+	return Instance{}, fmt.Errorf("could not create hybrid EC2 instance, none of the instance types %v are available: %w",
+		e.InstanceTypes, errors.Join(attemptErrs...))
+}
+
+// runInstance launches a single EC2 instance with the given instance type.
+func (e *InstanceConfig) runInstance(ctx context.Context, ec2Client *ec2.Client, instanceType, userDataEncoded string) (Instance, error) {
 	runResult, err := ec2Client.RunInstances(ctx, &ec2.RunInstancesInput{
 		ImageId:      aws.String(e.AmiID),
-		InstanceType: types.InstanceType(e.InstanceType),
+		InstanceType: types.InstanceType(instanceType),
 		MinCount:     aws.Int32(1),
 		MaxCount:     aws.Int32(1),
+
 		IamInstanceProfile: &types.IamInstanceProfileSpecification{
 			Arn: aws.String(e.InstanceProfileARN),
 		},
@@ -131,9 +179,12 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 			HttpEndpoint: types.InstanceMetadataEndpointStateEnabled,
 		},
 	}, func(o *ec2.Options) {
+		// InvalidParameterValue is retried persistently to wait out IAM propagation, but
+		// when it refers to the instance type it will never succeed, so it is excluded to
+		// avoid spending all 60 attempts before falling back to the next type.
 		clientRetryer := o.Retryer
 		persistentInvalidParameterValueRetryer := retry.AddWithMaxAttempts(retry.AddWithErrorCodes(clientRetryer, "InvalidParameterValue"), 60)
-		o.Retryer = persistentInvalidParameterValueRetryer
+		o.Retryer = &skipInstanceTypeErrorsRetryer{Retryer: persistentInvalidParameterValueRetryer}
 	})
 	if err != nil {
 		return Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)

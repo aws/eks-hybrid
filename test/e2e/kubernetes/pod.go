@@ -19,6 +19,7 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
+	"github.com/aws/eks-hybrid/test/e2e/images"
 )
 
 const (
@@ -61,7 +62,7 @@ func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeNam
 			Containers: []corev1.Container{
 				{
 					Name:  "nginx",
-					Image: fmt.Sprintf("%s.dkr.ecr.%s.%s/ecr-public/nginx/nginx:latest", ecrAccount, region, dnsSuffix),
+					Image: images.Nginx(region, dnsSuffix, ecrAccount),
 					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 80,

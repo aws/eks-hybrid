@@ -16,7 +16,7 @@ phases:
         cat << EOF > awscliconfig
         [profile artifacts-production]
         role_arn=${PROD_ARTIFACT_DEPLOYMENT_ROLE}
-        region=us-east-1
+        region=${PROD_REGION:-us-east-1}
         credential_source=EcsContainer
         EOF
       - export AWS_CONFIG_FILE=$(pwd)/awscliconfig
@@ -30,4 +30,6 @@ phases:
     commands:
       - AWS_PROFILE=artifacts-production ./hack/validate-release-artifacts.sh $PROD_BUCKET releases/${VERSION}
       - AWS_PROFILE=artifacts-production ./hack/validate-release-artifacts.sh $PROD_BUCKET releases/latest
-      - AWS_PROFILE=artifacts-production ./hack/validate-release.sh "${CLOUDFRONT_DISTRIBUTION_ID}" "latest/GIT_VERSION"
+      # RELEASE_ASSET_HOST is the public host fronting the prod bucket:
+      # hybrid-assets.eks.amazonaws.com (commercial) or eks-hybrid-assets.awsstatic.cn (China).
+      - AWS_PROFILE=artifacts-production ./hack/validate-release.sh "${CLOUDFRONT_DISTRIBUTION_ID}" "latest/GIT_VERSION" "${RELEASE_ASSET_HOST:-hybrid-assets.eks.amazonaws.com}"

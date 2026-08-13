@@ -16,7 +16,10 @@ type NodeadmOS interface {
 	Name() string
 	AMIName(ctx context.Context, awsConfig aws.Config, kubernetesVersion string, computeType ComputeType) (string, error)
 	BuildUserData(ctx context.Context, userDataInput UserDataInput) ([]byte, error)
-	InstanceType(region string, instanceSize InstanceSize, computeType ComputeType) string
+	// InstanceTypes returns an ordered list of candidate instance types. Callers should
+	// attempt them in order, falling back to the next when a type is unavailable in the
+	// target region or availability zone.
+	InstanceTypes(region string, instanceSize InstanceSize, computeType ComputeType) []string
 }
 
 type InstanceSize int

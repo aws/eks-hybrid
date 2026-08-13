@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	"github.com/aws/eks-hybrid/test/e2e/images"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -53,16 +54,11 @@ func NewCilium(k8s dynamic.Interface, podCIDR, region, kubernetesVersion string)
 	}
 }
 
-// isChinaRegion returns true if the region is a China region
-func isChinaRegion(region string) bool {
-	return strings.HasPrefix(region, "cn-")
-}
-
 // getCiliumImageConfig returns the appropriate image repository and tag based on region.
 // For China regions, it uses the China ECR registry (constants.ChinaCiliumEcrAccountId).
 // The same Cilium version (read from testdata/cilium/VERSION) is used for all regions.
 func getCiliumImageConfig(region string) (ciliumRepo, operatorRepo, tag string) {
-	if isChinaRegion(region) {
+	if images.IsChinaRegion(region) {
 		baseRepo := constants.ChinaCiliumEcrAccountId + ".dkr.ecr." + region + ".amazonaws.com.cn"
 		return baseRepo + "/cilium/cilium",
 			baseRepo + "/cilium/operator-generic",

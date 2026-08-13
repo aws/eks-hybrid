@@ -584,7 +584,7 @@ Resources:
             LaunchTemplateId: !Ref JumpboxLaunchTemplate
             Version: !GetAtt JumpboxLaunchTemplate.LatestVersionNumber
           Overrides:
-            # use t4g.micro if available, otherwise try other T4g instance types
+            # use t4g.micro if available, otherwise try other Graviton instance types
             - InstanceType: t4g.micro
               SubnetId: !Ref HybridNodeVPCPublicSubnet
               Priority: 1
@@ -600,6 +600,12 @@ Resources:
             - InstanceType: t4g.nano
               SubnetId: !Ref HybridNodeVPCPublicSubnet
               Priority: 5
+            - InstanceType: m7g.medium
+              SubnetId: !Ref HybridNodeVPCPublicSubnet
+              Priority: 6
+            - InstanceType: m6g.medium
+              SubnetId: !Ref HybridNodeVPCPublicSubnet
+              Priority: 7
       OnDemandOptions:
         AllocationStrategy: prioritized
         SingleAvailabilityZone: true

@@ -13,8 +13,11 @@ const (
 	// ChinaCiliumEcrAccountId is the ECR account ID used in AWS China (aws-cn) regions for Cilium images.
 	// This account mirrors Cilium images for use in China regions.
 	ChinaCiliumEcrAccountId = "907723705730"
+	// PublicEcrRegistry is the public ECR registry. It is anonymously pullable from every
+	// partition, including AWS China (aws-cn).
+	PublicEcrRegistry = "public.ecr.aws"
 	// CiliumPublicEcrRegistry is the public ECR registry used for Cilium images in standard regions.
-	CiliumPublicEcrRegistry         = "public.ecr.aws/eks"
+	CiliumPublicEcrRegistry         = PublicEcrRegistry + "/eks"
 	LogCollectorBundleFileName      = "bundle.tar.gz"
 	JumpboxLogBundleFileName        = "jumpbox-bundle.tar.gz"
 	TestCredentialsStackNamePrefix  = "EKSHybridCI"

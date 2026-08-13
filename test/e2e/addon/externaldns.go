@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	"github.com/aws/eks-hybrid/test/e2e/images"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -99,9 +100,7 @@ func (e *ExternalDNSTest) Validate(ctx context.Context) error {
 		"{{TEST_SERVICE}}", externalDNSTestService,
 		"{{NAMESPACE}}", defaultNamespace,
 		"{{HOSTED_ZONE_NAME}}", hostedZoneName,
-		"{{ECR_ACCOUNT_ID}}", e.EcrAccount,
-		"{{REGION}}", e.Region,
-		"{{DNS_SUFFIX}}", e.DNSSuffix,
+		"{{NGINX_IMAGE}}", images.Nginx(e.Region, e.DNSSuffix, e.EcrAccount),
 	)
 	replacedTestServiceYAML := replacer.Replace(testServiceYAML)
 

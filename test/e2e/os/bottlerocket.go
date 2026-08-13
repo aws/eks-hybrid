@@ -75,8 +75,8 @@ func (a BottleRocket) Name() string {
 	return "bottlerocket-" + a.architecture.String()
 }
 
-func (a BottleRocket) InstanceType(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
-	return getInstanceTypeFromRegionAndArch(region, a.architecture, instanceSize, computeType)
+func (a BottleRocket) InstanceTypes(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) []string {
+	return getInstanceTypesFromRegionAndArch(region, a.architecture, instanceSize, computeType)
 }
 
 func (a BottleRocket) AMIName(ctx context.Context, awsConfig aws.Config, kubernetesVersion string, computeType e2e.ComputeType) (string, error) {

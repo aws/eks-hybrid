@@ -7,6 +7,12 @@ set -o pipefail
 CLOUDFRONT_ID=$1
 VERSION_FILE=$2
 
+# Optional argument: base host serving the released assets (behind CloudFront).
+# Defaults to the commercial host so existing callers are unchanged. For the
+# China partition (aws-cn) pass eks-hybrid-assets.awsstatic.cn. Also honors the
+# RELEASE_ASSET_HOST env var if the positional arg is not provided.
+RELEASE_ASSET_HOST="${3:-${RELEASE_ASSET_HOST:-hybrid-assets.eks.amazonaws.com}}"
+
 echo "Starting release validation..."
 
 # Create and wait for CloudFront invalidation
@@ -30,7 +36,7 @@ echo "CloudFront invalidation completed successfully"
 
 # Validate released version
 echo "Validating released version..."
-curl -L -o released_nodeadm https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/amd64/nodeadm
+curl -L -o released_nodeadm "https://${RELEASE_ASSET_HOST}/releases/latest/bin/linux/amd64/nodeadm"
 chmod +x released_nodeadm
 
 # Extract just the semantic version using regex i.e. 'Version: v1.0.5' -> 'v1.0.5'

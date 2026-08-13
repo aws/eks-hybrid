@@ -8,11 +8,14 @@ COPY . .
 RUN make build
 RUN mv _bin/nodeadm /nodeadm
 
-FROM public.ecr.aws/amazonlinux/amazonlinux:2023
+# Pin AL2023 base image digest for reproducible builds
+# To update: docker pull public.ecr.aws/amazonlinux/amazonlinux:2023 && docker inspect --format '{{index .RepoDigests 0}}'
+FROM public.ecr.aws/amazonlinux/amazonlinux@sha256:a173dcd0fdeb0e83b39fcf9464a1b2af233569809181717cf541ab6a82039c09
 ARG TARGETARCH
 
-RUN dnf -y update && \
-    dnf -y install systemd containerd jq git-core python3 python3-pip tar procps zip openssl openssl-devel && \
+# Don't run dnf update — pinned base image provides reproducibility.
+# Update the image digest above when intentionally upgrading.
+RUN dnf -y install systemd containerd jq git-core python3.11 python3.11-pip tar procps zip openssl openssl-devel && \
     dnf clean all
 
 RUN curl -OL https://github.com/mikefarah/yq/releases/download/v4.45.3/yq_linux_${TARGETARCH}.tar.gz && \
@@ -28,7 +31,10 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "aws
     ./aws/install && \
     rm -rf aws awscliv2.zip
 
-RUN pip install --user 'moto[server]'
+# Pin moto version for reproducibility. Python 3.11 required — AL2023's Python 3.9.25
+# has a pkgutil.get_data security patch (CVE-2026-11972, July 2026) that breaks moto's
+# resource loading on all moto versions.
+RUN python3.11 -m pip install --user 'moto[server]==5.2.2'
 
 
 # I know how this looks, but it lets us use moto with our mocked IMDS and for now the simplicity is worth the hack
