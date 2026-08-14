@@ -57,8 +57,8 @@ func (s SLES15SP7) Name() string {
 	return "sles15sp7-" + s.architecture.String()
 }
 
-func (s SLES15SP7) InstanceType(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
-	return getInstanceTypeFromRegionAndArch(region, s.architecture, instanceSize, computeType)
+func (s SLES15SP7) InstanceTypes(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) []string {
+	return getInstanceTypesFromRegionAndArch(region, s.architecture, instanceSize, computeType)
 }
 
 func (s SLES15SP7) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
@@ -113,8 +113,8 @@ func (s SLES16) Name() string {
 	return "sles16-" + s.architecture.String()
 }
 
-func (s SLES16) InstanceType(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
-	return getInstanceTypeFromRegionAndArch(region, s.architecture, instanceSize, computeType)
+func (s SLES16) InstanceTypes(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) []string {
+	return getInstanceTypesFromRegionAndArch(region, s.architecture, instanceSize, computeType)
 }
 
 func (s SLES16) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
