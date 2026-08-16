@@ -70,7 +70,7 @@ func (s *ssm) registerMachine(ctx context.Context, cfg *api.NodeConfig) error {
 
 var possibleAgentPaths = []string{
 	"/usr/bin/amazon-ssm-agent",
-	"/snap/amazon-ssm-agent/current/amazon-ssm-agent",
+	snapAgentBinaryPath,
 }
 
 func agentBinaryPath() (string, error) {
