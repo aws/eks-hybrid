@@ -57,6 +57,12 @@ const (
 [plugins."io.containerd.grpc.v1.cri"]
     sandbox = "registry.k8s.io/pause:3.8"`
 
+	// containerd 2.3+ migrates older on-disk configs to version 4 in memory on startup,
+	// so `containerd config dump` reports version 4 with the same pinned_images format as v3.
+	containerdConfigV4 = `version = 4
+[plugins."io.containerd.cri.v1.images".pinned_images]
+    sandbox = "registry.k8s.io/pause:3.10.2"`
+
 	containerdConfigNoVersion = `[plugins."io.containerd.grpc.v1.cri"]
     sandbox_image = "registry.k8s.io/pause:3.8"`
 
@@ -72,6 +78,65 @@ func TestSandboxImageV2Regex(t *testing.T) {
 	}
 	sandboxImage := matches[1]
 	assert.Equal(t, sandboxImage, "registry.k8s.io/pause:3.8")
+}
+
+func TestSandboxImageRegexForConfigVersion(t *testing.T) {
+	tests := []struct {
+		name          string
+		configVersion int
+		dump          string
+		expectedImage string
+		expectError   bool
+	}{
+		{
+			name:          "v2 config uses sandbox_image field",
+			configVersion: 2,
+			dump:          containerdConfigV2,
+			expectedImage: "registry.k8s.io/pause:3.8",
+		},
+		{
+			name:          "v3 config uses pinned sandbox field",
+			configVersion: 3,
+			dump:          containerdConfigV3,
+			expectedImage: "registry.k8s.io/pause:3.8",
+		},
+		{
+			// containerd 2.3+ auto-migrates the config to version 4 on startup, which keeps
+			// the v3 pinned_images.sandbox format
+			name:          "v4 config is handled like v3",
+			configVersion: 4,
+			dump:          containerdConfigV4,
+			expectedImage: "registry.k8s.io/pause:3.10.2",
+		},
+		{
+			name:          "future config version is handled like v3",
+			configVersion: 5,
+			dump:          containerdConfigV4,
+			expectedImage: "registry.k8s.io/pause:3.10.2",
+		},
+		{
+			name:          "v1 config is not supported",
+			configVersion: 1,
+			expectError:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sandboxRegex, err := sandboxImageRegexForConfigVersion(tt.configVersion)
+
+			if tt.expectError {
+				assert.Error(t, err, "expected error for test case: %s", tt.name)
+				assert.Nil(t, sandboxRegex, "expected no regex for error cases")
+				return
+			}
+
+			assert.NoError(t, err, "unexpected error for test case: %s", tt.name)
+			matches := sandboxRegex.FindStringSubmatch(tt.dump)
+			assert.NotNil(t, matches, "sandbox image could not be found in containerd config")
+			assert.Equal(t, tt.expectedImage, matches[1])
+		})
+	}
 }
 
 func TestParseConfigVersion(t *testing.T) {
@@ -91,6 +156,12 @@ func TestParseConfigVersion(t *testing.T) {
 			name:        "valid v3 config",
 			input:       containerdConfigV3,
 			expected:    3,
+			expectError: false,
+		},
+		{
+			name:        "valid v4 config",
+			input:       containerdConfigV4,
+			expected:    4,
 			expectError: false,
 		},
 		{
