@@ -1,6 +1,6 @@
 module github.com/aws/eks-hybrid
 
-go 1.27.0
+go 1.26.6
 
 require (
 	dario.cat/mergo v1.0.2 // direct
