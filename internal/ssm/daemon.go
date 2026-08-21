@@ -123,6 +123,7 @@ func setDaemonName() {
 		system.UbuntuOsName: "snap.amazon-ssm-agent.amazon-ssm-agent",
 		system.RhelOsName:   "amazon-ssm-agent",
 		system.AmazonOsName: "amazon-ssm-agent",
+		system.SlesOsName:   "amazon-ssm-agent",
 	}
 	osName := system.GetOsName()
 	if daemonName, ok := osToDaemonName[osName]; ok {
