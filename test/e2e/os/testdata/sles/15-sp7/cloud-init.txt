@@ -23,6 +23,7 @@ write_files:
 
 runcmd:
   - ln -sf /run/log/journal /var/log/journal
+  - zypper --non-interactive --gpg-auto-import-keys refresh || true
   - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}"
   - /tmp/nvidia-driver-install.sh
 
