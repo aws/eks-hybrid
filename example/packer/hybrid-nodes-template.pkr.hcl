@@ -103,11 +103,11 @@ variable "format" {
 variable "rhel_version" {
   type        = string
   default     = env("RHEL_VERSION")
-  description = "Rhel version of the input iso and output Qcow2/Raw image. Must be 8 or 9"
+  description = "Rhel version of the input iso and output Qcow2/Raw image. Must be 8, 9, or 10"
 
   validation {
-    condition     = contains(["", "8", "9"], var.rhel_version)
-    error_message = "The 'RHEL_VERSION' environment variable must be set when using the QEMU builder. Set to 8 or 9."
+    condition     = contains(["", "8", "9", "10"], var.rhel_version)
+    error_message = "The 'RHEL_VERSION' environment variable must be set when using the QEMU builder. Set to 8, 9, or 10."
   }
 }
 
@@ -278,6 +278,24 @@ source "amazon-ebs" "rhel9" {
   source_ami_filter {
     filters = {
       name                = "RHEL-9.2.0_HVM-*"
+      root-device-type    = "ebs"
+      virtualization-type = "hvm"
+    }
+    most_recent = true
+    owners      = ["309956199498"]
+  }
+}
+
+source "amazon-ebs" "rhel10" {
+  ami_name      = "ami-packer-rhel10-${local.timestamp}"
+  instance_type = "m5.xlarge"
+  region        = "us-west-2"
+  ssh_username  = "ec2-user"
+  profile       = var.aws_profile
+
+  source_ami_filter {
+    filters = {
+      name                = "RHEL-10*_HVM-*"
       root-device-type    = "ebs"
       virtualization-type = "hvm"
     }
@@ -505,6 +523,54 @@ source "vsphere-iso" "rhel9" {
 
 }
 
+source "vsphere-iso" "rhel10" {
+  vcenter_server      = var.vsphere_server != "" ? var.vsphere_server : " "
+  username            = var.vsphere_user != "" ? var.vsphere_user : " "
+  password            = var.vsphere_password != "" ? var.vsphere_password : " "
+  insecure_connection = true
+
+  datacenter = var.vsphere_datacenter
+  cluster    = var.vsphere_cluster != "" ? var.vsphere_cluster : " "
+  datastore  = var.vsphere_datastore
+  folder     = var.vsphere_folder
+
+  vm_name              = "iso-packer-rhel10-${local.timestamp}"
+  guest_os_type        = "rhel9_64Guest"  # Using rhel9 as fallback until rhel10_64Guest is available
+  CPUs                 = 4
+  RAM                  = 16384
+  disk_controller_type = ["pvscsi"]
+  storage {
+    disk_size             = 30000
+    disk_thin_provisioned = true
+  }
+
+  network_adapters {
+    network      = var.vsphere_network
+    network_card = "vmxnet3"
+  }
+
+  iso_url      = local.iso_url
+  iso_checksum = local.iso_checksum
+
+  boot_order = "disk,cdrom"
+
+  iso_paths = [
+      "[${var.vsphere_datastore}] packer_cache/rhel10_ks.iso",
+  ]
+
+  boot_command = [
+    "<enter><enter"
+  ]
+
+  communicator = "ssh"
+  ssh_username = "builder"
+  ssh_password = var.pkr_ssh_password # default is "builder" as used in http/rhel/10/ks.cfg, make sure to change in both places
+  ssh_timeout  = "30m"
+
+  convert_to_template = true
+
+}
+
 ######################
 # Ubuntu Raw/Qcow2 sources 
 ######################
@@ -673,8 +739,48 @@ source "qemu" "rhel9" {
   output_directory = "${local.qemu_output_directory}/rhel${local.rhel_os}"
 }
 
+source "qemu" "rhel10" {
+  vm_name          = "qemu-${local.qemu_format}-packer-rhel10-${local.timestamp}"
+  accelerator      = "kvm"
+  disk_size        = "20000"
+  net_device       = "virtio-net"
+  disk_interface   = "virtio"
+  shutdown_command = "echo 'builder' | sudo -S shutdown -P now"
+
+  headless            = true
+
+  format = var.format
+
+  iso_url      = local.iso_url
+  iso_checksum = local.iso_checksum
+
+  boot_wait = "5s"
+  boot_command = [
+    "<up><tab> text inst.ks=",
+    "http://{{ .HTTPIP }}:{{ .HTTPPort }}",
+    "/rhel/10/ks.cfg<enter><wait>",
+  ]
+
+  qemuargs = [
+    ["-cpu", "host,+nx"],
+    ["-m", "2048M"],
+    ["-smp", "2"],
+    ["-nographic"],
+    ["-serial", "stdio"],
+    ["-monitor", "none"]
+  ]
+
+  http_directory = "http"
+  communicator   = "ssh"
+  ssh_username   = "builder"
+  ssh_password   = var.pkr_ssh_password # default is "builder" as used in http/rhel/10/ks.cfg, make sure to change in both places
+  ssh_timeout    = "60m"
+
+  output_directory = "${local.qemu_output_directory}/rhel${local.rhel_os}"
+}
+
 ######################
-# Generalized build for Ubuntu 22.04/24.04 and Rhel 8/9 to install nodeadm
+# Generalized build for Ubuntu 22.04/24.04 and Rhel 8/9/10 to install nodeadm
 ######################
 build {
   name = "general-build"
@@ -683,14 +789,17 @@ build {
     "source.amazon-ebs.ubuntu24",
     "source.amazon-ebs.rhel8",
     "source.amazon-ebs.rhel9",
+    "source.amazon-ebs.rhel10",
     "source.vsphere-iso.ubuntu22",
     "source.vsphere-iso.ubuntu24",
     "source.vsphere-iso.rhel8",
     "source.vsphere-iso.rhel9",
+    "source.vsphere-iso.rhel10",
     "source.qemu.ubuntu22",
     "source.qemu.ubuntu24",
     "source.qemu.rhel8", 
-    "source.qemu.rhel9"
+    "source.qemu.rhel9",
+    "source.qemu.rhel10"
   ]
 
 
@@ -715,6 +824,6 @@ build {
       "rhel_version=${var.rhel_version}",
       "k8s_version=${var.k8s_version}"
     ]
-    only = ["amazon-ebs.rhel8", "amazon-ebs.rhel9","qemu.rhel8", "qemu.rhel9", "vsphere-iso.rhel8", "vsphere-iso.rhel9"]
+    only = ["amazon-ebs.rhel8", "amazon-ebs.rhel9", "amazon-ebs.rhel10", "qemu.rhel8", "qemu.rhel9", "qemu.rhel10", "vsphere-iso.rhel8", "vsphere-iso.rhel9", "vsphere-iso.rhel10"]
   }
 }

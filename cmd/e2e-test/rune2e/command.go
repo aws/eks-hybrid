@@ -27,7 +27,7 @@ const (
 	defaultNodeadmARMURL     = "https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/arm64/nodeadm"
 	defaultClusterNamePrefix = "nodeadm-e2e-tests"
 	defaultRegion            = "us-west-2"
-	defaultK8sVersion        = "1.31"
+	defaultK8sVersion        = "1.34"
 	defaultCNI               = "cilium"
 	defaultTimeout           = time.Minute * 60
 	defaultTestProcs         = 1

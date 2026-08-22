@@ -26,6 +26,9 @@ var rhel8CloudInit []byte
 //go:embed testdata/rhel/9/cloud-init.txt
 var rhel9CloudInit []byte
 
+//go:embed testdata/rhel/10/cloud-init.txt
+var rhel10CloudInit []byte
+
 type rhelCloudInitData struct {
 	e2e.UserDataInput
 	NodeadmUrl        string
@@ -197,6 +200,92 @@ func (r RedHat9) BuildUserData(_ context.Context, userDataInput e2e.UserDataInpu
 	}
 
 	return executeTemplate(rhel9CloudInit, data)
+}
+
+type RedHat10 struct {
+	rhelUsername     string
+	rhelPassword     string
+	amiArchitecture  string
+	architecture     architecture
+	containerdSource string
+}
+
+func NewRedHat10AMD(rhelUsername, rhelPassword string) *RedHat10 {
+	rh10 := new(RedHat10)
+	rh10.rhelUsername = rhelUsername
+	rh10.rhelPassword = rhelPassword
+	rh10.amiArchitecture = x8664Arch
+	rh10.architecture = amd64
+	return rh10
+}
+
+func NewRedHat10ARM(rhelUsername, rhelPassword string) *RedHat10 {
+	rh10 := new(RedHat10)
+	rh10.rhelUsername = rhelUsername
+	rh10.rhelPassword = rhelPassword
+	rh10.amiArchitecture = arm64Arch
+	rh10.architecture = arm64
+	return rh10
+}
+
+func NewRedHat10NoDockerSource(rhelUsername, rhelPassword string) *RedHat10 {
+	rh10 := new(RedHat10)
+	rh10.rhelUsername = rhelUsername
+	rh10.rhelPassword = rhelPassword
+	rh10.amiArchitecture = x8664Arch
+	rh10.architecture = amd64
+	rh10.containerdSource = "none"
+	return rh10
+}
+
+func (r RedHat10) Name() string {
+	name := "rhel10-" + r.architecture.String()
+	if r.containerdSource == "none" {
+		name += "-source-none"
+	}
+	return name
+}
+
+func (r RedHat10) InstanceType(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
+	return getInstanceTypeFromRegionAndArch(region, r.architecture, instanceSize, computeType)
+}
+
+func (r RedHat10) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
+	// RHEL 10 AMIs from Red Hat account 309956199498
+	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-10*" "Name=architecture,Values=x86_64" --region us-west-2
+	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-10*", r.amiArchitecture)
+}
+
+func (r RedHat10) BuildUserData(_ context.Context, userDataInput e2e.UserDataInput) ([]byte, error) {
+	nodeadmConfigYaml, err := generateNodeadmConfigYaml(userDataInput.NodeadmConfig)
+	if err != nil {
+		return nil, err
+	}
+	userDataInput.NodeadmConfigYaml = nodeadmConfigYaml
+
+	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
+	data := rhelCloudInitData{
+		UserDataInput: userDataInput,
+		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
+		RhelUsername:  r.rhelUsername,
+		RhelPassword:  r.rhelPassword,
+		SSMAgentURL:   rhelSsmAgentAMD,
+	}
+
+	if r.architecture.arm() {
+		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
+		data.SSMAgentURL = rhelSsmAgentARM
+	}
+
+	data.ContainerdSource = "docker"
+	if r.containerdSource == "none" {
+		data.ContainerdSource = "none"
+	}
+
+	return executeTemplate(rhel10CloudInit, data)
 }
 
 // AMI represents an ec2 Image.
