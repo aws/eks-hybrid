@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	aptPackageManager  = "apt"
-	snapPackageManager = "snap"
-	yumPackageManager  = "yum"
+	aptPackageManager    = "apt"
+	snapPackageManager   = "snap"
+	yumPackageManager    = "yum"
+	zypperPackageManager = "zypper"
 
 	snapInstallVerb = "install"
 	snapUpdateVerb  = "refresh"
@@ -46,7 +47,7 @@ const (
 	ssmPkgName      = "amazon-ssm-agent"
 )
 
-// DistroPackageManager defines a new package manager using apt or yum
+// DistroPackageManager defines a new package manager using apt, yum, or zypper
 type DistroPackageManager struct {
 	manager             string
 	installVerb         string
@@ -201,11 +202,23 @@ func (pm *DistroPackageManager) appendPackageVersion(packageName, version string
 	switch pm.manager {
 	case yumPackageManager:
 		return fmt.Sprintf("%s-%s", packageName, version)
-	case aptPackageManager:
+	case aptPackageManager, zypperPackageManager:
 		return fmt.Sprintf("%s=%s", packageName, version)
 	default:
 		return packageName
 	}
+}
+
+// newAutoConfirmCmd builds a package manager command that runs non-interactively.
+// zypper only honors the confirm flag immediately after the subcommand
+// (e.g. "zypper install -y pkg")
+// Centralized here so every package getter gets the right flag placement
+// without repeating the zypper special case at each call site.
+func (pm *DistroPackageManager) newAutoConfirmCmd(verb, packageName string) artifact.Cmd {
+	if pm.manager == zypperPackageManager {
+		return artifact.NewCmd(pm.manager, verb, "-y", packageName)
+	}
+	return artifact.NewCmd(pm.manager, verb, packageName, "-y")
 }
 
 func (pm *DistroPackageManager) getContainerdPackageNameWithVersionConstraint(version string) string {
@@ -230,18 +243,18 @@ func (pm *DistroPackageManager) refreshMetadataCacheCommand(ctx context.Context)
 func (pm *DistroPackageManager) GetContainerd(versionConstraint string) artifact.Package {
 	packageName := pm.getContainerdPackageNameWithVersionConstraint(versionConstraint)
 	return artifact.NewPackageSource(
-		artifact.NewCmd(pm.manager, pm.installVerb, packageName, "-y"),
-		artifact.NewCmd(pm.manager, pm.deleteVerb, packageName, "-y"),
-		artifact.NewCmd(pm.manager, pm.updateVerb, packageName, "-y"),
+		pm.newAutoConfirmCmd(pm.installVerb, packageName),
+		pm.newAutoConfirmCmd(pm.deleteVerb, packageName),
+		pm.newAutoConfirmCmd(pm.updateVerb, packageName),
 	)
 }
 
 // GetIptables satisfies the getiptables source interface
 func (pm *DistroPackageManager) GetIptables() artifact.Package {
 	return artifact.NewPackageSource(
-		artifact.NewCmd(pm.manager, pm.installVerb, iptablesPkgName, "-y"),
-		artifact.NewCmd(pm.manager, pm.deleteVerb, iptablesPkgName, "-y"),
-		artifact.NewCmd(pm.manager, pm.updateVerb, iptablesPkgName, "-y"),
+		pm.newAutoConfirmCmd(pm.installVerb, iptablesPkgName),
+		pm.newAutoConfirmCmd(pm.deleteVerb, iptablesPkgName),
+		pm.newAutoConfirmCmd(pm.updateVerb, iptablesPkgName),
 	)
 }
 
@@ -256,34 +269,48 @@ func (pm *DistroPackageManager) GetSSMPackage() artifact.Package {
 			artifact.NewCmd(snapPackageManager, snapUpdateVerb, ssmPkgName),
 		)
 	}
+	// SSM on SLES is not installed through zypper, so there is nothing
+	// for the package manager to install/remove/update.
+	// This matters for uninstall. yum and apt return exit 0 when removing
+	// a package that was never installed.
+	// zypper returns a non-zero exit (ZYPPER_EXIT_INF_CAP_NOT_FOUND).
+	// cmd.Retry has no retry limit around `nodeadm uninstall`, so a
+	// non-zero exit would retry forever.
+	if pm.manager == zypperPackageManager {
+		return artifact.NewPackageSource(
+			artifact.NewCmd("true"),
+			artifact.NewCmd("true"),
+			artifact.NewCmd("true"),
+		)
+	}
 	return artifact.NewPackageSource(
-		artifact.NewCmd(pm.manager, pm.installVerb, ssmPkgName, "-y"),
-		artifact.NewCmd(pm.manager, pm.deleteVerb, ssmPkgName, "-y"),
-		artifact.NewCmd(pm.manager, pm.updateVerb, ssmPkgName, "-y"),
+		pm.newAutoConfirmCmd(pm.installVerb, ssmPkgName),
+		pm.newAutoConfirmCmd(pm.deleteVerb, ssmPkgName),
+		pm.newAutoConfirmCmd(pm.updateVerb, ssmPkgName),
 	)
 }
 
 func (pm *DistroPackageManager) caCertsPackage() artifact.Package {
 	return artifact.NewPackageSource(
-		artifact.NewCmd(pm.manager, pm.installVerb, caCertsPkgName, "-y"),
-		artifact.NewCmd(pm.manager, pm.deleteVerb, caCertsPkgName, "-y"),
-		artifact.NewCmd(pm.manager, pm.updateVerb, caCertsPkgName, "-y"),
+		pm.newAutoConfirmCmd(pm.installVerb, caCertsPkgName),
+		pm.newAutoConfirmCmd(pm.deleteVerb, caCertsPkgName),
+		pm.newAutoConfirmCmd(pm.updateVerb, caCertsPkgName),
 	)
 }
 
 func (pm *DistroPackageManager) yumUtilsPackage() artifact.Package {
 	return artifact.NewPackageSource(
-		artifact.NewCmd(pm.manager, pm.installVerb, yumUtilsManagerPkg, "-y"),
-		artifact.NewCmd(pm.manager, pm.deleteVerb, yumUtilsManagerPkg, "-y"),
-		artifact.NewCmd(pm.manager, pm.updateVerb, yumUtilsManagerPkg, "-y"),
+		pm.newAutoConfirmCmd(pm.installVerb, yumUtilsManagerPkg),
+		pm.newAutoConfirmCmd(pm.deleteVerb, yumUtilsManagerPkg),
+		pm.newAutoConfirmCmd(pm.updateVerb, yumUtilsManagerPkg),
 	)
 }
 
 func (pm *DistroPackageManager) runcPackage() artifact.Package {
 	return artifact.NewPackageSource(
-		artifact.NewCmd(pm.manager, pm.installVerb, runcPkgName, "-y"),
-		artifact.NewCmd(pm.manager, pm.deleteVerb, runcPkgName, "-y"),
-		artifact.NewCmd(pm.manager, pm.updateVerb, runcPkgName, "-y"),
+		pm.newAutoConfirmCmd(pm.installVerb, runcPkgName),
+		pm.newAutoConfirmCmd(pm.deleteVerb, runcPkgName),
+		pm.newAutoConfirmCmd(pm.updateVerb, runcPkgName),
 	)
 }
 
@@ -300,7 +327,7 @@ func (pm *DistroPackageManager) Cleanup() error {
 }
 
 func getOsPackageManager() (string, error) {
-	supportedManagers := []string{yumPackageManager, aptPackageManager}
+	supportedManagers := []string{yumPackageManager, aptPackageManager, zypperPackageManager}
 	for _, manager := range supportedManagers {
 		if _, err := exec.LookPath(manager); err == nil {
 			return manager, nil
@@ -310,25 +337,31 @@ func getOsPackageManager() (string, error) {
 }
 
 var packageManagerInstallCmd = map[string]string{
-	aptPackageManager: "install",
-	yumPackageManager: "install",
+	aptPackageManager:    "install",
+	yumPackageManager:    "install",
+	zypperPackageManager: "install",
 }
 
 var packageManagerUpdateCmd = map[string]string{
-	aptPackageManager: "upgrade",
-	yumPackageManager: "update",
+	aptPackageManager:    "upgrade",
+	yumPackageManager:    "update",
+	zypperPackageManager: "update",
 }
 
 var packageManagerDeleteCmd = map[string]string{
-	aptPackageManager: "autoremove",
-	yumPackageManager: "remove",
+	aptPackageManager:    "autoremove",
+	yumPackageManager:    "remove",
+	zypperPackageManager: "remove",
 }
 
 var packageManagerMetadataRefreshCmd = map[string]string{
-	aptPackageManager: "update",
-	yumPackageManager: "makecache",
+	aptPackageManager:    "update",
+	yumPackageManager:    "makecache",
+	zypperPackageManager: "refresh",
 }
 
+// managerToDockerRepoMap intentionally has no zypper entry: Docker does not
+// publish an official docker-ce repo for SLES/openSUSE
 var managerToDockerRepoMap = map[string]string{
 	yumPackageManager: "https://download.docker.com/linux/centos/docker-ce.repo",
 	aptPackageManager: "https://download.docker.com/linux/ubuntu",

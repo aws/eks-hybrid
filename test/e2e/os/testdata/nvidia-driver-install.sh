@@ -41,6 +41,9 @@ if [ -f /etc/os-release ]; then
     elif [[ "$ID" == "rhel" ]]; then
         OS_TYPE="rhel"
         PKG_TYPE="rpm"
+    elif [[ "$ID" == "sles" ]]; then
+        OS_TYPE="sles"
+        PKG_TYPE="zypper"
     fi
 fi
 
@@ -48,6 +51,15 @@ if [ -z "$OS_TYPE" ]; then
     echo "Unsupported OS type, cannot install NVIDIA drivers"
     exit 1
 fi
+
+zypper_install() {
+    local rc=0
+    zypper --non-interactive install "$@" || rc=$?
+    case $rc in
+        0|100|101|102|103|106) return 0 ;;
+        *) return $rc ;;
+    esac
+}
 
 # Install drivers based on OS type
 case $OS_TYPE in
@@ -125,6 +137,23 @@ case $OS_TYPE in
         dnf -y module enable nvidia-driver:open-dkms
         dnf install -y nvidia-open
         ;;
+    sles)
+        echo "Installing NVIDIA drivers for SLES ($ARCH_NAME)"
+        if [[ "$VERSION_ID" == 16* ]]; then
+            NVIDIA_DISTRO="suse16"
+        elif [[ "$VERSION_ID" == 15* ]]; then
+            NVIDIA_DISTRO="sles15"
+        else
+            echo "Unsupported SLES version: $VERSION_ID"
+            exit 1
+        fi
+
+        zypper_install kernel-default-devel=$(uname -r | sed 's/\-default//')
+        zypper --non-interactive addrepo --refresh \
+            https://developer.download.nvidia.com/compute/cuda/repos/${NVIDIA_DISTRO}/${ARCH_DIR_NVIDIA}/ cuda || true
+        zypper --gpg-auto-import-keys --non-interactive refresh || true
+        zypper_install nvidia-open
+        ;;
 esac
 
 # Install NVIDIA Container Toolkit based on package type
@@ -144,6 +173,12 @@ case $PKG_TYPE in
         curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | \
             sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo
         dnf install -y nvidia-container-toolkit
+        ;;
+    zypper)
+        zypper --non-interactive addrepo --refresh \
+            https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo || true
+        zypper --gpg-auto-import-keys --non-interactive refresh || true
+        zypper_install nvidia-container-toolkit
         ;;
 esac
 

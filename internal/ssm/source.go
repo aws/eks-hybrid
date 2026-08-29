@@ -166,9 +166,10 @@ func (s ssmInstallerSource) defaultBuildSSMURL() (string, error) {
 // package manager in use.
 func detectPlatformVariant() (string, error) {
 	toVariant := map[string]string{
-		"apt": "debian",
-		"dnf": "linux",
-		"yum": "linux",
+		"apt":    "debian",
+		"dnf":    "linux",
+		"yum":    "linux",
+		"zypper": "linux",
 	}
 
 	for pkgManager := range toVariant {
