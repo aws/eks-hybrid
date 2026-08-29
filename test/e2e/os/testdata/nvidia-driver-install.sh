@@ -105,8 +105,10 @@ case $OS_TYPE in
             RHEL_VERSION="8"
         elif [[ "$VERSION_ID" == "9"* ]]; then
             RHEL_VERSION="9"
+        elif [[ "$VERSION_ID" == "10"* ]]; then
+            RHEL_VERSION="10"
         else
-            echo "Unsupported RHEL version"
+            echo "Unsupported RHEL version: $VERSION_ID"
             exit 1
         fi
 

@@ -46,9 +46,9 @@ The `run-e2e` subcommand provides a streamlined way to run E2E tests with config
 - `--cni`: CNI plugin to use (default: "cilium")
 - `--logs-bucket`: S3 bucket for uploading test logs
 - `--no-color`: Disable colored output
-- `-n, --name`: Cluster name (default: "nodeadm-e2e-tests-1-31")
+- `-n, --name`: Cluster name (default: "nodeadm-e2e-tests-1-34")
 - `-r, --region`: AWS region (default: "us-west-2")
-- `-k, --kubernetes-version`: Kubernetes version (default: "1.31")
+- `-k, --kubernetes-version`: Kubernetes version (default: "1.34")
 - `-p, --procs`: Number of processes to run (default: 1)
 - `--timeout`: Test timeout (default: "60m")
 - `--setup-config`: Path to YAML file containing cluster.TestResources configuration
@@ -86,7 +86,7 @@ You can run the tests manually using the CLI commands:
 This file defines the infrastructure to be created for testing:
 
 ```yaml
-clusterName: nodeadm-e2e-tests-1-31
+clusterName: nodeadm-e2e-tests-1-34
 clusterRegion: us-west-2
 clusterNetwork:
   vpcCidr: 10.0.0.0/16
@@ -97,7 +97,7 @@ hybridNetwork:
   publicSubnetCidr: 10.1.1.0/24
   privateSubnetCidr: 10.1.2.0/24
   podCidr: 10.2.0.0/16
-kubernetesVersion: "1.31"
+kubernetesVersion: "1.34"
 cni: cilium
 endpoint: ""
 ```
@@ -111,7 +111,7 @@ endpoint: ""
 This file configures the test execution parameters:
 
 ```yaml
-clusterName: nodeadm-e2e-tests-1-31
+clusterName: nodeadm-e2e-tests-1-34
 clusterRegion: us-west-2
 nodeadmUrlAMD: https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/amd64/nodeadm
 nodeadmUrlARM: https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/arm64/nodeadm
@@ -145,7 +145,7 @@ The sweeper command provides more flexible cleanup options:
 
 ```bash
 # Clean up a specific cluster
-./_bin/e2e-test sweeper --cluster-name nodeadm-e2e-tests-1-31
+./_bin/e2e-test sweeper --cluster-name nodeadm-e2e-tests-1-34
 
 # Clean up clusters with a specific prefix
 ./_bin/e2e-test sweeper --cluster-prefix nodeadm-e2e-tests- --age-threshold 12h
