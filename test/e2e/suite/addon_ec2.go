@@ -50,6 +50,23 @@ func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTe
 	}
 }
 
+// NewNetworkFlowMonitorTest creates a new NetworkFlowMonitorTest
+func (a *AddonEc2Test) NewNetworkFlowMonitorTest(ctx context.Context) (*addon.NetworkFlowMonitorTest, error) {
+	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.IAMClient, a.Cluster.Name)
+	if err != nil {
+		a.Logger.Error(err, "Failed to get pod identity role ARN")
+		return nil, err
+	}
+
+	config := a.addonTestConfig()
+	config.Logger = config.Logger.WithName("NetworkFlowMonitorTest")
+
+	return &addon.NetworkFlowMonitorTest{
+		AddonTestConfig:    config,
+		PodIdentityRoleArn: podIdentityRoleArn,
+	}, nil
+}
+
 // NewVerifyPodIdentityAddon creates a new VerifyPodIdentityAddon
 func (a *AddonEc2Test) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{

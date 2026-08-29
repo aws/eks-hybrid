@@ -453,6 +453,36 @@ var _ = Describe("Hybrid Nodes", func() {
 					)
 				})
 			}, Label("fsx-csi-driver"))
+
+			// Network Flow Monitor addon test - commented out until hybrid support is enabled
+			// Context("runs network flow monitor tests", func() {
+			// 	It("uses all OS", func(ctx context.Context) {
+			// 		networkFlowMonitor, err := addonEc2Test.NewNetworkFlowMonitorTest(ctx)
+			// 		Expect(err).To(Succeed(), "should have created network flow monitor test")
+			//
+			// 		DeferCleanup(func(ctx context.Context) {
+			// 			Expect(networkFlowMonitor.Delete(ctx)).To(Succeed(), "should cleanup network flow monitor successfully")
+			// 		})
+			//
+			// 		Expect(networkFlowMonitor.Create(ctx)).To(
+			// 			Succeed(), "network flow monitor should have created successfully",
+			// 		)
+			//
+			// 		DeferCleanup(func(ctx context.Context) {
+			// 			report := CurrentSpecReport()
+			// 			if report.State.Is(types.SpecStateFailed) {
+			// 				err := networkFlowMonitor.PrintLogs(ctx)
+			// 				if err != nil {
+			// 					GinkgoWriter.Printf("Failed to get network flow monitor logs: %v\n", err)
+			// 				}
+			// 			}
+			// 		})
+			//
+			// 		Expect(networkFlowMonitor.Validate(ctx)).To(
+			// 			Succeed(), "network flow monitor should have been validated successfully",
+			// 		)
+			// 	})
+			// }, Label("network-flow-monitor"))
 		})
 	})
 })
