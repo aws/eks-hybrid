@@ -245,11 +245,11 @@ func (pm *DistroPackageManager) GetIptables() artifact.Package {
 	)
 }
 
-// GetSSMPackage satisfies the getssmpackage source interface
+// GetSSMPackage satisfies the getssmpackage source interface.
+// On apt-based systems (Ubuntu), SSM may be installed via snap or via deb.
+// We check for the snap binary to determine which package manager to use.
 func (pm *DistroPackageManager) GetSSMPackage() artifact.Package {
-	// SSM is installed using snap package manager. If apt package manager
-	// is detected, use snap to install/uninstall SSM.
-	if pm.manager == aptPackageManager {
+	if pm.manager == aptPackageManager && isSnapSSMInstall() {
 		return artifact.NewPackageSource(
 			artifact.NewCmd(snapPackageManager, snapInstallVerb, ssmPkgName),
 			artifact.NewCmd(snapPackageManager, snapRemoveVerb, ssmPkgName),
@@ -261,6 +261,13 @@ func (pm *DistroPackageManager) GetSSMPackage() artifact.Package {
 		artifact.NewCmd(pm.manager, pm.deleteVerb, ssmPkgName, "-y"),
 		artifact.NewCmd(pm.manager, pm.updateVerb, ssmPkgName, "-y"),
 	)
+}
+
+const snapSSMAgentBinaryPath = "/snap/amazon-ssm-agent/current/amazon-ssm-agent"
+
+func isSnapSSMInstall() bool {
+	_, err := os.Stat(snapSSMAgentBinaryPath)
+	return !os.IsNotExist(err)
 }
 
 func (pm *DistroPackageManager) caCertsPackage() artifact.Package {
