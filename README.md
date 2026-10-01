@@ -50,6 +50,16 @@ Install Kubernetes version 1.31 with AWS IAM Roles Anywhere as the credential pr
 nodeadm install 1.31 --credential-provider iam-ra
 ```
 
+To install a specific containerd version, pass the exact package version available in the selected `distro` or `docker` repository. Include any epoch and distribution release suffix required by the package manager. For example, on Amazon Linux 2023, if this package version is available:
+
+```sh
+nodeadm install 1.31 --credential-provider ssm --containerd-version 1.7.27-1.amzn2023.0.1
+```
+
+On Ubuntu with the Docker source, a package version may look like `1.7.27-1`. Use `apt-cache madison containerd.io` or `yum list --showduplicates containerd` to find available versions for your selected source. The flag selects a version for this installation; it does not pin subsequent `nodeadm upgrade` operations. An explicit version is passed to the package manager even when containerd is already installed. Package-manager errors, including unavailable versions or disallowed downgrades, are returned to the caller.
+
+Without `--containerd-version`, nodeadm retains its existing automatic version selection and skips installation when containerd and runc are already present. The flag cannot be combined with `--containerd-source none` or `--private-mode`, and containerd 2.x requires Kubernetes 1.30 or later.
+
 #### nodeadm init
 The `nodeadm init` command starts and connects hybrid nodes with the configured Amazon EKS cluster.
 
