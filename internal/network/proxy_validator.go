@@ -111,6 +111,8 @@ func validatePackageManagerProxyConfig(osName string) error {
 		return validateYumProxyConfig(httpProxy, httpsProxy)
 	case system.AmazonOsName:
 		return validateDnfProxyConfig(httpProxy, httpsProxy)
+	case system.SlesOsName:
+		return validateZypperProxyConfig(httpProxy, httpsProxy)
 	default:
 		return fmt.Errorf("unsupported operating system: %s", osName)
 	}
@@ -180,7 +182,7 @@ func validateSSMProxyConfig(osName string) error {
 	switch osName {
 	case system.UbuntuOsName:
 		ssmServicePath = "/etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service.d/http-proxy.conf"
-	case system.RhelOsName, system.AmazonOsName:
+	case system.RhelOsName, system.AmazonOsName, system.SlesOsName:
 		ssmServicePath = "/etc/systemd/system/amazon-ssm-agent.service.d/http-proxy.conf"
 	default:
 		return fmt.Errorf("unsupported operating system: %s", osName)
@@ -278,6 +280,46 @@ func validateDnfProxyConfig(httpProxy, httpsProxy string) error {
 			fmt.Errorf("dnf configuration file does not contain correct proxy setting"),
 			fmt.Sprintf("Update the dnf configuration file at %s with the correct proxy setting: proxy=%s",
 				dnfConfPath, httpProxy),
+		)
+	}
+
+	return nil
+}
+
+// validateZypperProxyConfig validates the zypper proxy configuration.
+// SUSE's system-wide proxy convention is /etc/sysconfig/proxy (unlike
+// yum/dnf, zypper has no manager-specific proxy.conf)
+func validateZypperProxyConfig(httpProxy, httpsProxy string) error {
+	proxyConfPath := "/etc/sysconfig/proxy"
+	if !fileExists(proxyConfPath) {
+		return validation.WithRemediation(
+			fmt.Errorf("proxy configuration file not found: %s", proxyConfPath),
+			fmt.Sprintf("Create the proxy configuration file at %s with the following content:\n"+
+				"PROXY_ENABLED=\"yes\"\n"+
+				"HTTP_PROXY=\"%s\"\n"+
+				"HTTPS_PROXY=\"%s\"",
+				proxyConfPath, httpProxy, httpsProxy),
+		)
+	}
+
+	content, err := os.ReadFile(proxyConfPath)
+	if err != nil {
+		return fmt.Errorf("failed to read proxy configuration file: %w", err)
+	}
+
+	if httpProxy != "" && !strings.Contains(string(content), fmt.Sprintf("HTTP_PROXY=\"%s\"", httpProxy)) {
+		return validation.WithRemediation(
+			fmt.Errorf("proxy configuration file does not contain correct HTTP_PROXY value"),
+			fmt.Sprintf("Update the proxy configuration file at %s with the correct HTTP_PROXY value: HTTP_PROXY=\"%s\"",
+				proxyConfPath, httpProxy),
+		)
+	}
+
+	if httpsProxy != "" && !strings.Contains(string(content), fmt.Sprintf("HTTPS_PROXY=\"%s\"", httpsProxy)) {
+		return validation.WithRemediation(
+			fmt.Errorf("proxy configuration file does not contain correct HTTPS_PROXY value"),
+			fmt.Sprintf("Update the proxy configuration file at %s with the correct HTTPS_PROXY value: HTTPS_PROXY=\"%s\"",
+				proxyConfPath, httpsProxy),
 		)
 	}
 
