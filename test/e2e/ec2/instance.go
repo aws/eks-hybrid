@@ -357,3 +357,17 @@ func GetAvailabilityZonesForInstanceType(ctx context.Context, ec2Client *ec2.Cli
 
 	return availabilityZonesForInstanceType, nil
 }
+
+func GetAvailabilityZoneIDs(ctx context.Context, ec2Client *ec2.Client) (map[string]string, error) {
+	describeAvailabilityZonesOutput, err := ec2Client.DescribeAvailabilityZones(ctx, &ec2.DescribeAvailabilityZonesInput{})
+	if err != nil {
+		return nil, fmt.Errorf("describing availability zones: %w", err)
+	}
+
+	availabilityZoneIDs := map[string]string{}
+	for _, zone := range describeAvailabilityZonesOutput.AvailabilityZones {
+		availabilityZoneIDs[*zone.ZoneName] = *zone.ZoneId
+	}
+
+	return availabilityZoneIDs, nil
+}

@@ -52,6 +52,11 @@ var jumpboxAllowedInstanceTypes = []string{
 	"t4g.large",
 }
 
+// Zone IDs excluded from hybrid node subnet
+var excludedZoneIDs = []string{
+	"euw2-az4", // eu-west-2d: Transit Gateway not supported
+}
+
 type vpcConfig struct {
 	vpcID         string
 	publicSubnet  string
@@ -208,6 +213,11 @@ func (s *stack) prepareStackParameters(ctx context.Context, test TestResources, 
 	ingressConfig := securitygroup.DefaultIngress()
 	params = append(params, s.prepareAddonParameters(ingressConfig)...)
 
+	availabilityZoneIDs, err := e2eEC2.GetAvailabilityZoneIDs(ctx, s.ec2Client)
+	if err != nil {
+		return nil, fmt.Errorf("getting availability zone IDs: %w", err)
+	}
+
 	jumpboxAllowedAvailabilityZones := []string{}
 	for _, instanceType := range jumpboxAllowedInstanceTypes {
 		availabilityZonesForInstanceType, err := e2eEC2.GetAvailabilityZonesForInstanceType(ctx, s.ec2Client, instanceType)
@@ -216,6 +226,9 @@ func (s *stack) prepareStackParameters(ctx context.Context, test TestResources, 
 		}
 
 		for _, zone := range availabilityZonesForInstanceType {
+			if slices.Contains(excludedZoneIDs, availabilityZoneIDs[zone]) {
+				continue
+			}
 			if !slices.Contains(jumpboxAllowedAvailabilityZones, zone) {
 				jumpboxAllowedAvailabilityZones = append(jumpboxAllowedAvailabilityZones, zone)
 			}
