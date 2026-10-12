@@ -26,6 +26,9 @@ const installHelpText = `Examples:
   # Install Kubernetes version 1.31 with AWS IAM Roles Anywhere as the credential provider and Docker as the containerd source
   nodeadm install 1.31 --credential-provider iam-ra --containerd-source docker
 
+  # Install a specific containerd package version available in the configured repositories
+  nodeadm install 1.31 --credential-provider ssm --containerd-version 1.7.27-1.amzn2023.0.1
+
   # Install from a private installation using a local custom manifest (for air-gapped environments)
   nodeadm install 1.31 --credential-provider ssm --manifest-override file://./manifest-1.31.13-arm64-linux-1765487946.yaml --private-mode
 
@@ -48,6 +51,7 @@ func NewCommand() cli.Command {
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values: [ssm, iam-ra].")
 	fc.String(&cmd.containerdSource, "s", "containerd-source", "Source for containerd artifact. Allowed values: [none, distro, docker].")
+	fc.String(&cmd.containerdVersion, "", "containerd-version", "Exact containerd package version to install from the selected source, including any epoch or release suffix. Defaults to the latest compatible version.")
 	fc.String(&cmd.region, "r", "region", "AWS region for downloading regional artifacts.")
 	fc.String(&cmd.manifestOverride, "m", "manifest-override", "URI to a manifest file containing custom artifact URLs. Supports file:// for local files and https:// for remote files.")
 	fc.Bool(&cmd.privateMode, "", "private-mode", "Enable private installation mode (skips OS packages, requires --manifest-override).")
@@ -62,6 +66,7 @@ type command struct {
 	kubernetesVersion  string
 	credentialProvider string
 	containerdSource   string
+	containerdVersion  string
 	region             string
 	manifestOverride   string
 	privateMode        bool
@@ -105,6 +110,13 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	if c.privateMode && c.containerdVersion != "" {
+		return fmt.Errorf("--containerd-version cannot be used with --private-mode")
+	}
+	if err := containerd.ValidateContainerdVersion(c.containerdVersion, "", containerdSource); err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
@@ -129,6 +141,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		log.Info("Using Kubernetes version", zap.String("version", awsSource.Eks.Version))
 	}
 
+	if err := containerd.ValidateContainerdVersion(c.containerdVersion, awsSource.Eks.Version, containerdSource); err != nil {
+		return err
+	}
+
 	// Create package manager unless in private mode
 	if !c.privateMode {
 		log.Info("Creating package manager...")
@@ -142,6 +158,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		AwsSource:          awsSource,
 		PackageManager:     packageManager,
 		ContainerdSource:   containerdSource,
+		ContainerdVersion:  c.containerdVersion,
 		SsmRegion:          c.region,
 		CredentialProvider: credentialProvider,
 		Logger:             log,
