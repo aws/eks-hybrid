@@ -490,6 +490,10 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider, region
 		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9NoDockerSource(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		osystem.NewSLES15SP7AMD(),
+		osystem.NewSLES15SP7ARM(),
+		osystem.NewSLES16AMD(),
+		osystem.NewSLES16ARM(),
 	}
 	osProviderList := []OSProvider{}
 	for _, nodeOS := range osList {

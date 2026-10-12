@@ -1,0 +1,30 @@
+#cloud-config
+users:
+  - name: root
+    lock_passwd: false
+    ssh_authorized_keys:
+      - {{ .PublicKey }}
+{{- if .RootPasswordHash }}
+    hashed_passwd: {{ .RootPasswordHash }}
+{{- end }}
+package_update: true
+write_files:
+  - content: |
+{{ .NodeadmConfigYaml | indent 6 }}
+    path: nodeadm-config.yaml
+{{ range $file := .Files }}
+  - content: |
+{{ $file.Content | indent 6 }}
+    path: {{ $file.Path }}
+{{if $file.Permissions}}
+    permissions: '{{ $file.Permissions }}'
+{{- end }}
+{{- end }}
+
+runcmd:
+  - ln -sf /run/log/journal /var/log/journal
+  - zypper --non-interactive --gpg-auto-import-keys refresh || true
+  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .Region }}"
+  - /tmp/nvidia-driver-install.sh
+
+final_message: "The system is prepped, after $UPTIME seconds"
