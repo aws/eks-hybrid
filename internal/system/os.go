@@ -3,9 +3,10 @@ package system
 import "github.com/go-ini/ini"
 
 const (
-	UbuntuOsName = "ubuntu"
-	RhelOsName   = "rhel"
-	AmazonOsName = "amzn"
+	UbuntuOsName      = "ubuntu"
+	RhelOsName        = "rhel"
+	AmazonOsName      = "amzn"
+	OracleLinuxOsName = "ol"
 
 	UbuntuResolvConfPath = "/run/systemd/resolve/resolv.conf"
 )
