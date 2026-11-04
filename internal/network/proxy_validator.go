@@ -107,7 +107,7 @@ func validatePackageManagerProxyConfig(osName string) error {
 	switch osName {
 	case system.UbuntuOsName:
 		return validateAptProxyConfig(httpProxy, httpsProxy)
-	case system.RhelOsName:
+	case system.RhelOsName, system.OracleLinuxOsName:
 		return validateYumProxyConfig(httpProxy, httpsProxy)
 	case system.AmazonOsName:
 		return validateDnfProxyConfig(httpProxy, httpsProxy)
@@ -180,7 +180,7 @@ func validateSSMProxyConfig(osName string) error {
 	switch osName {
 	case system.UbuntuOsName:
 		ssmServicePath = "/etc/systemd/system/snap.amazon-ssm-agent.amazon-ssm-agent.service.d/http-proxy.conf"
-	case system.RhelOsName, system.AmazonOsName:
+	case system.RhelOsName, system.AmazonOsName, system.OracleLinuxOsName:
 		ssmServicePath = "/etc/systemd/system/amazon-ssm-agent.service.d/http-proxy.conf"
 	default:
 		return fmt.Errorf("unsupported operating system: %s", osName)

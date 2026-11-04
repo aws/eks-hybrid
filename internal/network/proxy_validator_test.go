@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -299,4 +300,24 @@ func TestValidateSystemdServiceProxyConfig(t *testing.T) {
 
 	assert.True(t, validation.IsRemediable(err))
 	assert.NotEmpty(t, validation.Remediation(err))
+}
+
+func TestValidatePackageManagerProxyConfigSupportsOracleLinux(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("HTTP_PROXY", "http://proxy.example.com:8080")
+
+	err := validatePackageManagerProxyConfig(system.OracleLinuxOsName)
+	if err != nil {
+		assert.NotContains(t, err.Error(), "unsupported operating system")
+	}
+}
+
+func TestValidateSSMProxyConfigSupportsOracleLinux(t *testing.T) {
+	os.Clearenv()
+	os.Setenv("HTTP_PROXY", "http://proxy.example.com:8080")
+
+	err := validateSSMProxyConfig(system.OracleLinuxOsName)
+	if err != nil {
+		assert.NotContains(t, err.Error(), "unsupported operating system")
+	}
 }
