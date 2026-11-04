@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"time"
 
 	"github.com/pkg/errors"
@@ -27,19 +28,26 @@ type Source interface {
 	GetContainerd(version string) artifact.Package
 }
 
-func Install(ctx context.Context, artifactsTracker *tracker.Tracker, source Source, containerdSource tracker.ContainerdSourceName, kubernetesVersion string) error {
-	// if containerd/run are already installed, we skip the installation and set the source to none
+func Install(ctx context.Context, artifactsTracker *tracker.Tracker, source Source, containerdSource tracker.ContainerdSourceName, kubernetesVersion, containerdVersion string) error {
+	if err := ValidateContainerdVersion(containerdVersion, kubernetesVersion, containerdSource); err != nil {
+		return err
+	}
+	// An explicit package version must be installed even if containerd and runc already exist.
+	// Otherwise, if containerd/runc are already installed, we skip the installation and set the source to none
 	// which exclude it from being upgrading during upgrade and removed during uninstall
 	// this has the (potentially negative) side effect of the user not knowing that we have chosen none on
 	// their behalf based on it already being installed
 	// TODO: a better approach would be to determine if the installed versions are from the user supplied
 	// containerd-source (distro/docker) and if they are, treat it as such including upgrading/uninstalling
 	// if they are not, we error and ask the user to explictly pass none to the --containerd-source flag
-	if containerdSource == tracker.ContainerdSourceNone || areContainerdAndRuncInstalled() {
+	if containerdSource == tracker.ContainerdSourceNone || (containerdVersion == "" && areContainerdAndRuncInstalled()) {
 		artifactsTracker.Artifacts.Containerd = tracker.ContainerdSourceNone
 		return nil
 	}
 	containerdVersionConstraint := determineContainerdVersionConstraint(kubernetesVersion)
+	if containerdVersion != "" {
+		containerdVersionConstraint = containerdVersion
+	}
 	containerd := source.GetContainerd(containerdVersionConstraint)
 	// Sometimes install fails due to conflicts with other processes
 	// updating packages, specially when automating at machine startup.
@@ -147,4 +155,27 @@ func determineContainerdVersionConstraint(kubernetesVersion string) string {
 		containerdVersionConstraint = ""
 	}
 	return containerdVersionConstraint
+}
+
+// containerdPackageVersion accepts exact package versions, including Debian epochs
+// and distribution release suffixes, but excludes package-manager wildcards.
+var containerdPackageVersion = regexp.MustCompile(`^(?:[0-9]+:)?([0-9]+\.[0-9]+\.[0-9]+)(?:[-+~.][0-9A-Za-z.+~_-]+)?$`)
+
+// ValidateContainerdVersion preserves the compatibility policy used for automatic
+// version selection while accepting native package version strings.
+func ValidateContainerdVersion(version, kubernetesVersion string, source tracker.ContainerdSourceName) error {
+	if version == "" {
+		return nil
+	}
+	if source == tracker.ContainerdSourceNone {
+		return fmt.Errorf("--containerd-version cannot be used with --containerd-source none")
+	}
+	matches := containerdPackageVersion.FindStringSubmatch(version)
+	if matches == nil || !semver.IsValid("v"+matches[1]) {
+		return fmt.Errorf("invalid containerd package version %q: specify an exact major.minor.patch version with an optional epoch or release suffix", version)
+	}
+	if kubernetesVersion != "" && determineContainerdVersionConstraint(kubernetesVersion) == "1.*" && semver.Major("v"+matches[1]) != "v1" {
+		return fmt.Errorf("containerd package version %q is incompatible with Kubernetes %s: Kubernetes versions before 1.30 require containerd 1.x", version, kubernetesVersion)
+	}
+	return nil
 }

@@ -24,6 +24,7 @@ import (
 type Installer struct {
 	AwsSource          aws.Source
 	ContainerdSource   tracker.ContainerdSourceName
+	ContainerdVersion  string
 	PackageManager     *packagemanager.DistroPackageManager
 	CredentialProvider creds.CredentialProvider
 	SsmRegion          string
@@ -82,7 +83,7 @@ func (i *Installer) Run(ctx context.Context) error {
 
 func (i *Installer) installDistroPackages(ctx context.Context) error {
 	i.Logger.Info("Installing containerd...")
-	if err := containerd.Install(ctx, i.Tracker, i.PackageManager, i.ContainerdSource, i.AwsSource.Eks.Version); err != nil {
+	if err := containerd.Install(ctx, i.Tracker, i.PackageManager, i.ContainerdSource, i.AwsSource.Eks.Version, i.ContainerdVersion); err != nil {
 		return err
 	}
 	if containerdVersion, err := containerd.GetContainerdVersion(); err == nil {
