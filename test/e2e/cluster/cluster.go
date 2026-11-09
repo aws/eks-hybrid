@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	stdErr "errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
@@ -21,7 +24,9 @@ import (
 )
 
 const (
-	createClusterTimeout = 40 * time.Minute
+	createClusterTimeout     = 40 * time.Minute
+	apiServerDNSWaitTimeout  = 10 * time.Minute
+	apiServerDNSPollInterval = 10 * time.Second
 )
 
 type hybridCluster struct {
@@ -86,7 +91,40 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 
 	logger.Info("Successfully started EKS hybrid cluster", "cluster", cluster)
 
+	// A cluster can report ACTIVE before its endpoint's DNS record has propagated,
+	// so calling the API server right away can fail with "no such host".
+	if err := waitForAPIServerDNS(ctx, logger, *cluster.Endpoint, apiServerDNSPollInterval, apiServerDNSWaitTimeout); err != nil {
+		return nil, err
+	}
+
 	return cluster, nil
+}
+
+// waitForAPIServerDNS waits until the hostname of the cluster API server endpoint resolves.
+func waitForAPIServerDNS(ctx context.Context, logger logr.Logger, endpoint string, interval, timeout time.Duration) error {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("parsing API server endpoint %q: %w", endpoint, err)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("API server endpoint %q has no hostname", endpoint)
+	}
+
+	logger.Info("Waiting for API server endpoint to resolve", "host", host)
+	var lookupErr error
+	err = wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
+		if _, lookupErr = net.DefaultResolver.LookupHost(ctx, host); lookupErr != nil {
+			logger.Info("API server endpoint not resolvable yet, retrying", "host", host, "error", lookupErr.Error())
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return fmt.Errorf("waiting for API server endpoint %s to resolve (last error: %v): %w", host, lookupErr, err)
+	}
+	logger.Info("API server endpoint resolved", "host", host)
+	return nil
 }
 
 // waitForActiveCluster waits until the cluster is in the 'ACTIVE' state.
