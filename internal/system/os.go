@@ -6,6 +6,7 @@ const (
 	UbuntuOsName = "ubuntu"
 	RhelOsName   = "rhel"
 	AmazonOsName = "amzn"
+	SlesOsName   = "sles"
 
 	UbuntuResolvConfPath = "/run/systemd/resolve/resolv.conf"
 )
