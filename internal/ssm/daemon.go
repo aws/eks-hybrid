@@ -27,6 +27,10 @@ const (
 	awsCredentialsFilePath = defaultAWSConfigPath + "/credentials"
 	eksHybridPath          = "/eks-hybrid"
 	symlinkedAWSConfigPath = eksHybridPath + "/.aws"
+
+	snapAgentBinaryPath  = "/snap/amazon-ssm-agent/current/amazon-ssm-agent"
+	snapSsmDaemonName    = "snap.amazon-ssm-agent.amazon-ssm-agent"
+	defaultSsmDaemonName = "amazon-ssm-agent"
 )
 
 type ssm struct {
@@ -119,13 +123,22 @@ func (s *ssm) Name() string {
 }
 
 func setDaemonName() {
-	osToDaemonName := map[string]string{
-		system.UbuntuOsName: "snap.amazon-ssm-agent.amazon-ssm-agent",
-		system.RhelOsName:   "amazon-ssm-agent",
-		system.AmazonOsName: "amazon-ssm-agent",
-	}
-	osName := system.GetOsName()
-	if daemonName, ok := osToDaemonName[osName]; ok {
-		SsmDaemonName = daemonName
+	SsmDaemonName = resolveDaemonName(system.GetOsName(), fileExists)
+}
+
+// resolveDaemonName determines the correct SSM daemon name based on the OS and
+// how the agent was installed. On Ubuntu, SSM can be installed via snap or deb;
+// this function checks for the snap binary to distinguish between the two.
+func resolveDaemonName(osName string, exists func(string) bool) string {
+	switch osName {
+	case system.UbuntuOsName:
+		if exists(snapAgentBinaryPath) {
+			return snapSsmDaemonName
+		}
+		return defaultSsmDaemonName
+	case system.RhelOsName, system.AmazonOsName:
+		return defaultSsmDaemonName
+	default:
+		return defaultSsmDaemonName
 	}
 }
