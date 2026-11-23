@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/integrii/flaggy"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -29,7 +28,7 @@ const syncArtifactsHelpText = `Examples:
   nodeadm sync-artifacts 1.31 --arch arm64 --s3-bucket my-private-bucket --s3-prefix eks-deps/v1.31
 
   # Sync all Linux AMD64 dependencies for Kubernetes version 1.33 to S3
-  nodeadm sync-artifacts 1.33 --arch arm64 --s3-bucket my-private-bucket --s3-prefix eks-deps/v1.33
+  nodeadm sync-artifacts 1.33 --arch amd64 --s3-bucket my-private-bucket --s3-prefix eks-deps/v1.33
 
   # Sync all Linux dependencies corresponding to host system's architecture to a non-default region in S3
   nodeadm sync-artifacts 1.34 --region ap-south-1 --s3-bucket my-private-bucket --s3-prefix eks-deps/ap-south-1/v1.34
@@ -37,12 +36,13 @@ const syncArtifactsHelpText = `Examples:
 Documentation:
   https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_syncartifacts`
 
+const defaultRegion = "us-west-2"
+
 func NewCommand() cli.Command {
 	cmd := command{
 		timeout: 30 * time.Minute,
 		arch:    runtime.GOARCH,
 		os:      "linux",
-		region:  "us-west-2",
 	}
 
 	fc := flaggy.NewSubcommand("sync-artifacts")
@@ -50,7 +50,7 @@ func NewCommand() cli.Command {
 	fc.AdditionalHelpAppend = syncArtifactsHelpText
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to sync dependencies for.")
 	fc.String(&cmd.arch, "a", "arch", "Target architecture for artifacts.")
-	fc.String(&cmd.region, "r", "region", "AWS region for downloading regional artifacts.")
+	fc.String(&cmd.region, "r", "region", "AWS region of the S3 bucket and EKS cluster. Defaults to the region from the AWS SDK configuration, or us-west-2 if none is configured.")
 	fc.String(&cmd.s3Bucket, "", "s3-bucket", "S3 bucket to sync the dependencies to (required).")
 	fc.String(&cmd.s3Prefix, "", "s3-prefix", "S3 key prefix for the synced artifacts (required).")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum sync command duration.")
@@ -81,15 +81,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	log.Info("Validating Kubernetes version", zap.String("version", c.kubernetesVersion))
-
-	// Create a Source for all AWS managed artifacts
-	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion, c.region)
-	if err != nil {
-		return err
-	}
-	log.Info("Using Kubernetes version", zap.String("version", awsSource.Eks.Version))
-
 	// Validate S3 parameters - both are required now
 	if c.s3Bucket == "" {
 		return fmt.Errorf("--s3-bucket is required")
@@ -98,12 +89,32 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("--s3-prefix is required")
 	}
 
-	// Load AWS config once
-	log.Info("Loading AWS configuration", zap.String("region", c.region))
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(c.region))
+	// Load AWS config once. The region flag takes precedence over the SDK's
+	// configured region (AWS_REGION, shared config).
+	var configOpts []func(*config.LoadOptions) error
+	if c.region != "" {
+		configOpts = append(configOpts, config.WithRegion(c.region))
+	}
+	cfg, err := config.LoadDefaultConfig(ctx, configOpts...)
 	if err != nil {
 		return fmt.Errorf("failed to load AWS config: %w", err)
 	}
+	if cfg.Region == "" {
+		cfg.Region = defaultRegion
+		log.Warn("No region set with --region or in the AWS configuration, using default region. "+
+			"The generated manifest only works for clusters in this region.", zap.String("region", defaultRegion))
+	}
+	c.region = cfg.Region
+	log.Info("Using AWS region", zap.String("region", c.region))
+
+	log.Info("Validating Kubernetes version", zap.String("version", c.kubernetesVersion))
+
+	// Create a Source for all AWS managed artifacts
+	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion, c.region)
+	if err != nil {
+		return err
+	}
+	log.Info("Using Kubernetes version", zap.String("version", awsSource.Eks.Version))
 
 	// Create S3 service client once
 	svc := s3.NewFromConfig(cfg)
@@ -258,12 +269,12 @@ func (d *Downloader) syncArtifactToS3(ctx context.Context, artifact ArtifactInfo
 	}
 
 	// Download and upload checksum if available
+	// The generated manifest references the checksum, so a missing checksum
+	// would only surface later as an install failure on the node.
 	if artifact.ChecksumURL != "" {
 		checksumKey := s3Key + ".sha256"
 		if err := d.streamToS3(ctx, d.S3Client, artifact.ChecksumURL, checksumKey); err != nil {
-			d.Logger.Warn("Failed to sync checksum to S3",
-				zap.String("artifact", artifact.Name),
-				zap.Error(err))
+			return errors.Wrapf(err, "streaming %s checksum to S3", artifact.Name)
 		}
 	}
 
@@ -290,12 +301,13 @@ func (d *Downloader) streamToS3(ctx context.Context, svc *s3.Client, url, s3Key 
 	// Create S3 Manager uploader
 	uploader := manager.NewUploader(svc)
 
-	// Upload using S3 Manager with public-read ACL
+	// No object ACL: read access is granted by the bucket policy (for example,
+	// restricted to a VPC endpoint). New buckets have ACLs disabled and Block
+	// Public Access enabled, which both reject public-read ACLs.
 	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: awsSDKv2.String(d.S3Bucket),
 		Key:    awsSDKv2.String(s3Key),
 		Body:   resp.Body,
-		ACL:    types.ObjectCannedACLPublicRead,
 	})
 
 	return errors.Wrap(err, "uploading to S3 using manager")
