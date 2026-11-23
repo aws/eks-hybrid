@@ -63,13 +63,21 @@ func (hc *retryHttpClient) Do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 
-	for range hc.maxRetries {
+	for attempt := range hc.maxRetries {
+		if attempt > 0 {
+			select {
+			case <-req.Context().Done():
+				return nil, req.Context().Err()
+			case <-time.After(hc.backoff):
+			}
+		}
 		resp, err = http.DefaultClient.Do(req)
 		if err != nil {
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
 			err = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+			resp.Body.Close()
 			continue
 		}
 		return resp, nil
