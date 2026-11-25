@@ -55,6 +55,17 @@ type UserDataInput struct {
 	ClusterCert         []byte
 	// ManifestURL is an optional URL to a custom manifest file for testing
 	ManifestURL string
+	// PrivateMode runs nodeadm install, init and upgrade with --private-mode.
+	// The OS must preinstall the packages nodeadm skips in private mode.
+	PrivateMode bool
+	// HostsEntries are appended to /etc/hosts before nodeadm runs.
+	HostsEntries []HostsEntry
+}
+
+// HostsEntry maps a hostname to an IP address in /etc/hosts.
+type HostsEntry struct {
+	IP       string
+	Hostname string
 }
 
 type NodeadmURLs struct {

@@ -45,6 +45,7 @@ type testNode struct {
 	SerialOutputWriter io.Writer
 	DNSSuffix          string
 	EcrAccount         string
+	PrivateInstall     *peered.PrivateInstallSpec
 
 	flakyCode      *FlakyCode
 	peeredInstance *peered.PeeredInstance
@@ -72,6 +73,7 @@ func (n *testNode) Start(ctx context.Context) error {
 			OS:             n.OS,
 			Provider:       n.Provider,
 			ComputeType:    n.ComputeType,
+			PrivateInstall: n.PrivateInstall,
 		})
 		Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 		flakeRun.DeferCleanup(func(ctx context.Context) {

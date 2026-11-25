@@ -10,6 +10,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/addon"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
@@ -26,8 +27,17 @@ func NewS3Cleaner(s3Client *s3.Client, logger logr.Logger) *S3Cleaner {
 }
 
 func (s *S3Cleaner) ListBuckets(ctx context.Context, filterInput FilterInput) ([]string, error) {
+	return s.listBucketsWithPrefix(ctx, addon.PodIdentityS3BucketPrefix, filterInput)
+}
+
+// ListPrivateInstallBuckets lists the artifact buckets created by the private install suite.
+func (s *S3Cleaner) ListPrivateInstallBuckets(ctx context.Context, filterInput FilterInput) ([]string, error) {
+	return s.listBucketsWithPrefix(ctx, constants.PrivateInstallBucketPrefix, filterInput)
+}
+
+func (s *S3Cleaner) listBucketsWithPrefix(ctx context.Context, prefix string, filterInput FilterInput) ([]string, error) {
 	paginator := s3.NewListBucketsPaginator(s.s3Client, &s3.ListBucketsInput{
-		Prefix: aws.String(addon.PodIdentityS3BucketPrefix),
+		Prefix: aws.String(prefix),
 	})
 
 	var bucketNames []string

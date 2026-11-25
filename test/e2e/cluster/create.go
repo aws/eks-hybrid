@@ -46,6 +46,9 @@ type TestResources struct {
 	EKS               EKSConfig     `yaml:"eks"`
 	DNSSuffix         string        `yaml:"dnsSuffix"`  // AWS partition DNS suffix (e.g., amazonaws.com, amazonaws.com.cn)
 	EcrAccount        string        `yaml:"ecrAccount"` // ECR account ID for pulling test images
+	// EndpointPrivateAccess enables private access to the cluster API server endpoint,
+	// in addition to public access. Required by the private install suite.
+	EndpointPrivateAccess bool `yaml:"endpointPrivateAccess"`
 }
 type EKSConfig struct {
 	Endpoint      string `yaml:"endpoint"`
@@ -116,6 +119,8 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		SubnetIDs:         []string{stackOut.clusterVpcConfig.publicSubnet, stackOut.clusterVpcConfig.privateSubnet},
 		Role:              stackOut.clusterRole,
 		HybridNetwork:     test.HybridNetwork,
+
+		EndpointPrivateAccess: test.EndpointPrivateAccess,
 	}
 
 	c.logger.Info("Creating EKS cluster..", "cluster", test.ClusterName)

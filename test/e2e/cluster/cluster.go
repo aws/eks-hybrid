@@ -32,6 +32,8 @@ type hybridCluster struct {
 	SubnetIDs         []string
 	Role              string
 	HybridNetwork     NetworkConfig
+
+	EndpointPrivateAccess bool
 }
 
 func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger logr.Logger) (*types.Cluster, error) {
@@ -39,8 +41,10 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 		Name:    aws.String(h.Name),
 		Version: aws.String(h.KubernetesVersion),
 		ResourcesVpcConfig: &types.VpcConfigRequest{
-			SubnetIds:        h.SubnetIDs,
-			SecurityGroupIds: []string{h.SecurityGroup},
+			SubnetIds:             h.SubnetIDs,
+			SecurityGroupIds:      []string{h.SecurityGroup},
+			EndpointPublicAccess:  aws.Bool(true),
+			EndpointPrivateAccess: aws.Bool(h.EndpointPrivateAccess),
 		},
 		RoleArn: aws.String(h.Role),
 		Tags: map[string]string{

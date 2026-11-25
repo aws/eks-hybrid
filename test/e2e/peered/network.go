@@ -67,6 +67,10 @@ func (n *Network) addRoutesForCIDRs(ctx context.Context, instance *PeeredInstanc
 	var routeTableCIDRs []string
 	routeTable := resp.RouteTables[0]
 	for _, route := range routeTable.Routes {
+		// Routes for gateway endpoints use a prefix list instead of a CIDR block.
+		if route.DestinationCidrBlock == nil {
+			continue
+		}
 		routeTableCIDRs = append(routeTableCIDRs, *route.DestinationCidrBlock)
 	}
 	for _, cidr := range cidrs {
