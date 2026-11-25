@@ -6,8 +6,12 @@ const (
 	CreationTimeTagKey = "CreationTime"
 	TestClusterTagKey  = "Nodeadm-E2E-Tests-Cluster"
 	OSArchTagKey       = "OS-Arch"
-	TestRolePathPrefix = "/NodeadmE2E/"
-	EcrAccountId       = "381492195191"
+	// PrivateInstallTagKey marks EC2 resources created by the private install suite.
+	PrivateInstallTagKey = "Nodeadm-E2E-Private-Install"
+	// PrivateInstallBucketPrefix is the prefix for private install artifact buckets.
+	PrivateInstallBucketPrefix = "nodeadm-e2e-private-"
+	TestRolePathPrefix         = "/NodeadmE2E/"
+	EcrAccountId               = "381492195191"
 	// ChinaEcrAccountId is the ECR account ID used in AWS China (aws-cn) regions for test images.
 	ChinaEcrAccountId = "858475954877"
 	// ChinaCiliumEcrAccountId is the ECR account ID used in AWS China (aws-cn) regions for Cilium images.

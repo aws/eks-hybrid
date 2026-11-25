@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -140,6 +141,11 @@ type Downloader struct {
 	Logger        *zap.Logger
 	S3Client      *s3.Client
 	SyncTimestamp int64
+	// OutputDir is the directory the generated manifest is written to.
+	// Defaults to the current directory.
+	OutputDir string
+	// ManifestPath is set to the path of the generated manifest after Run succeeds.
+	ManifestPath string
 }
 
 type ArtifactInfo struct {
@@ -417,8 +423,8 @@ func (d *Downloader) generateCustomManifest(artifacts []ArtifactInfo) error {
 		}
 	}
 
-	filename := fmt.Sprintf("manifest-%s-%s-%s-%d.yaml",
-		d.AwsSource.Eks.Version, d.Arch, d.OS, d.SyncTimestamp)
+	filename := filepath.Join(d.OutputDir, fmt.Sprintf("manifest-%s-%s-%s-%d.yaml",
+		d.AwsSource.Eks.Version, d.Arch, d.OS, d.SyncTimestamp))
 
 	// Marshal to YAML
 	yamlData, err := yaml.Marshal(manifest)
@@ -431,6 +437,7 @@ func (d *Downloader) generateCustomManifest(artifacts []ArtifactInfo) error {
 		return errors.Wrapf(err, "writing manifest file %s", filename)
 	}
 
+	d.ManifestPath = filename
 	d.Logger.Info("Generated custom manifest with S3 URIs",
 		zap.String("filename", filename),
 		zap.String("baseS3URL", baseS3URL))

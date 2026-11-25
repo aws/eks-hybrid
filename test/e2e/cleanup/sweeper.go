@@ -127,6 +127,11 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 			FailureMessage: "emptying S3 pod identity buckets",
 		},
 		{
+			// private install resources live in the stack's VPC and block its deletion
+			Cleanup:        c.cleanupPrivateInstallResources,
+			FailureMessage: "cleaning up private install resources",
+		},
+		{
 			Cleanup:        c.cleanupArchitectureStacks,
 			FailureMessage: "cleaning up architecture stacks",
 		},
@@ -312,6 +317,43 @@ func (c *Sweeper) cleanupS3PodIdentityBuckets(ctx context.Context, filterInput F
 		}
 	}
 
+	return nil
+}
+
+func (c *Sweeper) cleanupPrivateInstallResources(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+	endpointIDs, err := vpcCleaner.ListPrivateInstallVPCEndpoints(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing private install VPC endpoints: %w", err)
+	}
+	securityGroupIDs, err := vpcCleaner.ListPrivateInstallSecurityGroups(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing private install security groups: %w", err)
+	}
+	s3Cleaner := NewS3Cleaner(c.s3Client, c.logger)
+	bucketNames, err := s3Cleaner.ListPrivateInstallBuckets(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing private install buckets: %w", err)
+	}
+
+	c.logger.Info("Deleting private install resources", "vpcEndpointIDs", endpointIDs, "securityGroupIDs", securityGroupIDs, "bucketNames", bucketNames)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	if err := vpcCleaner.DeleteVPCEndpointsAndWait(ctx, endpointIDs); err != nil {
+		return err
+	}
+	for _, securityGroupID := range securityGroupIDs {
+		if err := vpcCleaner.DeleteSecurityGroupWithRetry(ctx, securityGroupID); err != nil {
+			return err
+		}
+	}
+	for _, bucketName := range bucketNames {
+		if err := s3Cleaner.DeleteBucket(ctx, bucketName); err != nil {
+			return fmt.Errorf("deleting bucket %s: %w", bucketName, err)
+		}
+	}
 	return nil
 }
 

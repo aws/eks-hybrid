@@ -54,6 +54,21 @@ type NodeSpec struct {
 	ComputeType        e2e.ComputeType
 	OS                 e2e.NodeadmOS
 	Provider           e2e.NodeadmCredentialsProvider
+	// PrivateInstall, when set, overrides the node's network and nodeadm sources
+	// to install from private artifacts. See [PrivateInstallSpec].
+	PrivateInstall *PrivateInstallSpec
+}
+
+// PrivateInstallSpec configures a node to install nodeadm dependencies in private mode.
+type PrivateInstallSpec struct {
+	// SecurityGroupID replaces the default node security group.
+	SecurityGroupID string
+	// NodeadmURLs replaces the URLs the node downloads nodeadm from.
+	NodeadmURLs e2e.NodeadmURLs
+	// ManifestURL is passed to nodeadm with --manifest-override.
+	ManifestURL string
+	// HostsEntries are added to /etc/hosts on the node.
+	HostsEntries []e2e.HostsEntry
 }
 
 type NodeCreate struct {
@@ -132,6 +147,15 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		ClusterName:         c.Cluster.Name,
 		ClusterCert:         c.K8sClientConfig.CAData,
 	}
+	securityGroupID := c.Cluster.SecurityGroupID
+	if spec.PrivateInstall != nil {
+		userdataInput.PrivateMode = true
+		userdataInput.NodeadmUrls = spec.PrivateInstall.NodeadmURLs
+		userdataInput.ManifestURL = spec.PrivateInstall.ManifestURL
+		userdataInput.HostsEntries = spec.PrivateInstall.HostsEntries
+		securityGroupID = spec.PrivateInstall.SecurityGroupID
+	}
+
 	userdata, err := spec.OS.BuildUserData(ctx, userdataInput)
 	if err != nil {
 		return PeeredInstance{}, fmt.Errorf("expected to successfully build user data: %w", err)
@@ -167,7 +191,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 
 		VolumeSize:         ec2VolumeSize,
 		SubnetID:           c.Cluster.SubnetID,
-		SecurityGroupID:    c.Cluster.SecurityGroupID,
+		SecurityGroupID:    securityGroupID,
 		UserData:           userdata,
 		InstanceProfileARN: instanceProfileARN,
 		OS:                 spec.OS.Name(),

@@ -316,6 +316,18 @@ func WithLogging(loggerControl e2e.PausableLogger, serialOutputWriter io.Writer)
 	}
 }
 
+// NodeadmURLs returns the URLs of the nodeadm binaries under test.
+func (t *PeeredVPCTest) NodeadmURLs() e2e.NodeadmURLs {
+	return t.nodeadmURLs
+}
+
+// WithPrivateInstall configures the node to install nodeadm dependencies in private mode.
+func WithPrivateInstall(spec *peered.PrivateInstallSpec) TestNodeOption {
+	return func(n *testNode) {
+		n.PrivateInstall = spec
+	}
+}
+
 func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName, k8sVersion string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, instanceSize e2e.InstanceSize, computeType e2e.ComputeType, opts ...TestNodeOption) *testNode {
 	node := &testNode{
 		ArtifactsPath:   t.ArtifactsPath,

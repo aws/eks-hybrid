@@ -24,6 +24,36 @@ write_files:
 {{- end }}
 
 runcmd:
+{{- if .HostsEntries }}
+  # Resolve AWS service and cluster endpoints to private IPs for private installation
+  - |
+{{- range $entry := .HostsEntries }}
+    echo "{{ $entry.IP }} {{ $entry.Hostname }}" >> /etc/hosts
+{{- end }}
+{{- end }}
+{{- if .PrivateMode }}
+  # nodeadm skips OS packages in private mode. The AL2023 repositories are served
+  # from S3, so dnf works through the S3 gateway endpoint.
+  - dnf install -y containerd iptables
+  # New interface endpoints can take several minutes after they are "available" to accept
+  # connections. Wait for them before running nodeadm, and log the result to the serial console.
+  - |
+    echo "=== private install diagnostics ==="
+    cat /etc/hosts
+    for host in ssm ssmmessages ec2messages sts eks; do
+      for attempt in $(seq 1 60); do
+        if curl -sS -o /dev/null --max-time 5 "https://$host.{{ .Region }}.amazonaws.com/"; then
+          echo "$host.{{ .Region }} reachable after $attempt attempt(s)"
+          break
+        fi
+        if [ "$attempt" -eq 60 ]; then
+          echo "$host.{{ .Region }} NOT reachable after 60 attempts"
+        fi
+        sleep 5
+      done
+    done
+    echo "=== end private install diagnostics ==="
+{{- end }}
   - systemctl enable rsyslog --now
   # Install Lustre client for FSx CSI driver support
   - |
